@@ -14,6 +14,8 @@ Phase 1 使用命令行，后续 Streamlit 界面复用核心模块，不将界�
 - core/impedance.py：最佳 RL 点的完整归一化复阻抗。
 - core/batch.py：目录发现、清单校验、逐文件解析配置。
 - core/sdat_inspector.py：只读无语义结构诊断，不能用于 S 参数计算。
+- core/sparameter_mapping.py / sparameter_parser.py / sparameters.py：独立配置、候选解析与 S 参数计算，三层分离。
+- run_sparameters.py：候选 S 参数独立入口，状态、源文件哈希和 QC 全部记录。
 - plotting：只使用核心结果，所有图统一坐标单位、配色规范。
 - export/provenance.py：每次独立目录、来源哈希、版本、配置、失败记录。
 - export/phase2_export.py：组织 Phase 2 数据表与绘图，不实现物理公式。
@@ -21,6 +23,6 @@ Phase 1 使用命令行，后续 Streamlit 界面复用核心模块，不将界�
 - run_batch.py：逐样品故障隔离、公共配置、原生采样比较与汇总。
 - run_analysis.py：组织一次分析，不作为数值算法实现位置。
 
-Phase 2 已实现阻抗图/衰减/损耗角/Cole-Cole/C0/四分之一波长。Phase 3 已实现批量/比较，sdat 语义解析仍待外部字段说明。后续规划（当前不实现）：Phase 4 GUI/完整 Excel 报告/完整图片导出；Phase 5 CST 对照。VSM、XRD、Raman、多层结构分别增加独立模块，不修改单层公式含义。
+Phase 2 已实现阻抗图/衰减/损耗角/Cole-Cole/C0/四分之一波长。Phase 3 已实现批量/比较，v0.5 新增用户提供的候选 sdat 语义映射；厂商列顺序仍待外部确认。后续规划（当前不实现）：Phase 4 GUI/完整 Excel 报告/完整图片导出；Phase 5 CST 对照。VSM、XRD、Raman、多层结构分别增加独立模块，不修改单层公式含义。
 
 本阶段提前支持这份 memp 是用户确认的范围调整。正式发布依据 VERSIONING.md，阶段结束后等待用户验收。

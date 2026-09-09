@@ -66,7 +66,7 @@ Excel 为 Python 科学计算的结果快照，不是在工作簿中重新计算
 
 已观察的 sdat 为 Cluster XML 元数据 + 九列文本数值。结构检查可以保存 `sdat_structure.json` 和 `sdat_uninterpreted_columns.csv`，列名仅为 column_1…column_9。
 
-字段含义、频率单位、S 参数顺序仍未知；不推断 D 是样品厚度，不映射 S11/S21，不计算 R/T/A。含 sdat 的批次会明确显示该成员分析失败，但可提供结构诊断。真正的 S 参数解析仍需配套软件字段说明或可信对照导出，不能视为已完成。
+材料批次入口仍不为 sdat 计算 RL/EAB，含 sdat 时会显示该成员不适用并提供结构诊断。v0.5 根据用户提供的候选映射增加了独立 `run_sparameters.py`，可显式计算候选 S 参数与 R/T/A，见 `docs/sparameters.md`。厂商 S21/S12 顺序仍待确认，D 的物理意义仍不推断。
 
 ## 验收示例
 

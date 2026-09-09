@@ -1,0 +1,12 @@
+{
+  "schema_id": "cip_sio2_sdat_candidate_v1",
+  "schema_status": "candidate_high_confidence",
+  "frequency_column": 0,
+  "frequency_unit": "GHz",
+  "complex_columns": {"S11": [1, 2], "S21": [3, 4], "S12": [5, 6], "S22": [7, 8]},
+  "expected_points": 201,
+  "expected_frequency_start_ghz": 2.0,
+  "expected_frequency_stop_ghz": 18.0,
+  "expected_frequency_step_ghz": 0.08,
+  "frequency_grid_atol_ghz": 1e-9
+}
