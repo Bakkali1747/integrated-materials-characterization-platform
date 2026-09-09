@@ -1,0 +1,20 @@
+# Python 本地环境及缓存
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.coverage
+htmlcov/
+
+# 原始科研数据与生成结果（不忽略 sample_data 中的合成测试数据）
+Raw_Data/
+output/
+*.memp
+*.sdat
+
+# 本地配置和凭据
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
