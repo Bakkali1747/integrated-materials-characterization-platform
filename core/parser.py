@@ -2,6 +2,7 @@
 
 from io import BytesIO, StringIO
 from pathlib import Path
+import csv
 import hashlib
 import re
 import numpy as np
@@ -10,6 +11,24 @@ from core.models import COLUMNS, SampleData
 from core.validation import validate_data
 
 MEMP_HEADER = ["频率(GHz)", "介电实部", "介电虚部", "磁导实部", "磁导虚部"]
+
+
+def read_csv_table(text, delimiter):
+    """输入文本及分隔符；返回严格矩形表和实际源行号，拒绝多/少列及重复表头。"""
+    reader = csv.reader(StringIO(text), delimiter=delimiter, strict=True)
+    try:
+        header = next(reader)
+    except StopIteration:
+        raise ValueError("CSV 文件为空。") from None
+    if not header or len(set(header)) != len(header):
+        raise ValueError("CSV 表头为空或存在重复列名。")
+    rows, source_rows = [], []
+    for tokens in reader:
+        if len(tokens) != len(header):
+            raise ValueError(f"CSV 源行 {reader.line_num} 应有 {len(header)} 列，实际 {len(tokens)} 列。")
+        rows.append(tokens)
+        source_rows.append(reader.line_num)
+    return pd.DataFrame(rows, columns=header), source_rows
 
 
 def decode_text(raw, encoding=None):
@@ -101,12 +120,20 @@ def read_sample(path, *, name=None, frequency_unit=None, imaginary_convention=No
     elif suffix in (".csv", ".xlsx"):
         if suffix == ".csv":
             text, actual_encoding = decode_text(raw, encoding)
-            frame = pd.read_csv(StringIO(text), sep=delimiter, skip_blank_lines=False)
+            frame, source_rows = read_csv_table(text, delimiter)
             metadata.update({"encoding": actual_encoding, "delimiter": delimiter})
         else:
             with pd.ExcelFile(BytesIO(raw), engine="openpyxl") as workbook:
                 sheet_name = workbook.sheet_names[sheet] if isinstance(sheet, int) else sheet
-                frame = pd.read_excel(workbook, sheet_name=sheet_name)
+                table = pd.read_excel(workbook, sheet_name=sheet_name, header=None)
+            if table.empty:
+                raise ValueError("Excel 工作表为空。")
+            header = table.iloc[0].tolist()
+            if len(set(header)) != len(header):
+                raise ValueError("Excel 存在重复列名，拒绝自动重命名。")
+            frame = table.iloc[1:].reset_index(drop=True)
+            frame.columns = header
+            source_rows = list(range(2, len(frame) + 2))
             metadata["sheet"] = sheet_name
         mapping = column_map or {col: col for col in COLUMNS}
         if set(mapping) != set(COLUMNS) or len(set(mapping.values())) != 5:
@@ -116,7 +143,6 @@ def read_sample(path, *, name=None, frequency_unit=None, imaginary_convention=No
             raise ValueError(f"缺少源列 {sorted(missing)}；请提供显式列映射。")
         frame = frame[[mapping[col] for col in COLUMNS]].copy()
         frame.columns = COLUMNS
-        source_rows = list(range(2, len(frame) + 2))
         metadata["column_map"] = mapping
         if frequency_unit is None:
             if mapping["frequency_ghz"] == "frequency_ghz":

@@ -54,3 +54,34 @@ def test_unknown_sdat_refused(tmp_path):
     path.write_text("2 1 2 3 4 5 6 7 8")
     with pytest.raises(ValueError, match="禁止猜测"):
         read_sample(path, imaginary_convention="loss")
+
+
+@pytest.mark.parametrize("body", ["2,4,.2,1,.3,999", "2,4,.2,1", ""])
+def test_csv_ragged_or_blank_row_rejected(tmp_path, body):
+    path = tmp_path / "ragged.csv"
+    path.write_text("frequency_ghz,eps_real,eps_imag,mu_real,mu_imag\n"+body+"\n3,4,.2,1,.3\n")
+    with pytest.raises(ValueError):
+        read_sample(path, imaginary_convention="loss")
+
+
+def test_duplicate_csv_header_rejected(tmp_path):
+    path = tmp_path / "duplicate.csv"
+    path.write_text("frequency_ghz,eps_real,eps_imag,mu_real,mu_imag,eps_real\n2,4,.2,1,.3,5\n3,4,.2,1,.3,5\n")
+    with pytest.raises(ValueError, match="重复"):
+        read_sample(path, imaginary_convention="loss")
+
+
+def test_convention_required(tmp_path, frame):
+    path = tmp_path / "input.csv"
+    frame.to_csv(path, index=False)
+    with pytest.raises(ValueError, match="显式"):
+        read_sample(path)
+
+
+def test_missing_unit_with_nonstandard_column_refused(tmp_path, frame):
+    mapping = {col: col for col in frame.columns}
+    mapping["frequency_ghz"] = "Frequency"
+    path = tmp_path / "input.csv"
+    frame.rename(columns=mapping).to_csv(path, index=False)
+    with pytest.raises(ValueError, match="单位"):
+        read_sample(path, column_map=mapping, imaginary_convention="loss")

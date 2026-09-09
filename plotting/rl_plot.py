@@ -38,7 +38,7 @@ def plot_rl_2d(result, style=None, norm=None):
     else:
         artist = ax.pcolormesh(result.frequency_ghz, result.thickness_mm, result.rl_db,
                                shading="nearest", cmap=style.cmap, norm=norm)
-    fig.colorbar(artist, ax=ax, label="RL (dB)")
+    fig.colorbar(artist, ax=ax, label="RL (dB)", ticks=np.linspace(norm.vmin, norm.vmax, 6), format="%.2f")
     ax.set(xlabel="Frequency (GHz)", ylabel="Thickness (mm)")
     return fig, artist
 
@@ -56,7 +56,8 @@ def plot_rl_3d(result, style=None, norm=None):
     frequency, thickness = np.meshgrid(result.frequency_ghz, result.thickness_mm)
     artist = ax.plot_surface(frequency, thickness, result.rl_db, cmap=style.cmap, norm=norm,
                              rstride=1, cstride=1, shade=False, linewidth=0, antialiased=False)
-    fig.colorbar(artist, ax=ax, label="RL (dB)", shrink=0.7, pad=0.1)
+    fig.colorbar(artist, ax=ax, label="RL (dB)", shrink=0.7, pad=0.1,
+                 ticks=np.linspace(norm.vmin, norm.vmax, 6), format="%.2f")
     ax.set(xlabel="Frequency (GHz)", ylabel="Thickness (mm)", zlabel="RL (dB)")
     ax.view_init(elev=25, azim=-125)
     return fig, artist

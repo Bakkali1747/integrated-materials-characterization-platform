@@ -15,6 +15,7 @@ def test_surface_actual_face_values_and_colorbar():
     assert artist2.norm is artist3.norm is norm
     assert artist2.colorbar.mappable is artist2 and artist3.colorbar.mappable is artist3
     assert norm.vmin == -50 and norm.vmax == -2
+    np.testing.assert_array_equal(artist2.colorbar.get_ticks(), artist3.colorbar.get_ticks())
     fig3.canvas.draw()
     # 内部 facecolors 保持面输入顺序，公开 get_facecolors 会按深度排序。
     np.testing.assert_allclose(artist3._facecolor3d, artist3.cmap(norm(expected.ravel())))

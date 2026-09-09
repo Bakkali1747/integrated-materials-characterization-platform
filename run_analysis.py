@@ -12,6 +12,7 @@ os.environ.setdefault("MPLCONFIGDIR", str(Path(__file__).resolve().parent / ".mp
 import numpy as np
 import pandas as pd
 from core.electromagnetic import make_complex
+from core.eab import summarize_bandwidths, cumulative_frequency_coverage
 from core.parser import read_sample
 from core.rl_calculator import scan_rl, minimum_points
 from core.units import thickness_grid
@@ -23,7 +24,7 @@ from plotting.style import PlotStyle, plt
 
 def analyze(path, *, output="output", name=None, frequency_min=None, frequency_max=None,
             thickness_min=1.0, thickness_max=5.0, thickness_step=0.01, curve_thickness=2.0,
-            threshold=-10.0, style=None, **parser_options):
+            threshold=-10.0, eab_crossing="linear", style=None, **parser_options):
     """输入文件、展示单位配置及解析选项；返回唯一结果目录。
 
     失败时保存 status=failed 与错误，禁止把部分输出当作成功报告。
@@ -33,9 +34,12 @@ def analyze(path, *, output="output", name=None, frequency_min=None, frequency_m
     configuration = {"requested_frequency_range_ghz": [frequency_min, frequency_max],
                      "requested_thickness_range_mm": [thickness_min, thickness_max],
                      "thickness_step_mm": thickness_step, "curve_thickness_mm": curve_thickness,
-                     "rl_threshold_db": threshold, "parser_options": parser_options, "plot_style": vars(style)}
+                     "rl_threshold_db": threshold, "eab_threshold_crossing": eab_crossing,
+                     "parser_options": parser_options, "plot_style": vars(style)}
     directory, record = new_run(output, name or Path(path).stem, path, configuration)
     try:
+        if any(not np.isfinite(value) or value <= 0 for value in (style.width, style.height, style.linewidth, style.dpi)):
+            raise ValueError("图宽、高、线宽和 dpi 必须有限且大于零。")
         if not np.isfinite(threshold) or not np.isfinite(curve_thickness) or curve_thickness <= 0:
             raise ValueError("阈值必须有限；曲线厚度必须 > 0 mm。")
         for limit in (frequency_min, frequency_max):
@@ -44,6 +48,8 @@ def analyze(path, *, output="output", name=None, frequency_min=None, frequency_m
         if frequency_min is not None and frequency_max is not None and frequency_min > frequency_max:
             raise ValueError("频率起点不能超过终点。")
         sample = read_sample(path, name=name, **parser_options)
+        if record["raw_sha256"] != sample.metadata["sha256"]:
+            raise ValueError("分析启动后源文件发生变化；请在文件稳定后重新运行。")
         record.update({"sample": sample.name, "source": sample.metadata, "warnings": sample.warnings,
                        "validation_status": "pending_commercial_reference" if sample.metadata["convention_confirmed"]
                        else "pending_imaginary_convention_and_commercial_reference"})
@@ -55,6 +61,9 @@ def analyze(path, *, output="output", name=None, frequency_min=None, frequency_m
         if frequency_max is not None:
             selected &= data.frequency_ghz <= frequency_max
         sample.data = data.loc[selected].reset_index(drop=True)
+        record["selected_source_rows"] = [sample.metadata["source_rows"][i] for i in np.flatnonzero(selected)]
+        if (frequency_min is not None and frequency_min < data.frequency_ghz.iloc[0]) or (frequency_max is not None and frequency_max > data.frequency_ghz.iloc[-1]):
+            sample.warnings.append("[KNOWN] 请求频率范围超出原始数据，仅使用实测范围内已有点，不外推。")
         if len(sample.data) < 2:
             raise ValueError("所选频率范围内少于 2 个点。")
         d = thickness_grid(thickness_min, thickness_max, thickness_step)
@@ -69,6 +78,18 @@ def analyze(path, *, output="output", name=None, frequency_min=None, frequency_m
                        "thickness_points": len(d), "thickness_grid_mm": d.tolist(),
                        "rl_threshold_db": threshold, "matrix_orientation": "rows=thickness_mm, columns=frequency_ghz",
                        "minimum_scope": "current scan grid", "global_minima": minimum_points(result)})
+        if any(point["at_frequency_boundary"] or point["at_thickness_boundary"] for point in record["global_minima"]):
+            sample.warnings.append("[KNOWN] 网格最小值触及频率或厚度边界；不能据此确定扫描范围外的最优值。")
+        standard_eab = summarize_bandwidths(result, -10., eab_crossing)
+        selected_bandwidth = standard_eab if threshold == -10 else summarize_bandwidths(result, threshold, eab_crossing)
+        coverage = cumulative_frequency_coverage(selected_bandwidth["by_thickness"])
+        record.update({"eab_threshold_crossing": eab_crossing, "standard_eab_threshold_db": -10.,
+                       "maximum_eab_ghz": standard_eab["maximum_bandwidth_ghz"],
+                       "maximum_eab_details": standard_eab["best_thicknesses"],
+                       "cumulative_frequency_coverage": {**coverage, "threshold_db": threshold}})
+        if any(band["touches_lower_boundary"] or band["touches_upper_boundary"]
+               for entry in standard_eab["best_thicknesses"] for band in entry["widest_bands"]):
+            sample.warnings.append("[KNOWN] 最大 EAB 频段触及测量边界，只代表当前频率范围内的带宽。")
         sample.data.to_csv(directory / "electromagnetic_parameters.csv", index=False)
         matrix = pd.DataFrame(result.rl_db, columns=f)
         matrix.insert(0, "thickness_mm", d)
@@ -77,9 +98,16 @@ def analyze(path, *, output="output", name=None, frequency_min=None, frequency_m
         for i, thickness in enumerate(d):
             minimum = float(np.min(result.rl_db[i]))
             rows.append({"thickness_mm": thickness, "rl_min_db": minimum,
-                         "rl_min_frequencies_ghz": json.dumps(f[result.rl_db[i] == minimum].tolist())})
+                         "rl_min_frequencies_ghz": json.dumps(f[result.rl_db[i] == minimum].tolist()),
+                         "eab_minus10_db_ghz": standard_eab["by_thickness"][i]["maximum_continuous_bandwidth_ghz"],
+                         "eab_intervals_ghz": json.dumps(standard_eab["by_thickness"][i]["bands"]),
+                         "selected_threshold_db": threshold,
+                         "selected_threshold_max_continuous_bandwidth_ghz": selected_bandwidth["by_thickness"][i]["maximum_continuous_bandwidth_ghz"]})
         pd.DataFrame(rows).to_csv(directory / "thickness_summary.csv", index=False)
-        (directory / "summary.json").write_text(json.dumps(json_safe(record["global_minima"]), indent=2), encoding="utf-8")
+        summary = {"validation_status": record["validation_status"], "global_minima": record["global_minima"],
+                   "standard_eab": standard_eab, "selected_threshold_bandwidth": selected_bandwidth,
+                   "cumulative_frequency_coverage": {**coverage, "threshold_db": threshold}}
+        (directory / "summary.json").write_text(json.dumps(json_safe(summary), indent=2), encoding="utf-8")
         curve = scan_rl(f, eps, mu, [curve_thickness])
         pd.DataFrame({"frequency_ghz": f, "rl_db": curve.rl_db[0]}).to_csv(directory / "RL_curve.csv", index=False)
         figures = directory / "figures"
@@ -140,6 +168,7 @@ def main():
     parser.add_argument("--height", type=float, default=4.8)
     parser.add_argument("--linewidth", type=float, default=1.5)
     parser.add_argument("--cmap", default="viridis")
+    parser.add_argument("--eab-crossing", choices=["linear", "sample"], default="linear")
     args = vars(parser.parse_args())
     path = args.pop("file")
     style = PlotStyle(**{key: args.pop(key) for key in ("dpi", "width", "height", "linewidth", "cmap")})

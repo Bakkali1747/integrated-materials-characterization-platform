@@ -17,3 +17,11 @@ def test_zero_epsilon_limit():
 
 def test_exact_matching_is_negative_infinity():
     assert np.isneginf(rl_from_impedance([1+0j])[0])
+
+
+def test_double_negative_branch_is_consistent():
+    # ε=μ 时相对阻抗仍为 +1；独立主值平方根可能错误地选择传播方向。
+    f = np.array([2e9, 8e9])
+    material = np.full(2, -2-.3j)
+    expected = np.tanh(1j*2*np.pi*f*.002/C*material)
+    np.testing.assert_allclose(normalized_input_impedance(f, material, material, [.002])[0], expected)

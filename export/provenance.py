@@ -10,11 +10,14 @@ import platform
 import re
 import subprocess
 import uuid
+import numpy as np
 from core import __version__
 
 
 def json_safe(value):
     """输入嵌套结果；将非有限浮点转为显式字符串，输出符合标准 JSON 的对象。"""
+    if isinstance(value, np.generic):
+        return json_safe(value.item())
     if isinstance(value, dict):
         return {key: json_safe(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
@@ -66,8 +69,21 @@ def new_run(output_root, sample_name, raw_path, configuration):
 def write_record(directory, record):
     """输入运行目录和记录；写出机器可读 JSON 及相同内容的可读 TXT。"""
     text = json.dumps(json_safe(record), ensure_ascii=False, indent=2, allow_nan=False)
-    for filename in ("analysis_record.json", "analysis_record.txt"):
-        (Path(directory) / filename).write_text(text + "\n", encoding="utf-8")
+    (Path(directory) / "analysis_record.json").write_text(text + "\n", encoding="utf-8")
+    fields = {"Sample": record["sample"], "Analysis date": record["analysis_date"],
+              "Software version": record["software_version"], "Build state": record["build_state"],
+              "Git commit": record["git"]["commit"], "Raw file": record["raw_file"],
+              "Raw SHA-256": record.get("raw_sha256", "unavailable"),
+              "Frequency range (GHz)": record.get("frequency_range_ghz", "unavailable"),
+              "Thickness range (mm)": record.get("thickness_range_mm", "unavailable"),
+              "Thickness step (mm)": record["configuration"]["thickness_step_mm"],
+              "RL threshold (dB)": record["configuration"]["rl_threshold_db"],
+              "Missing-data interpolation": record["missing_data_interpolation"],
+              "EAB threshold crossing": record["configuration"].get("eab_threshold_crossing", "unavailable"),
+              "Complex convention": record["complex_convention"],
+              "Validation": record.get("validation_status", "pending"), "Status": record["status"]}
+    header = "\n".join(f"{key}: {value}" for key, value in fields.items())
+    (Path(directory) / "analysis_record.txt").write_text(header + "\n\nComplete record:\n" + text + "\n", encoding="utf-8")
 
 
 def artifact_hashes(directory):

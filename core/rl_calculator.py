@@ -67,5 +67,7 @@ def minimum_points(result):
     """输入扫描结果；返回网格内所有精确并列的最小值位置，不插值搜索。"""
     minimum = np.min(result.rl_db)
     return [{"rl_min_db": float(minimum), "frequency_ghz": float(result.frequency_ghz[j]),
-             "thickness_mm": float(result.thickness_mm[i])}
+             "thickness_mm": float(result.thickness_mm[i]),
+             "at_frequency_boundary": j in (0, len(result.frequency_ghz)-1),
+             "at_thickness_boundary": i in (0, len(result.thickness_mm)-1)}
             for i, j in np.argwhere(result.rl_db == minimum)]
