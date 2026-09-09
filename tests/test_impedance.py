@@ -1,6 +1,8 @@
 import numpy as np
 from core.rl_calculator import normalized_input_impedance, rl_from_impedance
 from core.units import C
+from core.impedance import impedance_at_minima
+from core.models import RLResult
 
 
 def test_standard_formula_for_positive_materials():
@@ -25,3 +27,12 @@ def test_double_negative_branch_is_consistent():
     material = np.full(2, -2-.3j)
     expected = np.tanh(1j*2*np.pi*f*.002/C*material)
     np.testing.assert_allclose(normalized_input_impedance(f, material, material, [.002])[0], expected)
+
+
+def test_unit_modulus_is_not_full_matching():
+    assert abs(1j) == 1
+    assert rl_from_impedance([1j])[0] == 0
+    result = RLResult(np.array([2]), np.array([1]), np.array([[0.]]), np.array([[1j]]))
+    row = impedance_at_minima(result)[0]
+    assert row["z_abs"] == 1 and row["z_real"] == 0 and row["z_imag"] == 1
+    assert row["distance_to_1_plus_0j"] > 1

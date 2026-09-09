@@ -23,6 +23,10 @@ def test_traceable_run_and_no_overwrite(tmp_path, frame, threshold):
     assert record["standard_eab_threshold_db"] == -10
     assert record["rl_threshold_db"] == threshold
     assert "pending" in record["validation_status"]
+    assert record["phase2"]["units"]["c0_seconds"] == "s"
+    assert (first/"loss_parameters.csv").exists()
+    assert (first/"figures"/"RL_impedance.png").exists()
+    assert (first/"figures"/"RL_quarter_wave.png").exists()
     assert record["thickness_grid_mm"] == [1, 1.1]
     assert path.read_bytes() == original
     summary = json.loads((first/"summary.json").read_text())
