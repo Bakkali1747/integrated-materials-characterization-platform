@@ -6,6 +6,7 @@ __pycache__/
 venv/
 .coverage
 htmlcov/
+.mplconfig/
 
 # 原始科研数据与生成结果（不忽略 sample_data 中的合成测试数据）
 Raw_Data/
