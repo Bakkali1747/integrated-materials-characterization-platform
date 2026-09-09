@@ -100,6 +100,8 @@ def read_sample(path, *, name=None, frequency_unit=None, imaginary_convention=No
     column_map 方向为：内部字段名 -> 文件列名。频率统一为 GHz。
     """
     path = Path(path)
+    if not isinstance(convention_confirmed, bool):
+        raise ValueError("convention_confirmed 必须为布尔值 true/false，不能使用字符串。")
     raw = path.read_bytes()
     suffix = path.suffix.lower()
     metadata = {"raw_file": str(path.resolve()), "sha256": hashlib.sha256(raw).hexdigest(),

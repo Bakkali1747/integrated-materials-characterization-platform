@@ -1,0 +1,9 @@
+{
+  "parser_defaults": {"imaginary_convention": "loss", "convention_confirmed": true},
+  "analysis": {"thickness_min": 1, "thickness_max": 5, "thickness_step": 0.01, "curve_thickness": 2},
+  "samples": [
+    {"name": "SYNTHETIC constant", "path": "synthetic_constant.csv"},
+    {"name": "SYNTHETIC variant", "path": "synthetic_variant.csv"}
+  ],
+  "compare_samples": ["SYNTHETIC constant", "SYNTHETIC variant"]
+}
