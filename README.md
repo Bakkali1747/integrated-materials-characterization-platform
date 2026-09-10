@@ -1,6 +1,8 @@
 # 本地微波吸收分析软件
 
-当前为 v0.5：已实现 Phase 1–2、Phase 3 批量/比较和 Excel 汇总，并增加独立的候选 `.sdat` S 参数入口。候选映射未获厂商确认。GUI 在 Phase 4。
+当前为 v0.6.0：在现有 CLI 基础上增加 PySide6 桌面 GUI Phase 1（单样品导入、参数、摘要和嵌入式 ε/μ、RL 曲线及二维图）。CLI 批量/比较及 S 参数功能继续保留。真实数据和候选映射仍待外部验证。
+
+启动桌面界面：`.\.venv\Scripts\python.exe run_gui.py`。新环境安装 `requirements-gui.txt`。具体步骤和阶段边界见 [GUI 使用说明](docs/gui_usage.md)。
 
 ## 安装与运行
 

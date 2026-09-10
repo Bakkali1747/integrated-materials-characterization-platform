@@ -1,5 +1,16 @@
 # 变更记录
 
+## v0.6 — GUI Phase 1
+
+- 新增 PySide6 中文主窗口、导航、文件多选/目录/拖拽导入、来源分组和单样品参数面板。
+- GUI 调用原 parser、RL/EAB、绘图和追溯 API；CLI 保持可用，没有复制科学公式。
+- 嵌入 Matplotlib ε/μ、固定厚度 RL 和二维图，展示全部并列极小值及连续频带；四种图片格式，默认 600 dpi。
+- 导入、分析、绘图与导出使用 QThread；协作取消保留产物，失败写入追溯记录与日志。
+- MEMP pending 与 SDAT candidate 状态持续显示；S 参数/比较/批量/历史 GUI 尚未开放。
+- parser 仅为旧 Excel 增加 xlrd 分支；MEMP 分支及科学计算逻辑不变。
+- 原有 106 项测试保持不变；新增 36 项 GUI/调用等价性/导出/旧 Excel/取消测试，共 142 项。
+- 真实 CIP_SiO2 文件以 loss 临时假设试运行，与此前 RLmin 和最大 EAB 记录一致，仍待商业软件验证。
+
 ## v0.5 — candidate S parameters
 
 - 新增 SParameterMapping 配置层、优先 GB18030 的严格 sdat parser，保留 XML 与原频率点。

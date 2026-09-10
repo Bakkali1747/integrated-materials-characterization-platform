@@ -1,0 +1,367 @@
+"""GUI 流程/信号/科学 API 等价性测试；不比较像素。"""
+
+import json
+import hashlib
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import pytest
+from PySide6.QtCore import Qt, QTimer, QUrl, QMimeData
+from PySide6.QtGui import QDropEvent, QDragEnterEvent
+from gui.main_window import MainWindow
+from gui.widgets.status_badge import StatusBadge
+from gui.widgets.file_selector import FileSelector
+from gui.widgets.parameter_panel import ParameterPanel
+from gui.widgets.sample_table import SampleTable
+from gui.workers.analysis_worker import AnalysisWorker
+from gui.controllers.analysis_controller import AnalysisRequest, analyze_request, inspect_file, Cancelled
+from gui.controllers.export_controller import export_figure
+
+
+@pytest.fixture
+def source(tmp_path, frame):
+    path = tmp_path / "synthetic.csv"
+    frame.to_csv(path, index=False)
+    return path
+
+
+@pytest.fixture
+def window(qtbot):
+    widget = MainWindow()
+    qtbot.addWidget(widget)
+    widget.show()
+    yield widget
+    if widget.single.worker:
+        widget.single.worker.requestInterruption()
+        qtbot.waitUntil(lambda: not widget.single.busy, timeout=30000)
+
+
+@pytest.fixture
+def result(source, tmp_path):
+    return analyze_request(AnalysisRequest(source, "synthetic", output=tmp_path / "output", thickness_max=1.1, thickness_step=.1, dpi=30))
+
+
+def test_main_window_start_and_navigation(window, qtbot):
+    assert window.minimumWidth() == 1200
+    assert window.minimumHeight() == 750
+    assert "微波吸收材料分析软件" in window.windowTitle()
+    window.navigation.setCurrentRow(1)
+    assert window.stack.currentWidget() is window.single
+    window.navigation.setCurrentRow(2)
+    assert "Phase 2" in window.stack.currentWidget().text()
+
+
+def test_file_dialog_multiselect(qtbot, monkeypatch, source):
+    selector = FileSelector()
+    qtbot.addWidget(selector)
+    monkeypatch.setattr("gui.widgets.file_selector.QFileDialog.getOpenFileNames", lambda *args: ([str(source)], ""))
+    with qtbot.waitSignal(selector.files_selected) as signal:
+        selector.files_button.click()
+    assert signal.args[0] == [str(source)]
+
+
+def test_directory_dialog(qtbot, monkeypatch, tmp_path):
+    selector = FileSelector()
+    qtbot.addWidget(selector)
+    monkeypatch.setattr("gui.widgets.file_selector.QFileDialog.getExistingDirectory", lambda *args: str(tmp_path))
+    with qtbot.waitSignal(selector.files_selected) as signal:
+        selector.folder_button.click()
+    assert signal.args[0] == [str(tmp_path)]
+
+
+def test_import_source_information(window, source, qtbot):
+    window.single.import_paths([source])
+    qtbot.waitUntil(lambda: not window.single.busy)
+    info = window.single.selected
+    assert info["points"] == 3
+    assert info["frequency"] == (2., 4.)
+    assert info["status"] == "PENDING"
+    assert info["size"] == source.stat().st_size
+    assert window.single.start_button.isEnabled()
+
+
+def test_unsupported_format_message(window, tmp_path, qtbot):
+    path = tmp_path / "bad.txt"
+    path.write_text("bad")
+    window.single.import_paths([path])
+    qtbot.waitUntil(lambda: not window.single.busy)
+    assert window.single.selected["status"] == "FAIL"
+    assert "不支持" in window.single.error.text()
+    assert not window.single.start_button.isEnabled()
+
+
+def test_parameter_snapshot_and_no_automatic_analysis(window, source, qtbot):
+    panel = window.single.parameters
+    panel.name.setText("CIP")
+    panel.fields["thickness_step"].setValue(.02)
+    request = panel.request(source)
+    assert request.thickness_min == 1 and request.thickness_max == 5
+    assert request.thickness_step == .02 and request.threshold == -10
+    assert request.frequency_min is None
+    assert request.parser_options["convention_confirmed"] is False
+    assert window.single.worker is None
+
+
+def test_mapping_and_crop(qtbot, source):
+    panel = ParameterPanel()
+    qtbot.addWidget(panel)
+    panel.name.setText("CIP")
+    panel.crop.setChecked(True)
+    panel.mapping.setText('{"frequency_ghz":"Frequency"}')
+    assert panel.request(source).parser_options["column_map"]["frequency_ghz"] == "Frequency"
+    assert panel.request(source).frequency_min == 2
+    assert "column_map" not in panel.parser_options(Path("input.memp"))
+
+
+def test_empty_output_rejected(qtbot, source):
+    panel = ParameterPanel()
+    qtbot.addWidget(panel)
+    panel.output.clear()
+    with pytest.raises(ValueError, match="输出目录"):
+        panel.request(source)
+
+
+def test_table_pairing_and_separate_sources(qtbot, source):
+    table = SampleTable()
+    qtbot.addWidget(table)
+    info = inspect_file(source, {"imaginary_convention": "loss"})
+    one = table.add_source(info)
+    other = dict(info, path=source.with_suffix(".sdat"), format=".sdat", status="candidate_high_confidence")
+    two = table.add_source(other)
+    assert one.parent() is two.parent()
+    assert len(table.sources) == 2
+    table.add_source(dict(info, path=source.parent / "other" / source.name))
+    assert table.topLevelItemCount() == 2
+    with qtbot.waitSignal(table.source_selected) as signal:
+        table.setCurrentItem(two)
+    assert signal.args[0]["format"] == ".sdat"
+
+
+@pytest.mark.parametrize("status", ["candidate_high_confidence", "PENDING", "WARNING"])
+def test_candidate_badge_not_green(qtbot, status):
+    badge = StatusBadge(status, "待验证")
+    qtbot.addWidget(badge)
+    assert "#fff1cc" in badge.styleSheet()
+    assert "Validated" not in badge.text()
+
+
+def test_sdat_cannot_trigger_rl(window, source):
+    info = inspect_file(source, {"imaginary_convention": "loss"})
+    window.single.select_source(dict(info, format=".sdat", status="candidate_high_confidence"))
+    assert not window.single.start_button.isEnabled()
+    window.single.start_analysis()
+    assert window.single.worker is None
+    assert "Measured S Parameters" in window.single.badge.text()
+
+
+def test_worker_progress_and_result(qtbot):
+    def operation(progress, cancelled):
+        progress(50, "阶段完成")
+        return 12
+    worker = AnalysisWorker(operation)
+    signals = []
+    worker.progress.connect(lambda n, text: signals.append((n, text)))
+    with qtbot.waitSignal(worker.succeeded) as signal:
+        worker.start()
+    worker.wait()
+    assert signal.args == [12]
+    assert signals == [(50, "阶段完成")]
+
+
+def test_worker_error_logs_traceback(qtbot, caplog):
+    def operation(*args):
+        raise ValueError("mu_imag 缺失，3 GHz")
+    worker = AnalysisWorker(operation)
+    with qtbot.waitSignal(worker.failed) as signal:
+        worker.start()
+    worker.wait()
+    assert "3 GHz" in signal.args[0]
+    assert "Traceback" not in signal.args[0]
+    assert "Traceback" in caplog.text
+
+
+def test_analysis_button_runs_off_main_thread(window, source, qtbot, monkeypatch, result):
+    from PySide6.QtCore import QThread
+    import gui.pages.single_sample_page as module
+    info = inspect_file(source, {"imaginary_convention": "loss"})
+    window.single.select_source(info)
+    threads = []
+    def analyze(request, progress, cancelled):
+        threads.append(QThread.currentThread())
+        progress(100, "完成")
+        return result
+    monkeypatch.setattr(module, "analyze_request", analyze)
+    with qtbot.waitSignal(window.single.analysis_completed):
+        window.single.start_button.click()
+    qtbot.waitUntil(lambda: not window.single.busy)
+    assert threads[0] != window.thread()
+    assert "Maximum EAB" in window.single.summary.toPlainText()
+    assert window.single.plot.selector.count() == 4
+    window.single.plot.selector.setCurrentIndex(3)
+    assert len(window.single.plot.canvas.figure.axes) == 2
+
+
+def test_controller_matches_cli(source, tmp_path, result):
+    from run_analysis import analyze
+    from plotting.style import PlotStyle
+    directory = analyze(source, output=tmp_path / "cli", name="synthetic", imaginary_convention="loss",
+                        thickness_max=1.1, thickness_step=.1, style=PlotStyle(dpi=30))
+    expected = json.loads((directory / "summary.json").read_text())
+    assert result["summary"]["global_minima"] == expected["global_minima"]
+    assert result["summary"]["standard_eab"] == expected["standard_eab"]
+    np.testing.assert_array_equal(pd.read_csv(directory / "RL_matrix.csv").to_numpy(),
+                                  pd.read_csv(result["directory"] / "RL_matrix.csv").to_numpy())
+
+
+def test_provenance_output_and_original_unchanged(source, result):
+    record = result["record"]
+    assert record["status"] == "success"
+    assert record["raw_sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert record["missing_data_interpolation"] == "OFF"
+    assert "parser_version" in record and "software_version" in record
+    assert record["sdat_schema_status"] == "not_applicable"
+    assert record["validation_status"].startswith("pending")
+    assert record["frequency_points"] == 3
+    for name, digest in record["artifacts_sha256"].items():
+        assert hashlib.sha256((result["directory"] / name).read_bytes()).hexdigest() == digest
+
+
+def test_failure_record(source, tmp_path):
+    with pytest.raises(ValueError):
+        analyze_request(AnalysisRequest(source, "bad", output=tmp_path / "fail", thickness_min=5, thickness_max=1))
+    record = json.loads(next((tmp_path / "fail").rglob("analysis_record.json")).read_text(encoding="utf-8"))
+    assert record["status"] == "failed"
+
+
+def test_cancel_preserves_completed_run(source, result, tmp_path):
+    before = (result["directory"] / "analysis_record.json").read_bytes()
+    with pytest.raises(Cancelled):
+        analyze_request(AnalysisRequest(source, "cancelled", output=tmp_path / "cancel"), cancelled=lambda: True)
+    record = json.loads(next((tmp_path / "cancel").rglob("analysis_record.json")).read_text(encoding="utf-8"))
+    assert record["status"] == "cancelled"
+    assert (result["directory"] / "analysis_record.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("extension", ["png", "tiff", "pdf", "svg"])
+def test_export_formats(tmp_path, result, extension):
+    path = tmp_path / f"export.{extension}"
+    export_figure(result, "RL_2D", path, lambda *args: None, lambda: False, dpi=30)
+    assert path.stat().st_size > 100
+
+
+def test_export_cannot_overwrite_provenance(result):
+    with pytest.raises(ValueError, match="追溯"):
+        export_figure(result, "RL_2D", result["directory"] / "figures" / "RL_2D.png", lambda *args: None, lambda: False)
+
+
+def test_open_output_uses_completed_directory(window, result, monkeypatch):
+    urls = []
+    monkeypatch.setattr("gui.pages.single_sample_page.QDesktopServices.openUrl", lambda url: urls.append(url) or True)
+    window.single.completed = result
+    window.single.parameters.output.setText("not-the-run")
+    window.single.open_output()
+    assert Path(urls[0].toLocalFile()) == result["directory"].resolve()
+
+
+def test_xlsx_import(source, frame, tmp_path):
+    path = tmp_path / "synthetic.xlsx"
+    frame.to_excel(path, index=False)
+    info = inspect_file(path, {"imaginary_convention": "loss"})
+    assert info["points"] == 3 and info["status"] == "PENDING"
+
+
+def test_folder_import_isolates_failures(window, source, tmp_path, qtbot):
+    (tmp_path / "bad.csv").write_text("bad\n1\n")
+    window.single.import_paths([tmp_path])
+    qtbot.waitUntil(lambda: not window.single.busy)
+    assert len(window.single.table.sources) == 2
+    statuses = [item.data(0, Qt.ItemDataRole.UserRole)["status"] for item in window.single.table.sources.values()]
+    assert set(statuses) == {"PENDING", "FAIL"}
+
+
+def test_xls_real_binary_parser(frame):
+    from core.parser import read_sample
+    path = Path(__file__).resolve().parents[1] / "sample_data/synthetic_legacy.xls"
+    data = read_sample(path, imaginary_convention="loss")
+    pd.testing.assert_frame_equal(data.data, frame)
+
+
+def test_drag_drop_uses_import(window, source, monkeypatch):
+    from PySide6.QtCore import QPoint, QPointF
+    calls = []
+    monkeypatch.setattr(window.single, "import_paths", lambda paths: calls.append(paths))
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(source))])
+    enter = QDragEnterEvent(QPoint(10, 10), Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    window.dragEnterEvent(enter)
+    assert enter.isAccepted()
+    event = QDropEvent(QPointF(10, 10), Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    window.dropEvent(event)
+    assert len(calls) == 1 and [Path(p) for p in calls[0]] == [source]
+    assert window.stack.currentWidget() is window.single
+
+
+def test_cancel_button_and_close_guard(window, qtbot):
+    import threading
+    started = threading.Event()
+    release = threading.Event()
+    def operation(progress, cancelled):
+        started.set()
+        release.wait(2)
+        if cancelled():
+            raise Cancelled("已取消")
+    window.single._launch(operation, lambda result: None)
+    qtbot.waitUntil(started.is_set)
+    assert not window.single.files.isEnabled()
+    assert window.close() is False
+    assert window.single.worker.isInterruptionRequested()
+    release.set()
+    qtbot.waitUntil(lambda: not window.single.busy)
+    assert window.single.files.isEnabled()
+    assert "已取消" in window.single.error.text()
+
+
+def test_cancel_after_data_saved(source, tmp_path):
+    requested = False
+    def progress(percent, text):
+        nonlocal requested
+        if percent == 50:
+            requested = True
+    with pytest.raises(Cancelled):
+        analyze_request(AnalysisRequest(source, "cancel_after_write", output=tmp_path / "partial", dpi=30),
+                        progress, lambda: requested)
+    record_path = next((tmp_path / "partial").rglob("analysis_record.json"))
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    assert record["status"] == "cancelled"
+    assert (record_path.parent / "RL_matrix.csv").exists()
+    assert record["artifacts_sha256"]["RL_matrix.csv"]
+
+
+def test_frequency_crop_uses_only_original_points(source, tmp_path):
+    request = AnalysisRequest(source, "crop", output=tmp_path, frequency_min=2.1, frequency_max=4,
+                              thickness_min=1, thickness_max=1, dpi=30)
+    result = analyze_request(request)
+    np.testing.assert_array_equal(result["result"].frequency_ghz, [3., 4.])
+    assert result["record"]["selected_source_rows"] == [3, 4]
+
+
+def test_nonstandard_threshold_keeps_standard_eab(source, tmp_path):
+    result = analyze_request(AnalysisRequest(source, "threshold", output=tmp_path, threshold=-5,
+                                             thickness_min=1, thickness_max=1, dpi=30))
+    assert result["summary"]["standard_eab"]["threshold_db"] == -10
+    assert "EAB" not in result["summary"]["selected_threshold_bandwidth"]["metric"]
+
+
+def test_empty_dialog_keeps_state(qtbot, monkeypatch):
+    selector = FileSelector()
+    qtbot.addWidget(selector)
+    monkeypatch.setattr("gui.widgets.file_selector.QFileDialog.getOpenFileNames", lambda *args: ([], ""))
+    seen = []
+    selector.files_selected.connect(seen.append)
+    selector.choose_files()
+    assert seen == []
+
+
+def test_toolbar_save_cannot_bypass_export():
+    from gui.widgets.plot_canvas import ScientificToolbar
+    assert all(item[0] != "Save" for item in ScientificToolbar.toolitems)

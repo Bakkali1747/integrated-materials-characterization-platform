@@ -1,12 +1,12 @@
 # 架构与阶段边界
 
-Phase 1 使用命令行，后续 Streamlit 界面复用核心模块，不将界面状态放入物理计算。
+命令行和 PySide6 桌面 GUI 复用核心模块，不将界面状态放入物理计算。GUI Phase 1 调用关系见 [GUI 使用说明](gui_usage.md)，不使用 Streamlit。
 
 数据流：只读原始文件 → parser 显式映射/单位/虚部转换 → validation → 标准化 SampleData → RLResult → EAB/绘图/结果记录。
 
 - core/models.py：数据对象，矩阵方向为 (Nd,Nf)。
 - core/units.py：展示单位与 SI 制之间的转换，厚度网格。
-- core/parser.py：CSV、Excel、已观察中文表头的 memp；不解析未知 sdat。
+- core/parser.py：CSV、Excel（xlsx/openpyxl、xls/xlrd）、已观察中文表头的 memp；不解析未知 sdat。
 - core/validation.py：阻止错误数据进入计算，警告不改变原数据。
 - core/electromagnetic.py：复数构造唯一入口。
 - core/rl_calculator.py：独立的输入阻抗/RL 和极小值定位。

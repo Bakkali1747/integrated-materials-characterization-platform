@@ -119,13 +119,13 @@ def read_sample(path, *, name=None, frequency_unit=None, imaginary_convention=No
         metadata.update({"encoding": actual_encoding, "header": header,
                          "column_map": dict(zip(COLUMNS, MEMP_HEADER)), "parser": "observed-memp-v1"})
         name = name or header.get("样品名称")
-    elif suffix in (".csv", ".xlsx"):
+    elif suffix in (".csv", ".xlsx", ".xls"):
         if suffix == ".csv":
             text, actual_encoding = decode_text(raw, encoding)
             frame, source_rows = read_csv_table(text, delimiter)
             metadata.update({"encoding": actual_encoding, "delimiter": delimiter})
         else:
-            with pd.ExcelFile(BytesIO(raw), engine="openpyxl") as workbook:
+            with pd.ExcelFile(BytesIO(raw), engine="xlrd" if suffix == ".xls" else "openpyxl") as workbook:
                 sheet_name = workbook.sheet_names[sheet] if isinstance(sheet, int) else sheet
                 table = pd.read_excel(workbook, sheet_name=sheet_name, header=None)
             if table.empty:
