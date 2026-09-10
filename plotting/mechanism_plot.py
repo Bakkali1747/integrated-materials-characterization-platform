@@ -5,11 +5,13 @@ from plotting.style import PlotStyle, new_axes
 from plotting.rl_plot import plot_rl_2d
 
 
-def plot_loss_tangents(table, style=None):
+def plot_loss_tangents(table, style=None, component=None):
     """输入派生表；返回两种无量纲损耗角正切随 GHz 频率的曲线。"""
     style = style or PlotStyle()
     fig, ax = new_axes(style)
     for col, label in (("tan_delta_eps", r"$\tan\delta_\varepsilon$"), ("tan_delta_mu", r"$\tan\delta_\mu$")):
+        if component is not None and col != component:
+            continue
         ax.plot(table.frequency_ghz, table[col], label=label, linewidth=style.linewidth)
     ax.set(xlabel="Frequency (GHz)", ylabel="Loss tangent")
     ax.legend(frameon=False)

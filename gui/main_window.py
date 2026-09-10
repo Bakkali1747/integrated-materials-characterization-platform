@@ -4,12 +4,14 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QListWidget, QS
 from core import __version__
 from gui.pages.home_page import HomePage
 from gui.pages.single_sample_page import SingleSamplePage
+from gui.pages.sparameter_page import SParameterPage
+from gui.pages.comparison_page import ComparisonPage
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"微波吸收材料分析软件 · v{__version__} · GUI Phase 1")
+        self.setWindowTitle(f"微波吸收材料分析软件 · v{__version__} · GUI Phase 2")
         self.resize(1400, 900)
         self.setMinimumSize(1200, 750)
         self.setAcceptDrops(True)
@@ -23,7 +25,18 @@ class MainWindow(QMainWindow):
         self.single = SingleSamplePage()
         self.stack.addWidget(self.home)
         self.stack.addWidget(self.single)
-        for title, phase in [("S参数分析", 2), ("多样品比较", 2), ("批量分析", 3), ("历史结果查看", 3), ("完整设置", 4)]:
+        self.sparameters = SParameterPage()
+        self.comparison = ComparisonPage()
+        self.stack.addWidget(self.sparameters)
+        self.stack.addWidget(self.comparison)
+        self.task_pages = [self.single, self.sparameters, self.comparison]
+        self.single.analysis_completed.connect(self.sparameters.add_theory)
+        self.single.analysis_completed.connect(lambda r: self.comparison.add_source(r["record"]["raw_file"], r["sample"].name))
+        self.single.table.source_selected.connect(self.transfer_source)
+        for page in self.task_pages:
+            page.busy_changed.connect(self.update_task_lock)
+            page.message.connect(self.statusBar().showMessage)
+        for title, phase in [("批量分析", 3), ("历史结果查看", 3), ("完整设置", 4)]:
             label = QLabel(f"{title}\n将在 GUI Phase {phase} 开放。\n本阶段请使用单样品页面；现有 CLI 功能继续可用。")
             label.setMargin(30)
             self.stack.addWidget(label)
@@ -48,22 +61,36 @@ class MainWindow(QMainWindow):
 
     def dragEnterEvent(self, event):
         """只接收本地文件 URL；分析运行中不接受新的拖入。"""
-        if not self.single.busy and event.mimeData().hasUrls() and all(u.isLocalFile() for u in event.mimeData().urls()):
+        if not any(p.busy for p in self.task_pages) and event.mimeData().hasUrls() and all(u.isLocalFile() for u in event.mimeData().urls()):
             event.acceptProposedAction()
 
     def dropEvent(self, event):
         """拖拽复用与文件对话框相同的导入路径。"""
         paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
-        if paths and not self.single.busy:
+        if paths and not any(p.busy for p in self.task_pages):
             self.navigation.setCurrentRow(1)
             self.single.import_paths(paths)
             event.acceptProposedAction()
 
     def closeEvent(self, event):
         """不销毁运行中的 QThread；先请求取消，让用户在任务结束后关闭。"""
-        if self.single.busy:
-            self.single.cancel()
+        if any(p.busy for p in self.task_pages):
+            for page in self.task_pages:
+                if page.busy:
+                    page.cancel()
             self.statusBar().showMessage("正在安全结束后台任务；结束后可再次关闭窗口。")
             event.ignore()
         else:
             event.accept()
+
+    def update_task_lock(self, *_):
+        """跨页面串行运行 pyplot 任务，其他页面可导航但不能并发操作。"""
+        active = next((p for p in self.task_pages if p.busy), None)
+        for page in self.task_pages:
+            page.setEnabled(active is None or page is active)
+
+    def transfer_source(self, info):
+        """已选 SDAT 传给独立页面；不自动把它送入材料计算。"""
+        if info and info["format"] == ".sdat":
+            self.sparameters.file.setText(str(info["path"]))
+            self.sparameters.name.setText(info["sample"])

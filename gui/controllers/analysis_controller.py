@@ -40,6 +40,7 @@ class AnalysisRequest:
     frequency_min: float | None = None
     frequency_max: float | None = None
     dpi: int = 600
+    full_science: bool = False
     parser_options: dict = field(default_factory=lambda: {"imaginary_convention": "loss"})
 
 
@@ -79,7 +80,7 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
               "requested_thickness_range_mm": [r.thickness_min, r.thickness_max],
               "thickness_step_mm": r.thickness_step, "curve_thickness_mm": r.curve_thickness,
               "rl_threshold_db": r.threshold, "eab_threshold_crossing": "linear",
-              "parser_options": r.parser_options, "figure_dpi": r.dpi}
+              "parser_options": r.parser_options, "figure_dpi": r.dpi, "full_science": r.full_science}
     directory, record = new_run(r.output, r.name, r.path, config)
     figures = {}
 
@@ -154,6 +155,7 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
         matrix.insert(0, "thickness_mm", d)
         matrix.to_csv(directory / "RL_matrix.csv", index=False)
         pd.DataFrame({"frequency_ghz": f, "rl_db": curve.rl_db[0]}).to_csv(directory / "RL_curve.csv", index=False)
+        pd.DataFrame({"thickness_mm": d, "eab_minus10_db_ghz": [e["maximum_continuous_bandwidth_ghz"] for e in standard["by_thickness"]]}).to_csv(directory / "thickness_summary.csv", index=False)
         (directory / "summary.json").write_text(json.dumps(json_safe(summary), ensure_ascii=False, indent=2), encoding="utf-8")
         style = PlotStyle(dpi=r.dpi)
         factories = [("permittivity", lambda: plot_parameters(sample, "permittivity", style)),
@@ -166,18 +168,43 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
         folder = directory / "figures"
         folder.mkdir()
         for index, (key, factory) in enumerate(factories):
-            checkpoint(60 + index * 9, f"绘图与保存：{key}")
+            checkpoint(55 + index * 5, f"绘图与保存：{key}")
             fig = factory()
             figures[key] = fig
             fig.suptitle("PENDING VALIDATION", fontsize=10, color="0.4")
             fig.savefig(folder / f"{key}.png", dpi=r.dpi)
             plt.close(fig)  # 解除 pyplot 管理；Figure 仍交由 Qt Canvas 持有。
+        science = {}
+        if r.full_science:
+            from export.phase2_export import export_phase2
+            from gui.controllers.science_figures import make_figure
+
+            def save_science(fig, filename):
+                # 取消检查放在持有 Figure 后，异常路径也可统一释放。
+                key = Path(filename).stem
+                figures[key] = fig
+                checkpoint(min(96, 70 + len(figures)), f"科研图：{key}")
+                fig.suptitle("PENDING VALIDATION", fontsize=10, color="0.4")
+                fig.savefig(folder / filename, dpi=r.dpi)
+                plt.close(fig)
+
+            record["phase2"] = export_phase2(sample, result, curve, directory, save_science, style)
+            summary["phase2"] = record["phase2"]
+            science = {"science_table": pd.read_csv(directory / "loss_parameters.csv"),
+                       "quarter_comparison": pd.read_csv(directory / "quarter_wave_comparison.csv").to_dict("records")}
+            context = {"sample": sample, "result": result, "curve": curve, "record": record, **science}
+            extra = ["tan_delta_eps", "tan_delta_mu"]
+            if len(d) > 1 and np.isfinite(result.rl_db).all():
+                extra.append("RL_3D")
+            for key in extra:
+                save_science(make_figure(context, key, style), key + ".png")
+            (directory / "summary.json").write_text(json.dumps(json_safe(summary), ensure_ascii=False, indent=2), encoding="utf-8")
         checkpoint(98, "完成来源追踪")
         record.update(status="success", artifacts_sha256=artifact_hashes(directory))
         write_record(directory, record)
         progress(100, "分析完成")
         return {"directory": directory, "sample": sample, "result": result, "curve": curve,
-                "summary": summary, "record": record, "figures": figures}
+                "summary": summary, "record": record, "figures": figures, **science}
     except Exception as error:
         for fig in figures.values():
             plt.close(fig)

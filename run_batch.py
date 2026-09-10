@@ -47,7 +47,7 @@ def summarize_sample(name, directory):
     return summary, minima, bands, record
 
 
-def compare_runs(runs, directory, style, curve_thickness):
+def compare_runs(runs, directory, style, curve_thickness, *, figure_callback=None):
     """输入选中的 name/运行目录；验证来源哈希后输出十项原生采样曲线和长表 CSV。
 
     不对不同频率网格自动对齐，不混用每个样品各自最佳厚度的 RL。
@@ -84,6 +84,8 @@ def compare_runs(runs, directory, style, curve_thickness):
         fig = plot_comparison(series, metric, style, curve_thickness)
         fig.suptitle("PENDING VALIDATION", fontsize=10, color="0.35")
         fig.savefig(directory/f"{metric}.png", dpi=style.dpi, bbox_inches="tight")
+        if figure_callback is not None:
+            figure_callback(metric, fig)
         plt.close(fig)
     notes = ["所有曲线保留各自原始采样点；不插值、不外推。", "RL 比较使用公共指定厚度；EAB 使用 −10 dB 最大连续频段。",
              "虚部定义和商业软件对照状态见每个样品记录。"]

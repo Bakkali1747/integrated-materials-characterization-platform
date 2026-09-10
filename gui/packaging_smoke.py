@@ -30,7 +30,7 @@ def run_smoke(app, output):
 
     def tick():
         nonlocal phase
-        if page.busy:
+        if any(p.busy for p in window.task_pages):
             return
         try:
             if phase == "import":
@@ -42,12 +42,12 @@ def run_smoke(app, output):
                 result = page.completed
                 if result is None:
                     raise RuntimeError(page.error.text())
-                if len(result["figures"]) != 4:
-                    raise RuntimeError("未生成四类基础图。")
+                if len(result["figures"]) != 16:
+                    raise RuntimeError("未生成十六类科研图。")
                 page.plot.selector.setCurrentIndex(3)
                 report.update(run_directory=str(result["directory"]), git=result["record"]["git"],
                               software_version=result["record"]["software_version"],
-                              rl_minima=result["summary"]["global_minima"], figure_count=4)
+                              rl_minima=result["summary"]["global_minima"], figure_count=len(result["figures"]))
 
                 def verify(progress, cancelled):
                     for extension in ("png", "tiff", "pdf", "svg"):
@@ -63,10 +63,38 @@ def run_smoke(app, output):
                     return True
                 page._launch(verify, lambda ok: report.update(exports_and_excel="PASS"))
                 phase = "verify"
-            else:
+            elif phase == "verify":
                 if report.get("exports_and_excel") != "PASS":
                     raise RuntimeError(page.error.text())
                 window.grab().save(str(output / "client.png"))
+                path = output / "synthetic.sdat"
+                lines = ['<Cluster><Name>SYNTHETIC ONLY</Name></Cluster>']
+                lines += ["\t".join(str(x) for x in [2+i*.08, .1, 0, .7, 0, .7, 0, .1, 0]) for i in range(201)]
+                path.write_text("\n".join(lines), encoding="utf-8")
+                spage = window.sparameters
+                spage.file.setText(str(path)); spage.name.setText("synthetic_sparameters"); spage.output.setText(str(output))
+                window.navigation.setCurrentRow(2)
+                spage.start_analysis()
+                phase = "sparameters"
+            elif phase == "sparameters":
+                if not window.sparameters.completed:
+                    raise RuntimeError(window.sparameters.error.text())
+                report["sparameters"] = window.sparameters.completed["record"]["schema_status"]
+                window.grab().save(str(output / "client-sparameters.png"))
+                compare = window.comparison
+                compare.add_source(output / "synthetic.xlsx", "synthetic_copy")
+                compare.parameters.output.setText(str(output))
+                compare.parameters.fields["thickness_max"].setValue(1.1)
+                compare.parameters.fields["thickness_step"].setValue(.1)
+                window.navigation.setCurrentRow(3)
+                compare.start_comparison()
+                phase = "comparison"
+            else:
+                result = window.comparison.completed
+                if not result or result["record"]["success_count"] != 2 or len(result["figures"]) != 10:
+                    raise RuntimeError(window.comparison.error.text() or "比较验收失败")
+                report["comparison_metric_count"] = len(result["figures"])
+                window.grab().save(str(output / "client-comparison.png"))
                 report["status"] = "success"
                 save_report()
                 window.close()

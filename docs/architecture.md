@@ -1,6 +1,6 @@
 # 架构与阶段边界
 
-命令行和 PySide6 桌面 GUI 复用核心模块，不将界面状态放入物理计算。GUI Phase 1 调用关系见 [GUI 使用说明](gui_usage.md)，不使用 Streamlit。
+命令行和 PySide6 桌面 GUI 复用核心模块，不将界面状态放入物理计算。GUI Phase 1 调用关系见 [GUI 使用说明](gui_usage.md)，当前 Phase 2 见 [完整科研图/S参数/比较](gui_phase2.md)，不使用 Streamlit。
 
 数据流：只读原始文件 → parser 显式映射/单位/虚部转换 → validation → 标准化 SampleData → RLResult → EAB/绘图/结果记录。
 

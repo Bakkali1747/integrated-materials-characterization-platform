@@ -81,4 +81,4 @@ class ParameterPanel(QWidget):
             values.update(frequency_min=None, frequency_max=None)
         return AnalysisRequest(path=Path(path), name=self.name.text().strip(),
                                output=Path(self.output.text()).expanduser().resolve(),
-                               parser_options=self.parser_options(path), **values)
+                               parser_options=self.parser_options(path), full_science=True, **values)

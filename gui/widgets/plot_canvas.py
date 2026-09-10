@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QComboBox, QLabel
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
+from gui.controllers.science_figures import NAMES
 
 
 class ScientificToolbar(NavigationToolbar2QT):
@@ -25,9 +26,9 @@ class PlotCanvas(QWidget):
         self.selector.blockSignals(True)
         self.selector.clear()
         self.figures = figures
-        names = {"permittivity": "ε′ / ε″", "permeability": "μ′ / μ″", "RL_curve": "指定厚度 RL 曲线", "RL_2D": "RL 二维图"}
+        names = NAMES
         for key in figures:
-            self.selector.addItem(names[key], key)
+            self.selector.addItem(names.get(key, key), key)
         self.selector.blockSignals(False)
         self.show_selected()
 

@@ -7,6 +7,7 @@ from plotting.em_parameters import plot_parameters
 from plotting.rl_plot import plot_rl_curve, plot_rl_2d
 from plotting.style import PlotStyle, plt
 from gui.controllers.analysis_controller import Cancelled
+from gui.controllers.science_figures import make_figure
 
 
 def export_figure(completed, key, path, progress, cancelled, dpi=600):
@@ -19,11 +20,7 @@ def export_figure(completed, key, path, progress, cancelled, dpi=600):
     if cancelled():
         raise Cancelled("图片导出已取消。")
     style = PlotStyle(dpi=dpi)
-    factories = {"permittivity": lambda: plot_parameters(completed["sample"], "permittivity", style),
-                 "permeability": lambda: plot_parameters(completed["sample"], "permeability", style),
-                 "RL_curve": lambda: plot_rl_curve(completed["curve"], style=style, threshold=completed["record"]["rl_threshold_db"]),
-                 "RL_2D": lambda: plot_rl_2d(completed["result"], style)[0]}
-    figure = factories[key]()
+    figure = make_figure(completed, key, style)
     temporary = None
     try:
         figure.suptitle("PENDING VALIDATION", fontsize=10, color="0.4")

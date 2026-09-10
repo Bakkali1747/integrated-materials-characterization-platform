@@ -20,6 +20,7 @@ class SingleSamplePage(QWidget):
     message = Signal(str)
     analysis_started = Signal(object)
     analysis_completed = Signal(object)
+    busy_changed = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -105,6 +106,7 @@ class SingleSamplePage(QWidget):
         self.start_button.setEnabled(not busy and ready)
         self.open_button.setEnabled(not busy and self.completed is not None)
         self.save_button.setEnabled(not busy and self.completed is not None)
+        self.busy_changed.emit(busy)
 
     def _finished(self):
         """Qt 线程真正结束后清理对象，解除输入锁定。"""
@@ -182,7 +184,7 @@ class SingleSamplePage(QWidget):
             self.parameters.name.setText(info["sample"])
             self.source_label.setText(f"文件来源：{info['path']}")
             if info["format"] == ".sdat":
-                self.badge.set_status(info["status"], "Measured S Parameters；S21/S12 顺序待厂商确认。S 参数分析将在 GUI Phase 2 开放。")
+                self.badge.set_status(info["status"], "Measured S Parameters；S21/S12 顺序待厂商确认。请切换左侧 S 参数分析页面。")
             else:
                 self.badge.set_status(info["status"], "Calculated RL from ε/μ；虚部定义 / 商业软件定量验证 PENDING。")
             if info.get("error"):
@@ -231,6 +233,7 @@ class SingleSamplePage(QWidget):
         if not summary["curve_standard_eab"]["bands"]:
             lines.append("当前厚度没有满足 −10 dB 的频段。")
         lines += ["不连续频段不累加为 EAB。", "", "警告：", *record["warnings"], "", f"结果目录：{result['directory']}"]
+        lines += record.get("phase2", {}).get("notes", [])
         self.summary.setPlainText("\n".join(lines))
         self.message.emit("分析完成；结果待外部验证。")
         self.analysis_completed.emit(result)
