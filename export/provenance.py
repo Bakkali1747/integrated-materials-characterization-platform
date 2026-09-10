@@ -10,6 +10,7 @@ import platform
 import re
 import subprocess
 import uuid
+import sys
 import numpy as np
 from core import __version__
 
@@ -29,6 +30,13 @@ def json_safe(value):
 
 def git_state():
     """读取项目 Git 提交及工作区状态；Git 不可用时明确返回 unavailable。"""
+    if getattr(sys, "frozen", False):
+        from application_paths import resource_root
+        try:
+            info = json.loads((resource_root() / "build_info.json").read_text(encoding="utf-8"))
+            return {"commit": info["commit"], "dirty": info["dirty"], "origin": "packaged_build"}
+        except (OSError, ValueError, KeyError):
+            return {"commit": "unavailable", "dirty": "unavailable", "origin": "packaged_build"}
     root = Path(__file__).resolve().parents[1]
     try:
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, stderr=subprocess.DEVNULL, text=True).strip()

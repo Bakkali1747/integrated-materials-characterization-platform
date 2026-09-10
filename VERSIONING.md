@@ -12,6 +12,7 @@
 | v0.4 | batch analysis | 批量分析及样品汇总 |
 | v0.5 | candidate S parameters | 独立候选 S 参数解析与检查 |
 | v0.6 | GUI Phase 1 | PySide6 单样品可视化操作层 |
+| v0.6.1 | Windows client | GUI Phase 1 独立客户端安装包 |
 | v1.0 | stable release | 已约定稳定版功能完成，验证和使用文档齐全 |
 
 版本里程碑不替代开发阶段：仍在每个 Phase 完成测试、展示结果后，等待用户确认再进入下一阶段。其他已约定功能仍按开发计划实现。

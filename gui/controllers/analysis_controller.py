@@ -15,8 +15,9 @@ from export.provenance import new_run, write_record, artifact_hashes, json_safe
 from plotting.em_parameters import plot_parameters
 from plotting.rl_plot import plot_rl_curve, plot_rl_2d
 from plotting.style import PlotStyle, plt
+from application_paths import user_data_root
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = user_data_root()
 SUPPORTED = {".csv", ".xlsx", ".xls", ".memp", ".sdat"}
 PENDING = "pending_imaginary_convention_and_commercial_reference"
 
