@@ -87,8 +87,15 @@ class BatchPage(TaskPage):
     def selected(self):
         row = self.table.currentItem()
         if row in self.rows:
-            import json
-            self.details.setPlainText(json.dumps(self.states[self.rows.index(row)], ensure_ascii=False, indent=2, default=str))
+            member = self.states[self.rows.index(row)]
+            lines = [f"样品：{member['sample']}", f"状态：{member['status']}",
+                     f"来源：{member.get('raw_file',member.get('path','未记录'))}"]
+            if member.get("error"):
+                lines += ["问题："+member["error"], "建议：检查原始数据、列映射和单位后重新扫描；其他来源结果保留。"]
+            if member.get("run_directory"):
+                lines.append("结果目录："+member["run_directory"])
+            lines += [f"{name}: {state} — {note}" for name,state,note in member.get("quality_control",[])]
+            self.details.setPlainText("\n".join(lines))
 
     def analyzed(self, result):
         self.completed = result

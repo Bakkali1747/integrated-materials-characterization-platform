@@ -20,3 +20,4 @@ output/
 .env.*
 !.env.example
 .streamlit/secrets.toml
+settings/gui.json

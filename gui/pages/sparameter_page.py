@@ -51,6 +51,7 @@ class SParameterPage(TaskPage):
         row.addWidget(self.channel); row.addWidget(self.quantity)
         update = QPushButton("更新显示"); update.clicked.connect(self.render_selected); row.addWidget(update)
         save = QPushButton("保存图片"); save.clicked.connect(self.save_selected); row.addWidget(save)
+        all_images = QPushButton("导出全部图片"); all_images.clicked.connect(self.save_all); row.addWidget(all_images)
         open_button = QPushButton("打开结果目录"); open_button.clicked.connect(self.open_output); row.addWidget(open_button)
         self.layout.addLayout(row)
         self.plot = PlotCanvas(); self.plot.selector.hide()
@@ -87,7 +88,8 @@ class SParameterPage(TaskPage):
         if not path or not name or not output:
             self.show_error("请指定 .sdat 文件、样品名称和输出目录。")
             return
-        self.launch(lambda progress, cancelled: analyze_s_request(path, name, output, schema, progress, cancelled), self.analyzed)
+        dpi = self.export_dpi
+        self.launch(lambda progress, cancelled: analyze_s_request(path, name, output, schema, progress, cancelled, dpi=dpi), self.analyzed)
 
     def analyzed(self, result):
         self.completed = result
@@ -130,6 +132,11 @@ class SParameterPage(TaskPage):
         if self.display_builder:
             self.save_plot(self.display_builder)
 
+    def save_all(self):
+        if self.completed:
+            result, dpi = self.completed, self.export_dpi
+            self.save_all_plots({key:lambda k=key:s_figure(result,k,dpi=dpi) for key in result["figures"]})
+
     def add_theory(self, result):
         key = str(result["directory"])
         if key not in self.theory_runs:
@@ -151,4 +158,5 @@ class SParameterPage(TaskPage):
             fig, directory = payload
             self.display(fig, builder)
             self.message.emit(f"理论 / 实测对照已保存：{directory}")
-        self.launch(lambda progress, cancelled: theory_comparison(theory, measured, progress, cancelled), completed)
+        dpi = self.export_dpi
+        self.launch(lambda progress, cancelled: theory_comparison(theory, measured, progress, cancelled, dpi=dpi), completed)

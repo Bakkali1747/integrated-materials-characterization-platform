@@ -27,6 +27,8 @@ class SingleSamplePage(QWidget):
         self.worker = None
         self.selected = None
         self.completed = None
+        self.export_dpi = 600
+        self.figure_format = "png"
         layout = QVBoxLayout(self)
         self.badge = StatusBadge("PENDING", "MEMP 可计算 / 待商业软件验证；虚部定义尚未交叉确认。所有真实结果待验证。")
         layout.addWidget(self.badge)
@@ -65,11 +67,14 @@ class SingleSamplePage(QWidget):
         self.cancel_button = QPushButton("取消（当前步骤结束后生效）")
         self.open_button = QPushButton("打开结果文件夹")
         self.save_button = QPushButton("保存当前图片…")
+        self.save_all_button = QPushButton("导出全部图片…")
+        self.save_all_button.clicked.connect(self.save_all_figures)
+        self.save_all_button.setEnabled(False)
         self.start_button.setEnabled(False)
         self.cancel_button.setEnabled(False)
         self.open_button.setEnabled(False)
         self.save_button.setEnabled(False)
-        for button in (self.start_button, self.cancel_button, self.open_button, self.save_button):
+        for button in (self.start_button, self.cancel_button, self.open_button, self.save_button, self.save_all_button):
             buttons.addWidget(button)
         layout.addLayout(buttons)
         self.progress = QProgressBar()
@@ -106,6 +111,7 @@ class SingleSamplePage(QWidget):
         self.start_button.setEnabled(not busy and ready)
         self.open_button.setEnabled(not busy and self.completed is not None)
         self.save_button.setEnabled(not busy and self.completed is not None)
+        self.save_all_button.setEnabled(not busy and self.completed is not None)
         self.busy_changed.emit(busy)
 
     def _finished(self):
@@ -255,8 +261,9 @@ class SingleSamplePage(QWidget):
         """保存 PNG/TIFF/PDF/SVG，默认 600 dpi；绘制与磁盘写入移至后台。"""
         if self.busy or self.plot.current_figure() is None:
             return
-        path, selected = QFileDialog.getSaveFileName(self, "保存当前图片（600 dpi）", "figure.png",
-                                                     "PNG (*.png);;TIFF (*.tiff);;PDF (*.pdf);;SVG (*.svg)")
+        dpi, extension = self.export_dpi, self.figure_format
+        filters = [f"{fmt.upper()} (*.{fmt})" for fmt in (extension, *[f for f in ("png","tiff","pdf","svg") if f != extension])]
+        path, selected = QFileDialog.getSaveFileName(self, f"保存当前图片（{dpi} dpi）", f"figure.{extension}", ";;".join(filters))
         if not path:
             return
         path = Path(path)
@@ -270,5 +277,23 @@ class SingleSamplePage(QWidget):
             self.show_error("请另选导出位置，分析运行目录中的追溯产物保持不变。")
             return
         completed, key = self.completed, self.plot.selector.currentData()
-        self._launch(lambda progress, cancelled: export_figure(completed, key, path, progress, cancelled),
+        self._launch(lambda progress, cancelled: export_figure(completed, key, path, progress, cancelled, dpi=dpi),
                      lambda saved: self.message.emit(f"图片已保存：{saved}"))
+
+    def save_all_figures(self):
+        if self.busy or not self.completed:
+            return
+        output = QFileDialog.getExistingDirectory(self,"导出全部图片（创建独立子目录）")
+        if not output:
+            return
+        from gui.controllers.export_controller import export_all_builders
+        from gui.controllers.science_figures import make_figure
+        from plotting.style import PlotStyle
+        result, dpi, extension = self.completed, self.export_dpi, self.figure_format
+        def builder(key):
+            figure = make_figure(result,key,PlotStyle(dpi=dpi))
+            figure.suptitle("PENDING VALIDATION",fontsize=10)
+            return figure
+        builders = {key:lambda k=key:builder(k) for key in result["figures"]}
+        self._launch(lambda p,c:export_all_builders(builders,result["directory"],output,extension,dpi,p,c),
+                     lambda path:self.message.emit(f"全部图片已保存：{path}"))

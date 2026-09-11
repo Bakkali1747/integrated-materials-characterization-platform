@@ -8,12 +8,14 @@ from gui.pages.sparameter_page import SParameterPage
 from gui.pages.comparison_page import ComparisonPage
 from gui.pages.batch_page import BatchPage
 from gui.pages.results_page import ResultsPage
+from gui.pages.settings_page import SettingsPage
+from gui.controllers.settings_controller import SettingsStore
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, settings_store=None):
         super().__init__()
-        self.setWindowTitle(f"微波吸收材料分析软件 · v{__version__} · GUI Phase 3")
+        self.setWindowTitle(f"微波吸收材料分析软件 · v{__version__} · GUI Phase 4")
         self.resize(1400, 900)
         self.setMinimumSize(1200, 750)
         self.setAcceptDrops(True)
@@ -42,10 +44,13 @@ class MainWindow(QMainWindow):
         for page in self.task_pages:
             page.busy_changed.connect(self.update_task_lock)
             page.message.connect(self.statusBar().showMessage)
-        for title, phase in [("完整设置", 4)]:
-            label = QLabel(f"{title}\n将在 GUI Phase {phase} 开放。\n本阶段请使用单样品页面；现有 CLI 功能继续可用。")
-            label.setMargin(30)
-            self.stack.addWidget(label)
+        self.settings_store = settings_store or SettingsStore()
+        self.settings = SettingsPage()
+        self.stack.addWidget(self.settings)
+        self.settings.apply_requested.connect(self.save_settings)
+        preferences, settings_warning = self.settings_store.load()
+        self.apply_preferences(preferences)
+        self.settings.message.setText(settings_warning)
         layout.addWidget(self.navigation)
         layout.addWidget(self.stack, 1)
         self.setCentralWidget(body)
@@ -54,6 +59,8 @@ class MainWindow(QMainWindow):
         self.single.message.connect(self.statusBar().showMessage)
         self.navigation.setCurrentRow(0)
         self.statusBar().showMessage("就绪 · 缺失数据插值 OFF · 真实数据验证 PENDING")
+        if settings_warning:
+            self.statusBar().showMessage(settings_warning)
         self.setStyleSheet("""
             QMainWindow, QWidget { background-color: #f5f7fa; color: #25364a; }
             QLineEdit, QDoubleSpinBox, QComboBox, QTreeWidget, QTextBrowser { background: white; }
@@ -63,7 +70,32 @@ class MainWindow(QMainWindow):
             QListWidget { background: #e9eef4; border: none; font-size: 15px; }
             QListWidget::item { padding: 17px 10px; }
             QListWidget::item:selected { background: #cedeee; color: #173e65; }
+            QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox { padding: 4px; border: 1px solid #bccbd9; border-radius: 3px; }
+            QTabWidget::pane { border: 1px solid #d4dde6; }
+            QHeaderView::section { background: #e9eef4; padding: 5px; border: none; }
         """)
+
+    def apply_preferences(self, values):
+        self.settings.populate(values)
+        for page in (self.single, self.comparison, self.batch):
+            page.parameters.apply_defaults(values)
+        self.sparameters.output.setText(values["output"])
+        for page in self.task_pages:
+            page.export_dpi = values["dpi"]
+            page.figure_format = values["figure_format"]
+
+    def save_settings(self, values):
+        if any(page.busy for page in self.task_pages):
+            self.settings.message.setText("任务运行中，结束后可应用默认设置。")
+            return
+        try:
+            saved = self.settings_store.save(values)
+            self.apply_preferences(saved)
+            self.settings.message.setText("已保存并应用；参数修改不自动计算。更改单位后请重新导入检查。")
+        except Exception as error:
+            import logging
+            logging.getLogger("microwave.gui").exception("设置保存失败")
+            self.settings.message.setText(f"保存失败，参数未应用：{error}")
 
     def dragEnterEvent(self, event):
         """只接收本地文件 URL；分析运行中不接受新的拖入。"""
@@ -94,6 +126,7 @@ class MainWindow(QMainWindow):
         active = next((p for p in self.task_pages if p.busy), None)
         for page in self.task_pages:
             page.setEnabled(active is None or page is active)
+        self.settings.setEnabled(active is None)
 
     def transfer_source(self, info):
         """已选 SDAT 传给独立页面；不自动把它送入材料计算。"""

@@ -14,7 +14,10 @@ def run_smoke(app, output):
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     report = {"status": "started", "user_data_root": str(user_data_root())}
-    window = MainWindow()
+    from gui.controllers.settings_controller import SettingsStore, defaults
+    smoke_settings = SettingsStore(output / "preferences/gui.json")
+    smoke_settings.save(defaults())
+    window = MainWindow(settings_store=smoke_settings)
     window.show()
     window.navigation.setCurrentRow(1)
     page = window.single
@@ -122,7 +125,7 @@ def run_smoke(app, output):
                 window.history.discovered([result["directory"] / "batch_record.json"])
                 window.history.load_selected()
                 phase = "history"
-            else:
+            elif phase == "history":
                 result = window.history.completed
                 if not result or not result["checks"] or any(s != "PASS" for _,s in result["checks"]):
                     raise RuntimeError("历史读取与完整性核对失败")
@@ -133,6 +136,35 @@ def run_smoke(app, output):
                 if report["quality_control"] != "PASS":
                     raise RuntimeError("Quality Control 未展示")
                 window.grab().save(str(output / "client-history.png"))
+                window.navigation.setCurrentRow(6)
+                window.settings.dpi.setValue(120)
+                window.settings.format.setCurrentText("svg")
+                window.settings.fields["thickness_step"].setValue(.02)
+                window.settings.save_button.click()
+                saved, warning = smoke_settings.load()
+                if warning or saved["dpi"] != 120 or saved["figure_format"] != "svg":
+                    raise RuntimeError("设置保存验收失败")
+                reopened = MainWindow(settings_store=smoke_settings)
+                if reopened.single.parameters.figure_dpi != 120 or reopened.sparameters.figure_format != "svg":
+                    raise RuntimeError("设置重启恢复失败")
+                reopened.close(); reopened.deleteLater()
+                report["settings_persistence"] = "PASS"
+                report["existing_snapshot_unchanged"] = page.completed["record"]["configuration"]["figure_dpi"] == 600
+                window.grab().save(str(output / "client-settings.png"))
+                from gui.controllers.export_controller import export_all_builders
+                from gui.controllers.science_figures import make_figure
+                from plotting.style import PlotStyle
+                result = page.completed
+                builders = {key:lambda k=key:make_figure(result,k,PlotStyle(dpi=120)) for key in result["figures"]}
+                page._launch(lambda p,c:export_all_builders(builders,result["directory"],output/"all-figures","svg",120,p,c),
+                             lambda directory:report.update(all_figures_directory=str(directory)))
+                phase = "all-exports"
+            else:
+                directory = Path(report.get("all_figures_directory", "missing"))
+                record = json.loads((directory / "export_record.json").read_text(encoding="utf-8"))
+                if record["status"] != "success" or len(record["completed"]) != 16:
+                    raise RuntimeError("全部图片导出验收失败")
+                report["all_figure_exports"] = len(record["completed"])
                 report["status"] = "success"
                 save_report()
                 window.close()

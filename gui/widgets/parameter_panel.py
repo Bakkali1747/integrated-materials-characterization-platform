@@ -10,7 +10,9 @@ class ParameterPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.figure_dpi = 600
         form = QFormLayout(self)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.name = QLineEdit()
         form.addRow("样品名称", self.name)
         self.fields = {}
@@ -36,6 +38,8 @@ class ParameterPanel(QWidget):
         self.unit.addItems(["GHz", "MHz", "kHz", "Hz"])
         form.addRow("文件频率单位", self.unit)
         self.convention = QComboBox()
+        self.convention.setMinimumContentsLength(10)
+        self.convention.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.convention.addItem("loss：损耗系数（临时假设）", "loss")
         self.convention.addItem("signed：带符号虚部", "signed")
         form.addRow("文件虚部定义", self.convention)
@@ -57,6 +61,13 @@ class ParameterPanel(QWidget):
         path = QFileDialog.getExistingDirectory(self, "选择输出目录", self.output.text())
         if path:
             self.output.setText(path)
+
+    def apply_defaults(self, values):
+        for key in ("thickness_min", "thickness_max", "thickness_step", "curve_thickness", "threshold"):
+            self.fields[key].setValue(values[key])
+        self.unit.setCurrentText(values["frequency_unit"])
+        self.output.setText(values["output"])
+        self.figure_dpi = values["dpi"]
 
     def parser_options(self, path=None):
         """输出显式解析选项；MEMP 按原始表头 GHz，不覆盖其列映射。"""
@@ -81,4 +92,4 @@ class ParameterPanel(QWidget):
             values.update(frequency_min=None, frequency_max=None)
         return AnalysisRequest(path=Path(path), name=self.name.text().strip(),
                                output=Path(self.output.text()).expanduser().resolve(),
-                               parser_options=self.parser_options(path), full_science=True, **values)
+                               parser_options=self.parser_options(path), full_science=True, dpi=self.figure_dpi, **values)

@@ -46,7 +46,7 @@ class ComparisonPage(TaskPage):
         row = QHBoxLayout()
         self.start_button = QPushButton("分析勾选样品并比较"); self.start_button.clicked.connect(self.start_comparison)
         row.addWidget(self.start_button)
-        for label, callback in [("保存当前图", self.save_selected), ("打开结果 / Excel", self.open_output)]:
+        for label, callback in [("保存当前图", self.save_selected), ("导出全部图片", self.save_all), ("打开结果 / Excel", self.open_output)]:
             button = QPushButton(label); button.clicked.connect(callback); row.addWidget(button)
         self.layout.addLayout(row)
 
@@ -96,7 +96,7 @@ class ComparisonPage(TaskPage):
             output = requests[0].output
         except Exception as error:
             self.show_error(str(error)); return
-        self.launch(lambda progress, cancelled: compare_requests(requests, output, progress, cancelled), self.analyzed)
+        self.launch(lambda progress, cancelled: compare_requests(requests, output, progress, cancelled, dpi=requests[0].dpi), self.analyzed)
 
     def analyzed(self, result):
         self.completed = result
@@ -113,7 +113,14 @@ class ComparisonPage(TaskPage):
     def save_selected(self):
         if not self.completed or not self.plot.current_figure():
             return
-        result, metric = self.completed, self.plot.selector.currentData()
+        self.save_plot(self.figure_builder(self.plot.selector.currentData()))
+
+    def save_all(self):
+        if self.completed:
+            self.save_all_plots({key:self.figure_builder(key) for key in self.completed["figures"]})
+
+    def figure_builder(self, metric):
+        result, dpi = self.completed, self.export_dpi
         # 读取已输出的比较长表仅用于重绘；不重新对齐不同采样网格。
         def builder():
             relative = Path("figures") / f"{metric}.csv"
@@ -123,7 +130,7 @@ class ComparisonPage(TaskPage):
             frame = pd.read_csv(path)
             axis = "thickness_mm" if metric == "eab_minus10_db_ghz" else "frequency_ghz"
             series = [{"name": name, "x": group[axis].to_numpy(), "y": group[metric].to_numpy()} for name, group in frame.groupby("sample", sort=False)]
-            fig = plot_comparison(series, metric, PlotStyle(), result["curve_thickness"])
+            fig = plot_comparison(series, metric, PlotStyle(dpi=dpi), result["curve_thickness"])
             fig.suptitle("PENDING VALIDATION", fontsize=10); plt.close(fig)
             return fig
-        self.save_plot(builder)
+        return builder

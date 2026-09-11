@@ -12,7 +12,7 @@ class HomePage(QWidget):
         title = QLabel("微波吸收材料分析软件")
         title.setStyleSheet("font-size: 28px; font-weight: 600;")
         layout.addWidget(title)
-        layout.addWidget(QLabel("GUI Phase 3 · 本地科研分析\n目录批量任务 / Quality Control / 历史结果\n支持导入 .memp / .sdat / .xlsx / .xls / .csv"))
+        layout.addWidget(QLabel("GUI Phase 4 · 本地科研分析\n单样品 / S 参数 / 多样品比较 / 批量 / 历史 / 持久化设置\n支持导入 .memp / .sdat / .xlsx / .xls / .csv"))
         for text, index in [("单样品分析", 1), ("S 参数分析", 2), ("多样品比较", 3), ("批量分析", 4), ("打开历史结果", 5)]:
             button = QPushButton(text)
             button.setMinimumHeight(58)

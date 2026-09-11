@@ -4,6 +4,8 @@
 
 GUI Phase 3 调用链：BatchPage → AnalysisWorker(QThread) → batch_controller → analyze_request / analyze_s_request → 原核心 API。跨页面串行执行绘图任务；请求参数在主线程快照，后台只通过 Qt 信号发送进度和成员状态。QC 适配读取 parser 通过证据与原质量检查，不另写数值检查公式。ResultsPage → AnalysisWorker → history_controller，只读取文件及核对哈希，不重新计算。批量顶层记录逐来源原子写入；独立子运行沿用原有追溯格式。
 
+GUI Phase 4：SettingsPage → SettingsStore 严格校验 / 原子保存 → MainWindow 显式应用默认参数。GUI 偏好与科研核心配置分离；分析开始时仍由 ParameterPanel 生成独立请求快照。全部图片导出从已完成结果调用原绘图 API，每张图片原子保存，导出记录包含来源运行记录哈希、版本、DPI、格式及状态。历史 ImageView 只缩放已保存图像，不调用科学计算。见 [设置与导出](gui_phase4.md)。
+
 数据流：只读原始文件 → parser 显式映射/单位/虚部转换 → validation → 标准化 SampleData → RLResult → EAB/绘图/结果记录。
 
 - core/models.py：数据对象，矩阵方向为 (Nd,Nf)。

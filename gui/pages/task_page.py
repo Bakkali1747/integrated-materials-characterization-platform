@@ -17,6 +17,8 @@ class TaskPage(QWidget):
         super().__init__()
         self.worker = None
         self.completed = None
+        self.export_dpi = 600
+        self.figure_format = "png"
         self.outer = QVBoxLayout(self)
         self.heading = QLabel(title)
         self.outer.addWidget(self.heading)
@@ -89,7 +91,9 @@ class TaskPage(QWidget):
         """输入只依赖结果快照的绘图函数；后台原子保存，不触碰 Qt canvas。"""
         if not self.completed or self.busy:
             return
-        path, selected = QFileDialog.getSaveFileName(self, "保存图片（600 dpi）", "figure.png", "PNG (*.png);;TIFF (*.tiff);;PDF (*.pdf);;SVG (*.svg)")
+        dpi, extension = self.export_dpi, self.figure_format
+        filters = [f"{fmt.upper()} (*.{fmt})" for fmt in (extension, *[f for f in ("png","tiff","pdf","svg") if f != extension])]
+        path, selected = QFileDialog.getSaveFileName(self, f"保存图片（{dpi} dpi）", f"figure.{extension}", ";;".join(filters))
         if not path:
             return
         path = Path(path)
@@ -111,7 +115,7 @@ class TaskPage(QWidget):
             try:
                 with tempfile.NamedTemporaryFile(dir=path.parent, suffix=path.suffix, delete=False) as handle:
                     temporary = Path(handle.name)
-                fig.savefig(temporary, dpi=600, bbox_inches="tight")
+                fig.savefig(temporary, dpi=dpi, bbox_inches="tight")
                 if cancelled():
                     raise Cancelled("导出已取消，未改变目标")
                 os.replace(temporary, path)
@@ -121,3 +125,14 @@ class TaskPage(QWidget):
                 if temporary:
                     temporary.unlink(missing_ok=True)
         self.launch(operation, lambda p: self.message.emit(f"已保存：{p}"))
+
+    def save_all_plots(self, builders):
+        if not self.completed or self.busy:
+            return
+        output = QFileDialog.getExistingDirectory(self, "导出全部图片（创建独立子目录）")
+        if not output:
+            return
+        from gui.controllers.export_controller import export_all_builders
+        source, extension, dpi = self.completed["directory"], self.figure_format, self.export_dpi
+        self.launch(lambda p,c: export_all_builders(builders,source,output,extension,dpi,p,c),
+                    lambda path:self.message.emit(f"全部图片已保存：{path}"))
