@@ -1,10 +1,10 @@
 # Windows 独立客户端
 
-当前安装包为 GUI Phase 2（v0.7.0），不包含 Phase 3 功能。操作见 `gui_phase2.md`。
+当前安装包为 GUI Phase 3（v0.8.0），新增批量任务、质量检查和历史查看。操作见 `gui_phase3.md` 和 `gui_phase2.md`。
 
 ## 安装和启动
 
-双击 `MicrowaveAbsorptionAnalyzer-Setup-0.7.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“微波吸收材料分析软件”。
+双击 `MicrowaveAbsorptionAnalyzer-Setup-0.8.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“微波吸收材料分析软件”。
 
 目标为 Windows 10（1809 或更高）/Windows 11 x64。界面为中文，安装向导按钮使用英文。客户端未做商业代码签名，Windows 可能显示“未知发布者”；请只使用随交付提供哈希的安装文件。
 

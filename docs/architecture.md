@@ -1,6 +1,8 @@
 # 架构与阶段边界
 
-命令行和 PySide6 桌面 GUI 复用核心模块，不将界面状态放入物理计算。GUI Phase 1 调用关系见 [GUI 使用说明](gui_usage.md)，当前 Phase 2 见 [完整科研图/S参数/比较](gui_phase2.md)，不使用 Streamlit。
+命令行和 PySide6 桌面 GUI 复用核心模块，不将界面状态放入物理计算。GUI Phase 1 调用关系见 [GUI 使用说明](gui_usage.md)，Phase 2 见 [完整科研图/S参数/比较](gui_phase2.md)，当前 Phase 3 见 [批量/QC/历史](gui_phase3.md)，不使用 Streamlit。
+
+GUI Phase 3 调用链：BatchPage → AnalysisWorker(QThread) → batch_controller → analyze_request / analyze_s_request → 原核心 API。跨页面串行执行绘图任务；请求参数在主线程快照，后台只通过 Qt 信号发送进度和成员状态。QC 适配读取 parser 通过证据与原质量检查，不另写数值检查公式。ResultsPage → AnalysisWorker → history_controller，只读取文件及核对哈希，不重新计算。批量顶层记录逐来源原子写入；独立子运行沿用原有追溯格式。
 
 数据流：只读原始文件 → parser 显式映射/单位/虚部转换 → validation → 标准化 SampleData → RLResult → EAB/绘图/结果记录。
 

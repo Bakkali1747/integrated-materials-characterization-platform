@@ -89,12 +89,50 @@ def run_smoke(app, output):
                 window.navigation.setCurrentRow(3)
                 compare.start_comparison()
                 phase = "comparison"
-            else:
+            elif phase == "comparison":
                 result = window.comparison.completed
                 if not result or result["record"]["success_count"] != 2 or len(result["figures"]) != 10:
                     raise RuntimeError(window.comparison.error.text() or "比较验收失败")
                 report["comparison_metric_count"] = len(result["figures"])
                 window.grab().save(str(output / "client-comparison.png"))
+                batch_source = output / "batch-input"
+                batch_source.mkdir(exist_ok=True)
+                (batch_source / "synthetic.csv").write_bytes(source.read_bytes())
+                (batch_source / "synthetic.sdat").write_bytes((output / "synthetic.sdat").read_bytes())
+                (batch_source / "broken.csv").write_text("bad\n1")
+                bpage = window.batch
+                bpage.parameters.output.setText(str(output / "batch-output"))
+                bpage.parameters.fields["thickness_max"].setValue(1.1)
+                bpage.parameters.fields["thickness_step"].setValue(.1)
+                window.navigation.setCurrentRow(4)
+                bpage.scan(batch_source)
+                phase = "batch-scan"
+            elif phase == "batch-scan":
+                if len(window.batch.items) != 3:
+                    raise RuntimeError("批量目录扫描失败")
+                window.batch.start()
+                phase = "batch-run"
+            elif phase == "batch-run":
+                result = window.batch.completed
+                if not result or result["record"]["success_count"] != 2 or result["record"]["failed_count"] != 1:
+                    raise RuntimeError(window.batch.error.text() or "批量失败隔离验收失败")
+                report["batch"] = {k:result["record"][k] for k in ("status", "success_count", "failed_count")}
+                window.grab().save(str(output / "client-batch.png"))
+                window.navigation.setCurrentRow(5)
+                window.history.discovered([result["directory"] / "batch_record.json"])
+                window.history.load_selected()
+                phase = "history"
+            else:
+                result = window.history.completed
+                if not result or not result["checks"] or any(s != "PASS" for _,s in result["checks"]):
+                    raise RuntimeError("历史读取与完整性核对失败")
+                if window.history.image.pixmap() is None or window.history.image.pixmap().isNull():
+                    raise RuntimeError("历史图片未显示")
+                report["history_integrity"] = "PASS"
+                report["quality_control"] = "PASS" if "Quality Control" in page.summary.toPlainText() else "FAIL"
+                if report["quality_control"] != "PASS":
+                    raise RuntimeError("Quality Control 未展示")
+                window.grab().save(str(output / "client-history.png"))
                 report["status"] = "success"
                 save_report()
                 window.close()

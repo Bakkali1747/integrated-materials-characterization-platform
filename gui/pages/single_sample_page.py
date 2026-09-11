@@ -234,7 +234,8 @@ class SingleSamplePage(QWidget):
             lines.append("当前厚度没有满足 −10 dB 的频段。")
         lines += ["不连续频段不累加为 EAB。", "", "警告：", *record["warnings"], "", f"结果目录：{result['directory']}"]
         lines += record.get("phase2", {}).get("notes", [])
-        self.summary.setPlainText("\n".join(lines))
+        from gui.controllers.quality_controller import quality_text
+        self.summary.setPlainText(quality_text(record) + "\n\n" + "\n".join(lines))
         self.message.emit("分析完成；结果待外部验证。")
         self.analysis_completed.emit(result)
 

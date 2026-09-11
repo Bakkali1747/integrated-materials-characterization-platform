@@ -101,6 +101,8 @@ class SParameterPage(TaskPage):
             f"[COMPUTED] 互易性超容差点数：{qc['reciprocity']['violation_count']}",
             "容差：" + json.dumps(qc["tolerances"]), *qc["warnings"],
             "[COMMON] 一致性筛查不证明完整二端口无源性，也不确认厂商映射。", "S11_dB 不命名为 RL。"] ))
+        from gui.controllers.quality_controller import quality_text
+        self.summary.setPlainText(quality_text(record) + "\n\n" + self.summary.toPlainText())
         if qc["negative_absorption_count"] or qc["energy_violation_count"] or sum(qc["magnitude_violation_counts"].values()):
             self.show_error("WARNING：存在负 A 或幅度/能量超限；请查看右侧 QC，原始数值没有裁剪。")
         columns = ["frequency_ghz"] + [f"{s}_db" for s in ("S11", "S21", "S12", "S22")] + ["R", "T", "A"]

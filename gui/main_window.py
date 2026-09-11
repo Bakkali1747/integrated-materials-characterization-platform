@@ -6,12 +6,14 @@ from gui.pages.home_page import HomePage
 from gui.pages.single_sample_page import SingleSamplePage
 from gui.pages.sparameter_page import SParameterPage
 from gui.pages.comparison_page import ComparisonPage
+from gui.pages.batch_page import BatchPage
+from gui.pages.results_page import ResultsPage
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"微波吸收材料分析软件 · v{__version__} · GUI Phase 2")
+        self.setWindowTitle(f"微波吸收材料分析软件 · v{__version__} · GUI Phase 3")
         self.resize(1400, 900)
         self.setMinimumSize(1200, 750)
         self.setAcceptDrops(True)
@@ -29,14 +31,18 @@ class MainWindow(QMainWindow):
         self.comparison = ComparisonPage()
         self.stack.addWidget(self.sparameters)
         self.stack.addWidget(self.comparison)
-        self.task_pages = [self.single, self.sparameters, self.comparison]
+        self.batch = BatchPage()
+        self.history = ResultsPage()
+        self.stack.addWidget(self.batch)
+        self.stack.addWidget(self.history)
+        self.task_pages = [self.single, self.sparameters, self.comparison, self.batch, self.history]
         self.single.analysis_completed.connect(self.sparameters.add_theory)
         self.single.analysis_completed.connect(lambda r: self.comparison.add_source(r["record"]["raw_file"], r["sample"].name))
         self.single.table.source_selected.connect(self.transfer_source)
         for page in self.task_pages:
             page.busy_changed.connect(self.update_task_lock)
             page.message.connect(self.statusBar().showMessage)
-        for title, phase in [("批量分析", 3), ("历史结果查看", 3), ("完整设置", 4)]:
+        for title, phase in [("完整设置", 4)]:
             label = QLabel(f"{title}\n将在 GUI Phase {phase} 开放。\n本阶段请使用单样品页面；现有 CLI 功能继续可用。")
             label.setMargin(30)
             self.stack.addWidget(label)

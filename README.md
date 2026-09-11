@@ -1,8 +1,8 @@
 # 本地微波吸收分析软件
 
-当前为 v0.7.0：PySide6 GUI Phase 2 提供完整科研图、候选 S 参数/RTA、理论实测叠图、十项多样品比较及指标表。CLI 继续保留，真实数据仍待外部验证。见 [Phase 2 使用说明](docs/gui_phase2.md)。
+当前为 v0.8.0：GUI Phase 3 增加目录批量分析、失败隔离与取消、Quality Control 和只读历史结果浏览。CLI 及已有科研计算继续保留，真实数据仍待外部验证。见 [Phase 3 使用说明](docs/gui_phase3.md)；完整科研图和比较操作见 [Phase 2 使用说明](docs/gui_phase2.md)。
 
-无需 Python 的客户端：双击 `output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.7.0-win64.exe` 安装，见 [客户端使用说明](docs/client_usage.md)。
+无需 Python 的客户端：双击 `output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.8.0-win64.exe` 安装，见 [客户端使用说明](docs/client_usage.md)。
 
 启动桌面界面：`.\.venv\Scripts\python.exe run_gui.py`。新环境安装 `requirements-gui.txt`。具体步骤和阶段边界见 [GUI 使用说明](docs/gui_usage.md)。
 

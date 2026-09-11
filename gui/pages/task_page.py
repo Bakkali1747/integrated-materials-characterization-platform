@@ -47,6 +47,7 @@ class TaskPage(QWidget):
         if self.busy:
             return
         self.error.clear()
+        self.progress.setValue(0)
         self.worker = AnalysisWorker(operation, self)
         self.worker.progress.connect(self.on_progress)
         self.worker.succeeded.connect(callback)
