@@ -171,7 +171,6 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
             checkpoint(55 + index * 5, f"绘图与保存：{key}")
             fig = factory()
             figures[key] = fig
-            fig.suptitle("PENDING VALIDATION", fontsize=10, color="0.4")
             fig.savefig(folder / f"{key}.png", dpi=r.dpi)
             plt.close(fig)  # 解除 pyplot 管理；Figure 仍交由 Qt Canvas 持有。
         science = {}
@@ -184,7 +183,6 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
                 key = Path(filename).stem
                 figures[key] = fig
                 checkpoint(min(96, 70 + len(figures)), f"科研图：{key}")
-                fig.suptitle("PENDING VALIDATION", fontsize=10, color="0.4")
                 fig.savefig(folder / filename, dpi=r.dpi)
                 plt.close(fig)
 

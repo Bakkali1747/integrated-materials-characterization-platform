@@ -131,6 +131,6 @@ class ComparisonPage(TaskPage):
             axis = "thickness_mm" if metric == "eab_minus10_db_ghz" else "frequency_ghz"
             series = [{"name": name, "x": group[axis].to_numpy(), "y": group[metric].to_numpy()} for name, group in frame.groupby("sample", sort=False)]
             fig = plot_comparison(series, metric, PlotStyle(dpi=dpi), result["curve_thickness"])
-            fig.suptitle("PENDING VALIDATION", fontsize=10); plt.close(fig)
+            plt.close(fig)
             return fig
         return builder

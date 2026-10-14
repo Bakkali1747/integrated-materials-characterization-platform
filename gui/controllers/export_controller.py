@@ -74,7 +74,6 @@ def export_figure(completed, key, path, progress, cancelled, dpi=600):
     figure = make_figure(completed, key, style)
     temporary = None
     try:
-        figure.suptitle("PENDING VALIDATION", fontsize=10, color="0.4")
         progress(20, "保存图片…")
         with tempfile.NamedTemporaryFile(dir=path.parent, suffix=path.suffix, delete=False) as handle:
             temporary = Path(handle.name)

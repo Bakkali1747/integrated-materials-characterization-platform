@@ -292,7 +292,6 @@ class SingleSamplePage(QWidget):
         result, dpi, extension = self.completed, self.export_dpi, self.figure_format
         def builder(key):
             figure = make_figure(result,key,PlotStyle(dpi=dpi))
-            figure.suptitle("PENDING VALIDATION",fontsize=10)
             return figure
         builders = {key:lambda k=key:builder(k) for key in result["figures"]}
         self._launch(lambda p,c:export_all_builders(builders,result["directory"],output,extension,dpi,p,c),
