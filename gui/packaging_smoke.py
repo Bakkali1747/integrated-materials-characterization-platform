@@ -45,9 +45,12 @@ def run_smoke(app, output):
                 result = page.completed
                 if result is None:
                     raise RuntimeError(page.error.text())
-                if len(result["figures"]) != 16:
-                    raise RuntimeError("未生成十六类科研图。")
-                page.plot.selector.setCurrentIndex(3)
+                if len(result["figures"]) != 17:
+                    raise RuntimeError("未生成十七类科研图。")
+                page.plot.selector.setCurrentIndex(page.plot.selector.findData("RL_multi_thickness"))
+                if not (result["directory"] / "RL_multi_thickness.csv").is_file():
+                    raise RuntimeError("多厚度 RL 逐点数据未保存")
+                report["multi_thickness_mm"] = result["record"]["multi_thickness_rl"]["thickness_mm"]
                 report.update(run_directory=str(result["directory"]), git=result["record"]["git"],
                               software_version=result["record"]["software_version"],
                               rl_minima=result["summary"]["global_minima"], figure_count=len(result["figures"]))
@@ -162,7 +165,7 @@ def run_smoke(app, output):
             else:
                 directory = Path(report.get("all_figures_directory", "missing"))
                 record = json.loads((directory / "export_record.json").read_text(encoding="utf-8"))
-                if record["status"] != "success" or len(record["completed"]) != 16:
+                if record["status"] != "success" or len(record["completed"]) != 17:
                     raise RuntimeError("全部图片导出验收失败")
                 report["all_figure_exports"] = len(record["completed"])
                 report["status"] = "success"

@@ -240,6 +240,10 @@ class SingleSamplePage(QWidget):
             lines.append("当前厚度没有满足 −10 dB 的频段。")
         lines += ["不连续频段不累加为 EAB。", "", "警告：", *record["warnings"], "", f"结果目录：{result['directory']}"]
         lines += record.get("phase2", {}).get("notes", [])
+        if "multi_thickness_rl" in record:
+            values = record["multi_thickness_rl"]["thickness_mm"]
+            lines += ["", "自动多厚度 RL 图：" + ", ".join(f"{d:g}" for d in values) + " mm",
+                      "已从计算矩阵选取代表厚度，并加入首个 RLmin / 最大 EAB 厚度；图类型列表中查看。"]
         from gui.controllers.quality_controller import quality_text
         self.summary.setPlainText(quality_text(record) + "\n\n" + "\n".join(lines))
         self.message.emit("分析完成；结果待外部验证。")

@@ -43,6 +43,38 @@ def plot_rl_2d(result, style=None, norm=None):
     return fig, artist
 
 
+def representative_thickness_indices(result, important_thicknesses=()):
+    """从已计算矩阵中选最多七个均匀分布的厚度行，加入指定的关键厚度行。"""
+    count = len(result.thickness_mm)
+    if not count:
+        raise ValueError("没有可用厚度点。")
+    indices = set(np.rint(np.linspace(0, count - 1, min(7, count))).astype(int).tolist())
+    for thickness in important_thicknesses:
+        matches = np.flatnonzero(result.thickness_mm == thickness)
+        if not len(matches):
+            raise ValueError("关键厚度不在本次扫描矩阵中。")
+        indices.add(int(matches[0]))
+    return sorted(indices)
+
+
+def plot_rl_multi_thickness(result, indices, style=None):
+    """直接绘制已计算矩阵的指定行；不插值、不重新实现 RL 公式。"""
+    style = style or PlotStyle()
+    if not indices or any(i < 0 or i >= len(result.thickness_mm) for i in indices):
+        raise ValueError("请选择有效厚度行。")
+    if not np.isfinite(result.rl_db[indices]).all():
+        raise ValueError("RL 含无限极限值；不截断绘图。")
+    fig, ax = new_axes(style)
+    for index in indices:
+        ax.plot(result.frequency_ghz, result.rl_db[index], linewidth=style.linewidth,
+                label=f"{result.thickness_mm[index]:.12g} mm")
+    ax.axhline(-10, color="0.3", linestyle="--", linewidth=.8, label="-10 dB")
+    ax.set(xlabel="Frequency (GHz)", ylabel="RL (dB)", title="Calculated reflection loss at different thicknesses")
+    ax.grid(True, alpha=.18)
+    ax.legend(frameon=False, ncol=2, fontsize=9)
+    return fig
+
+
 def plot_rl_3d(result, style=None, norm=None):
     """输入扫描结果；返回三维面和 mappable；面颜色对应四角 RL 的均值。
 

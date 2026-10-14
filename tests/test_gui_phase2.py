@@ -50,7 +50,7 @@ def comparison(tmp_path_factory, scientific):
 
 
 def test_full_science_has_all_views(scientific):
-    assert len(scientific["figures"]) == 16
+    assert len(scientific["figures"]) == 17
     assert {"RL_3D", "tan_delta_eps", "tan_delta_mu", "impedance", "attenuation", "Cole_Cole", "C0", "quarter_wave"} <= set(scientific["figures"])
     assert scientific["record"]["phase2"]["units"]["alpha_per_m"] == "m^-1"
 

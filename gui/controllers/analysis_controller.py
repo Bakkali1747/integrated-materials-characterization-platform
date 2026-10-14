@@ -192,6 +192,21 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
                        "quarter_comparison": pd.read_csv(directory / "quarter_wave_comparison.csv").to_dict("records")}
             context = {"sample": sample, "result": result, "curve": curve, "record": record, **science}
             extra = ["tan_delta_eps", "tan_delta_mu"]
+            if np.isfinite(result.rl_db).all():
+                from plotting.rl_plot import representative_thickness_indices
+                important = [minima[0]["thickness_mm"]]
+                if standard["best_thicknesses"]:
+                    important.append(standard["best_thicknesses"][0]["thickness_mm"])
+                indices = representative_thickness_indices(result, important)
+                record["multi_thickness_rl"] = {
+                    "selection": "up_to_7_uniform_grid_rows_plus_first_global_minimum_and_first_maximum_eab",
+                    "row_indices": indices, "thickness_mm": [float(d[i]) for i in indices],
+                    "source": "existing_RL_matrix", "frequency_interpolation": "OFF",
+                    "reference_threshold_db": -10,
+                    "note": "自动选取代表厚度；并列最优的全部明细仍在原摘要中。"}
+                pd.concat([pd.DataFrame({"frequency_ghz": f, "thickness_mm": d[i], "rl_db": result.rl_db[i]})
+                           for i in indices], ignore_index=True).to_csv(directory / "RL_multi_thickness.csv", index=False)
+                extra.append("RL_multi_thickness")
             if len(d) > 1 and np.isfinite(result.rl_db).all():
                 extra.append("RL_3D")
             for key in extra:

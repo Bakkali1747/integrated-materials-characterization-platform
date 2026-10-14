@@ -17,6 +17,7 @@
 | v0.8 | GUI Phase 3 | 目录批量、质量检查与历史结果 |
 | v0.9 | GUI Phase 4 | 持久化设置、导出与客户端优化 |
 | v0.9.1 | Figure titles | 移除图片顶部 PENDING VALIDATION 字样 |
+| v0.9.2 | Multi-thickness RL | 自动计算结果的多厚度叠图 |
 | v1.0 | stable release | 已约定稳定版功能完成，验证和使用文档齐全 |
 
 版本里程碑不替代开发阶段：仍在每个 Phase 完成测试、展示结果后，等待用户确认再进入下一阶段。其他已约定功能仍按开发计划实现。

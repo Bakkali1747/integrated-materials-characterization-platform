@@ -1,6 +1,6 @@
 """图形目录与现有 plotting API 的适配；没有科学公式。"""
 from plotting.em_parameters import plot_parameters
-from plotting.rl_plot import plot_rl_curve, plot_rl_2d, plot_rl_3d
+from plotting.rl_plot import plot_rl_curve, plot_rl_2d, plot_rl_3d, plot_rl_multi_thickness
 from plotting.impedance_plot import plot_impedance_curve, plot_impedance_2d, plot_rl_impedance
 from plotting.mechanism_plot import (plot_loss_tangents, plot_scalar_parameter, plot_cole_cole,
                                     plot_quarter_wave, plot_quarter_wave_overlay)
@@ -14,6 +14,7 @@ NAMES = {"permittivity": "ε′ / ε″", "permeability": "μ′ / μ″", "RL_c
 NAMES.update({"eps_real": "ε′ 比较", "eps_imag": "ε″ 比较", "mu_real": "μ′ 比较", "mu_imag": "μ″ 比较",
               "alpha_per_m": "α 比较", "c0_seconds": "C0 比较", "rl_db": "共同厚度 RL 比较",
               "eab_minus10_db_ghz": "EAB 随厚度比较"})
+NAMES["RL_multi_thickness"] = "多厚度 RL 曲线（自动）"
 
 
 def make_figure(completed, key, style):
@@ -25,6 +26,7 @@ def make_figure(completed, key, style):
         "permittivity": lambda: plot_parameters(s, "permittivity", style),
         "permeability": lambda: plot_parameters(s, "permeability", style),
         "RL_curve": lambda: plot_rl_curve(c, style=style, threshold=completed["record"]["rl_threshold_db"]),
+        "RL_multi_thickness": lambda: plot_rl_multi_thickness(r, completed["record"]["multi_thickness_rl"]["row_indices"], style),
         "RL_2D": lambda: plot_rl_2d(r, style)[0], "RL_3D": lambda: plot_rl_3d(r, style)[0],
         "loss_tangent": lambda: plot_loss_tangents(t, style),
         "tan_delta_eps": lambda: plot_loss_tangents(t, style, "tan_delta_eps"),
