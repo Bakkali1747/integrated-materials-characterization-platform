@@ -1,4 +1,5 @@
 """S 参数 GUI 适配；复用已验证的软件计算路径，候选状态不升级。"""
+from export.origin_export import save_figure_bundle
 from pathlib import Path
 import json
 import pandas as pd
@@ -42,7 +43,7 @@ def analyze_s_request(path, name, output, schema, progress, cancelled, dpi=600):
             progress(30 + i * 13, f"绘制 {quantity}")
             fig = s_figure(result, quantity, dpi=dpi)
             result["figures"][quantity] = fig
-            fig.savefig(folder / f"{quantity}.png", dpi=dpi)
+            save_figure_bundle(fig, folder / f"{quantity}.png", dpi=dpi)
         record.update(status="success", artifacts_sha256=artifact_hashes(directory))
         write_sparameter_record(directory, record)
         progress(100, "S 参数分析完成，schema 仍为候选")
@@ -77,7 +78,7 @@ def theory_comparison(theory, measured, progress, cancelled, dpi=600):
         fig = plot_theory_measured(theory["curve"], measured["table"], PlotStyle(dpi=dpi))
         fig.suptitle("PENDING / candidate mapping", fontsize=10)
         plt.close(fig)
-        fig.savefig(directory / "theory_measured.png", dpi=dpi)
+        save_figure_bundle(fig, directory / "theory_measured.png", dpi=dpi)
         if cancelled():
             raise Cancelled("对照已取消，已输出图保留")
         record.update(status="success", artifacts_sha256=artifact_hashes(directory))

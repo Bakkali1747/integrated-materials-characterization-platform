@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib.colors import Normalize
 from plotting.style import PlotStyle, new_axes, plt
 from plotting.rl_plot import rl_normalization
+from export.origin_export import attach_grid
 
 
 def draw_impedance_map(ax, result, style, tolerance):
@@ -17,6 +18,7 @@ def draw_impedance_map(ax, result, style, tolerance):
     low, high = float(values.min()), float(values.max())
     norm = Normalize(low, high if high > low else low + 0.5)
     f, d = result.frequency_ghz, result.thickness_mm
+    attach_grid(ax, f, d, values, "|Zin/Z0| (dimensionless)")
     if len(d) > 1:
         artist = ax.contourf(f, d, values, levels=np.linspace(norm.vmin, norm.vmax, 65), cmap=style.cmap, norm=norm)
         for level in (1-tolerance, 1., 1+tolerance):
@@ -62,6 +64,7 @@ def plot_rl_impedance(result, style=None, tolerance=.1):
     style = style or PlotStyle()
     fig, axes = plt.subplots(1, 2, figsize=(style.width*2, style.height), layout="constrained", sharex=True, sharey=True)
     norm = rl_normalization(result.rl_db)
+    attach_grid(axes[0], result.frequency_ghz, result.thickness_mm, result.rl_db, "RL (dB)")
     if len(result.thickness_mm) > 1:
         left = axes[0].contourf(result.frequency_ghz, result.thickness_mm, result.rl_db,
                                 levels=np.linspace(norm.vmin, norm.vmax, 65), norm=norm, cmap=style.cmap)

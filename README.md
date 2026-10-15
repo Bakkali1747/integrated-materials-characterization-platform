@@ -1,10 +1,12 @@
 # 本地微波吸收分析软件
 
+新增 [图片配套 Origin 数据](docs/origin_data.md)：图片内容不变，每张输出图片旁额外保存独立 CSV 数据与坐标说明。
+
 新增 [自动多厚度 RL 曲线](docs/multi_thickness_rl.md)：单样品分析后，从图类型列表选择“多厚度 RL 曲线（自动）”，无需逐个输入厚度。
 
-当前为 v0.9.2：GUI Phase 4 增加持久化设置、全部图片导出和历史视图布局优化。CLI 及已有科研计算继续保留，真实数据仍待外部验证。见 [Phase 4 使用说明](docs/gui_phase4.md)、[批量与历史](docs/gui_phase3.md)、[完整科研图与比较](docs/gui_phase2.md)。
+当前为 v0.9.3：GUI Phase 4 增加持久化设置、全部图片导出和历史视图布局优化。CLI 及已有科研计算继续保留，真实数据仍待外部验证。见 [Phase 4 使用说明](docs/gui_phase4.md)、[批量与历史](docs/gui_phase3.md)、[完整科研图与比较](docs/gui_phase2.md)。
 
-无需 Python 的客户端：双击 `output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.9.2-win64.exe` 安装，见 [客户端使用说明](docs/client_usage.md)。
+无需 Python 的客户端：双击 `output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.9.3-win64.exe` 安装，见 [客户端使用说明](docs/client_usage.md)。
 
 启动桌面界面：`.\.venv\Scripts\python.exe run_gui.py`。新环境安装 `requirements-gui.txt`。具体步骤和阶段边界见 [GUI 使用说明](docs/gui_usage.md)。
 

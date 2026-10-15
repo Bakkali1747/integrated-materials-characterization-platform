@@ -1,5 +1,6 @@
 """Phase 3 批次入口：单样品失败隔离、公共扫描配置、可追溯比较与 Excel 汇总。"""
 
+from export.origin_export import save_figure_bundle
 import argparse
 from datetime import datetime
 import hashlib
@@ -83,7 +84,7 @@ def compare_runs(runs, directory, style, curve_thickness, *, figure_callback=Non
         pd.concat(long_rows, ignore_index=True).to_csv(directory/f"{metric}.csv", index=False)
         fig = plot_comparison(series, metric, style, curve_thickness)
         fig.suptitle("PENDING VALIDATION", fontsize=10, color="0.35")
-        fig.savefig(directory/f"{metric}.png", dpi=style.dpi, bbox_inches="tight")
+        save_figure_bundle(fig, directory/f"{metric}.png", dpi=style.dpi, bbox_inches="tight")
         if figure_callback is not None:
             figure_callback(metric, fig)
         plt.close(fig)

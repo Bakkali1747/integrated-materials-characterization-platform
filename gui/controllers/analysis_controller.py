@@ -1,5 +1,6 @@
 """Phase 1 流程适配；数值、频带和绘图全部调用已有 API。"""
 
+from export.origin_export import save_figure_bundle
 from dataclasses import dataclass, field
 from pathlib import Path
 import json
@@ -171,7 +172,7 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
             checkpoint(55 + index * 5, f"绘图与保存：{key}")
             fig = factory()
             figures[key] = fig
-            fig.savefig(folder / f"{key}.png", dpi=r.dpi)
+            save_figure_bundle(fig, folder / f"{key}.png", dpi=r.dpi)
             plt.close(fig)  # 解除 pyplot 管理；Figure 仍交由 Qt Canvas 持有。
         science = {}
         if r.full_science:
@@ -183,7 +184,7 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
                 key = Path(filename).stem
                 figures[key] = fig
                 checkpoint(min(96, 70 + len(figures)), f"科研图：{key}")
-                fig.savefig(folder / filename, dpi=r.dpi)
+                save_figure_bundle(fig, folder / filename, dpi=r.dpi)
                 plt.close(fig)
 
             record["phase2"] = export_phase2(sample, result, curve, directory, save_science, style)

@@ -168,6 +168,13 @@ def run_smoke(app, output):
                 if record["status"] != "success" or len(record["completed"]) != 17:
                     raise RuntimeError("全部图片导出验收失败")
                 report["all_figure_exports"] = len(record["completed"])
+                images = [p for p in output.rglob("*") if p.suffix.lower() in {".png", ".tiff", ".pdf", ".svg"} and not p.name.startswith("client")]
+                for image_path in images:
+                    data_folder = image_path.with_name(image_path.name + ".data")
+                    manifest = json.loads((data_folder / "metadata.json").read_text(encoding="utf-8"))
+                    if not manifest["datasets"] or not all((data_folder / item["file"]).is_file() for item in manifest["datasets"]):
+                        raise RuntimeError(f"图片配套数据缺失：{image_path}")
+                report["origin_data_image_count"] = len(images)
                 report["status"] = "success"
                 save_report()
                 window.close()

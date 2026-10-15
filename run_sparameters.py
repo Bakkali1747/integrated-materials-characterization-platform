@@ -1,5 +1,6 @@
 """候选 S 参数独立入口；不改变 .memp 或材料 RL 批量入口。"""
 
+from export.origin_export import save_figure_bundle
 import argparse
 from dataclasses import asdict
 from datetime import datetime
@@ -80,7 +81,7 @@ def analyze_sparameter_file(path, *, mapping=None, tolerances=None, output="outp
             for quantity in ("magnitude", "db", "phase_deg", "RTA"):
                 fig = plot_rta(table, style) if quantity == "RTA" else plot_sparameter_quantity(table, quantity, style)
                 fig.suptitle(mapping.schema_status + " (not manufacturer-confirmed)", fontsize=9, color="0.35")
-                fig.savefig(figures/f"{quantity}.png", dpi=style.dpi)
+                save_figure_bundle(fig, figures/f"{quantity}.png", dpi=style.dpi)
                 plt.close(fig)
         record.update({"status": "success", "source": data.metadata, "frequency_points": len(table),
                        "frequency_range_ghz": [float(data.frequency_ghz[0]), float(data.frequency_ghz[-1])],

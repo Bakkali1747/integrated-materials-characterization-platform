@@ -3,6 +3,7 @@
 import numpy as np
 from matplotlib.colors import Normalize
 from plotting.style import PlotStyle, new_axes
+from export.origin_export import attach_grid
 
 
 def rl_normalization(rl_db):
@@ -40,6 +41,7 @@ def plot_rl_2d(result, style=None, norm=None):
                                shading="nearest", cmap=style.cmap, norm=norm)
     fig.colorbar(artist, ax=ax, label="RL (dB)", ticks=np.linspace(norm.vmin, norm.vmax, 6), format="%.2f")
     ax.set(xlabel="Frequency (GHz)", ylabel="Thickness (mm)")
+    attach_grid(ax, result.frequency_ghz, result.thickness_mm, result.rl_db, "RL (dB)")
     return fig, artist
 
 
@@ -85,6 +87,7 @@ def plot_rl_3d(result, style=None, norm=None):
     style = style or PlotStyle()
     norm = norm or rl_normalization(result.rl_db)
     fig, ax = new_axes(style, "3d")
+    attach_grid(ax, result.frequency_ghz, result.thickness_mm, result.rl_db, "RL (dB)")
     frequency, thickness = np.meshgrid(result.frequency_ghz, result.thickness_mm)
     artist = ax.plot_surface(frequency, thickness, result.rl_db, cmap=style.cmap, norm=norm,
                              rstride=1, cstride=1, shade=False, linewidth=0, antialiased=False)

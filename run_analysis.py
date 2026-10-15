@@ -1,5 +1,6 @@
 """Phase 1–2 本地命令行入口；配置与核心计算分离，之后可由 GUI 复用。"""
 
+from export.origin_export import save_figure_bundle
 import argparse
 import json
 import os
@@ -124,7 +125,7 @@ def analyze(path, *, output="output", name=None, frequency_min=None, frequency_m
         def save(fig, filename):
             """保存基本 PNG 验收图；图上标明当前结果仍待验证。"""
             fig.suptitle("PENDING VALIDATION", fontsize=10, color="0.35")
-            fig.savefig(figures / filename, dpi=style.dpi)
+            save_figure_bundle(fig, figures / filename, dpi=style.dpi)
             plt.close(fig)
 
         save(plot_parameters(sample, "permittivity", style), "permittivity.png")

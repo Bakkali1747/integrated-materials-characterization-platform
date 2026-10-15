@@ -1,12 +1,11 @@
 """Phase 2 页面共用的后台任务及导出生命周期。"""
 from pathlib import Path
-import os
-import tempfile
 from PySide6.QtCore import Signal, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, QProgressBar, QFileDialog
 from gui.workers.analysis_worker import AnalysisWorker
 from gui.controllers.analysis_controller import Cancelled
+from export.origin_export import save_figure_bundle
 
 
 class TaskPage(QWidget):
@@ -111,19 +110,11 @@ class TaskPage(QWidget):
             if cancelled():
                 raise Cancelled("导出已取消")
             fig = builder()
-            temporary = None
             try:
-                with tempfile.NamedTemporaryFile(dir=path.parent, suffix=path.suffix, delete=False) as handle:
-                    temporary = Path(handle.name)
-                fig.savefig(temporary, dpi=dpi, bbox_inches="tight")
-                if cancelled():
-                    raise Cancelled("导出已取消，未改变目标")
-                os.replace(temporary, path)
+                save_figure_bundle(fig, path, dpi=dpi, bbox_inches="tight", cancelled=cancelled, cancel_error=Cancelled)
                 return path
             finally:
                 plt.close(fig)
-                if temporary:
-                    temporary.unlink(missing_ok=True)
         self.launch(operation, lambda p: self.message.emit(f"已保存：{p}"))
 
     def save_all_plots(self, builders):

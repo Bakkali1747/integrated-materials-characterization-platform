@@ -1,13 +1,10 @@
 """图片导出适配；使用已完成的核心结果，不接触 Qt Canvas。"""
 
 from pathlib import Path
-import os
-import tempfile
-from plotting.em_parameters import plot_parameters
-from plotting.rl_plot import plot_rl_curve, plot_rl_2d
 from plotting.style import PlotStyle, plt
 from gui.controllers.analysis_controller import Cancelled
 from gui.controllers.science_figures import make_figure
+from export.origin_export import save_figure_bundle
 
 
 def export_all_builders(builders, source, output, extension, dpi, progress, cancelled):
@@ -34,23 +31,16 @@ def export_all_builders(builders, source, output, extension, dpi, progress, canc
                 raise Cancelled("全部图片导出已取消；已保存图片保留。")
             if Path(key).name != key or key in {".", ".."}:
                 raise ValueError("无效图片名称。")
-            figure, temporary = None, None
+            figure = None
             try:
                 figure = builder()
-                with tempfile.NamedTemporaryFile(dir=directory, suffix="."+extension, delete=False) as handle:
-                    temporary = Path(handle.name)
-                figure.savefig(temporary, dpi=dpi, bbox_inches="tight")
-                if cancelled():
-                    raise Cancelled("全部图片导出已取消；已保存图片保留。")
                 target = directory / f"{key}.{extension}"
-                os.replace(temporary, target)
+                save_figure_bundle(figure, target, dpi=dpi, bbox_inches="tight", cancelled=cancelled, cancel_error=Cancelled)
                 record["completed"].append(target.name)
                 progress(int(len(record["completed"])*100/len(builders)), "导出 "+key)
             finally:
                 if figure is not None:
                     plt.close(figure)
-                if temporary:
-                    temporary.unlink(missing_ok=True)
         record["status"] = "success"
         return directory
     except Exception as error:
@@ -72,18 +62,10 @@ def export_figure(completed, key, path, progress, cancelled, dpi=600):
         raise Cancelled("图片导出已取消。")
     style = PlotStyle(dpi=dpi)
     figure = make_figure(completed, key, style)
-    temporary = None
     try:
         progress(20, "保存图片…")
-        with tempfile.NamedTemporaryFile(dir=path.parent, suffix=path.suffix, delete=False) as handle:
-            temporary = Path(handle.name)
-        figure.savefig(temporary, dpi=dpi)
-        if cancelled():
-            raise Cancelled("图片导出已取消；原目标未改变。")
-        os.replace(temporary, path)
+        save_figure_bundle(figure, path, dpi=dpi, cancelled=cancelled, cancel_error=Cancelled)
         progress(100, "图片保存完成")
         return path
     finally:
         plt.close(figure)
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
