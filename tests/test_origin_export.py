@@ -138,3 +138,30 @@ def test_unrelated_directory_preserved(tmp_path):
         save_figure_bundle(fig,path,dpi=25)
     assert not path.exists() and (directory/"keep.txt").read_text()=="keep"
     plt.close(fig)
+
+
+def test_transient_windows_lock_retried(tmp_path,monkeypatch):
+    import export.origin_export as module
+    source=tmp_path/"source";source.write_text("data")
+    target=tmp_path/"target";original=module.os.replace;calls=[]
+    def locked(a,b):
+        calls.append(1)
+        if len(calls)<3:
+            error=PermissionError("busy");error.winerror=32;raise error
+        original(a,b)
+    monkeypatch.setattr(module.os,"replace",locked)
+    monkeypatch.setattr(module.time,"sleep",lambda _:None)
+    module.replace_path(source,target)
+    assert len(calls)==3 and target.read_text()=="data"
+
+
+def test_permanent_windows_denial_has_bounded_retries(monkeypatch):
+    import export.origin_export as module
+    calls=[]
+    def denied(a,b):
+        calls.append(1);error=PermissionError("denied");error.winerror=5;raise error
+    monkeypatch.setattr(module.os,"replace",denied)
+    monkeypatch.setattr(module.time,"sleep",lambda _:None)
+    with pytest.raises(PermissionError):
+        module.replace_path("source","target")
+    assert len(calls)==6

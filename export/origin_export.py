@@ -3,9 +3,22 @@ from pathlib import Path
 import json
 import os
 import tempfile
+import time
 import numpy as np
 import pandas as pd
 from matplotlib.collections import PathCollection
+
+
+def replace_path(source, target):
+    """短暂 Windows 文件占用可重试；永久权限错误有界失败，不跳过输出。"""
+    for attempt in range(6):
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError as error:
+            if getattr(error, "winerror", None) not in {5, 32, 33} or attempt == 5:
+                raise
+            time.sleep(.05 * 2**attempt)
 
 
 def attach_grid(ax, x, y, z, z_name):
@@ -94,19 +107,19 @@ def save_figure_bundle(figure, path, *, cancelled=lambda:False, cancel_error=Int
         moved_image = moved_data = installed_image = installed_data = False
         try:
             if path.exists():
-                os.replace(path,old_image); moved_image=True
+                replace_path(path,old_image); moved_image=True
             if companion.exists():
-                os.replace(companion,old_data); moved_data=True
-            os.replace(staged_data,companion); installed_data=True
-            os.replace(staged_image,path); installed_image=True
+                replace_path(companion,old_data); moved_data=True
+            replace_path(staged_data,companion); installed_data=True
+            replace_path(staged_image,path); installed_image=True
         except Exception:
             if installed_image:
-                os.replace(path,staged_image)
+                replace_path(path,staged_image)
             if installed_data:
-                os.replace(companion,staged_data)
+                replace_path(companion,staged_data)
             if moved_image:
-                os.replace(old_image,path)
+                replace_path(old_image,path)
             if moved_data:
-                os.replace(old_data,companion)
+                replace_path(old_data,companion)
             raise
     return path
