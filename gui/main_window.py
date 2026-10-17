@@ -38,6 +38,11 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.batch)
         self.stack.addWidget(self.history)
         self.task_pages = [self.single, self.sparameters, self.comparison, self.batch, self.history]
+        from gui.widgets.mapping_dialog import configure_mapping
+        for page in (self.single,self.comparison,self.batch):
+            page.parameters.mapping_button.clicked.connect(lambda checked=False,p=page:configure_mapping(p,p.parameters))
+        for page in (self.comparison,self.batch):
+            page.parameters.quick_preview.hide()
         self.single.analysis_completed.connect(self.sparameters.add_theory)
         self.single.analysis_completed.connect(lambda r: self.comparison.add_source(r["record"]["raw_file"], r["sample"].name))
         self.single.table.source_selected.connect(self.transfer_source)

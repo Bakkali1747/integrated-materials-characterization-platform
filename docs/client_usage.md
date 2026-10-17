@@ -1,10 +1,10 @@
 # Windows 独立客户端
 
-当前安装包为 GUI Phase 4（v0.9.3），新增持久化设置、全部图片导出及历史视图优化。操作见 `gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
+当前安装包为 GUI Phase 4（v0.9.4），新增持久化设置、全部图片导出及历史视图优化。操作见 `gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
 
 ## 安装和启动
 
-双击 `MicrowaveAbsorptionAnalyzer-Setup-0.9.3-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“微波吸收材料分析软件”。
+双击 `MicrowaveAbsorptionAnalyzer-Setup-0.9.4-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“微波吸收材料分析软件”。
 
 目标为 Windows 10（1809 或更高）/Windows 11 x64。界面为中文，安装向导按钮使用英文。客户端未做商业代码签名，Windows 可能显示“未知发布者”；请只使用随交付提供哈希的安装文件。
 
@@ -40,3 +40,7 @@ MicrowaveAbsorptionAnalyzer.exe --self-test "验收输出目录"
 ```
 
 自检经过真实 Qt 导入和分析按钮、后台任务、四类嵌入图、Excel 导入和四种图片导出，输出 `smoke_report.json`。仍需在其他独立 Windows 电脑上确认兼容性；同机隔离 PATH 验收不等于跨机器实测。
+
+## v0.9.4 操作优化
+
+使用说明见 [optimizations.md](optimizations.md)。默认完整导出保持不变；快速预览为可选模式。参考对照不自动更改科研验证状态。

@@ -47,6 +47,11 @@ class ParameterPanel(QWidget):
         self.mapping.setPlaceholderText('可选：内部字段 → 源列名 JSON')
         self.mapping.setToolTip('例如 {"frequency_ghz":"频率","eps_real":"介电实部","eps_imag":"介电虚部","mu_real":"磁导实部","mu_imag":"磁导虚部"}')
         form.addRow("CSV/Excel 列映射", self.mapping)
+        self.mapping_button = QPushButton("可视化列映射 / 导入模板…")
+        form.addRow(self.mapping_button)
+        self.quick_preview = QCheckBox("快速预览（高清图片稍后手动导出）")
+        self.quick_preview.setToolTip("数值表照常保存；只预览基础图，其余图按需生成。保持默认完整自动导出行为。")
+        form.addRow(self.quick_preview)
         self.output = QLineEdit(str(ROOT / "output"))
         form.addRow("输出目录", self.output)
         choose = QPushButton("选择输出目录")
@@ -92,4 +97,5 @@ class ParameterPanel(QWidget):
             values.update(frequency_min=None, frequency_max=None)
         return AnalysisRequest(path=Path(path), name=self.name.text().strip(),
                                output=Path(self.output.text()).expanduser().resolve(),
-                               parser_options=self.parser_options(path), full_science=True, dpi=self.figure_dpi, **values)
+                               parser_options=self.parser_options(path), full_science=True,
+                               quick_preview=self.quick_preview.isChecked(), dpi=self.figure_dpi, **values)

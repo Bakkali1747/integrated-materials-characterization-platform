@@ -13,6 +13,7 @@ datas += [(str(root / 'docs/gui_phase3.md'), 'docs')]
 datas += [(str(root / 'docs/gui_phase4.md'), 'docs')]
 datas += [(str(root / 'docs/multi_thickness_rl.md'), 'docs')]
 datas += [(str(root / 'docs/origin_data.md'), 'docs')]
+datas += [(str(root / 'docs/optimizations.md'), 'docs')]
 for package in ('numpy', 'pandas', 'matplotlib', 'openpyxl', 'xlrd', 'PySide6', 'PySide6_Essentials', 'PySide6_Addons', 'shiboken6', 'pillow'):
     datas += copy_metadata(package)
 

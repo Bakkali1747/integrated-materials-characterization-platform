@@ -4,7 +4,7 @@
 
 新增 [自动多厚度 RL 曲线](docs/multi_thickness_rl.md)：单样品分析后，从图类型列表选择“多厚度 RL 曲线（自动）”，无需逐个输入厚度。
 
-当前为 v0.9.3：GUI Phase 4 增加持久化设置、全部图片导出和历史视图布局优化。CLI 及已有科研计算继续保留，真实数据仍待外部验证。见 [Phase 4 使用说明](docs/gui_phase4.md)、[批量与历史](docs/gui_phase3.md)、[完整科研图与比较](docs/gui_phase2.md)。
+当前为 v0.9.4（新增导出恢复、厚度交互、快速预览及参考对照；见 [使用说明](docs/optimizations.md)）：GUI Phase 4 增加持久化设置、全部图片导出和历史视图布局优化。CLI 及已有科研计算继续保留，真实数据仍待外部验证。见 [Phase 4 使用说明](docs/gui_phase4.md)、[批量与历史](docs/gui_phase3.md)、[完整科研图与比较](docs/gui_phase2.md)。
 
 无需 Python 的客户端：双击 `output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.9.3-win64.exe` 安装，见 [客户端使用说明](docs/client_usage.md)。
 
@@ -69,7 +69,7 @@ RL = 20 log10 |(z-1)/(z+1)|
 
 图默认 600 dpi，使用 `--dpi`、`--width`、`--height`、`--linewidth`、`--cmap` 调整。二维等高图的颜色为离散等高带；三维颜色为每个面的四角 RL 均值，禁用光照和降采样，共享归一化范围。精确零反射保留 `-inf`，当前不自动裁剪其绘图范围。
 
-真实 `.memp` 文件虚部定义和商业软件对照尚未确认，结果和图均标为待验证。原始真实数据不提交 Git。
+真实 `.memp` 文件虚部定义和商业软件对照尚未确认，界面与记录保持待验证，图片不添加 PENDING 标题。原始真实数据不提交 Git。
 
 ## Phase 2：阻抗与损耗辅助分析
 

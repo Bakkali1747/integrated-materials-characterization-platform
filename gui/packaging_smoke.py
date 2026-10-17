@@ -130,6 +130,12 @@ def run_smoke(app, output):
                 phase = "history"
             elif phase == "history":
                 result = window.history.completed
+                if not result or result.get("integrity_checked"):
+                    raise RuntimeError("历史快速读取未按预期保持未核验状态")
+                window.history.verify_selected()
+                phase = "history-verified"
+            elif phase == "history-verified":
+                result = window.history.completed
                 if not result or not result["checks"] or any(s != "PASS" for _,s in result["checks"]):
                     raise RuntimeError("历史读取与完整性核对失败")
                 if window.history.image.pixmap() is None or window.history.image.pixmap().isNull():
@@ -162,7 +168,7 @@ def run_smoke(app, output):
                 page._launch(lambda p,c:export_all_builders(builders,result["directory"],output/"all-figures","svg",120,p,c),
                              lambda directory:report.update(all_figures_directory=str(directory)))
                 phase = "all-exports"
-            else:
+            elif phase == "all-exports":
                 directory = Path(report.get("all_figures_directory", "missing"))
                 record = json.loads((directory / "export_record.json").read_text(encoding="utf-8"))
                 if record["status"] != "success" or len(record["completed"]) != 17:
@@ -175,6 +181,41 @@ def run_smoke(app, output):
                     if not manifest["datasets"] or not all((data_folder / item["file"]).is_file() for item in manifest["datasets"]):
                         raise RuntimeError(f"图片配套数据缺失：{image_path}")
                 report["origin_data_image_count"] = len(images)
+                def optimization_check(progress,cancelled):
+                    import numpy as np
+                    import pandas as pd
+                    from gui.controllers.analysis_controller import AnalysisRequest,analyze_request
+                    from gui.controllers.exploration_controller import thickness_snapshot
+                    from gui.controllers.reference_controller import export_reference_comparison
+                    from gui.controllers.import_controller import preview_table
+                    quick=analyze_request(AnalysisRequest(source,"quick",output=output/"quick",thickness_max=1.1,
+                        thickness_step=.1,dpi=120,full_science=True,quick_preview=True),progress,cancelled)
+                    np.testing.assert_array_equal(quick["result"].rl_db,page.completed["result"].rl_db)
+                    if any((quick["directory"]/"figures").iterdir()): raise RuntimeError("快速预览意外导出高清图片")
+                    snapshot,_=thickness_snapshot(quick,1)
+                    reference=output/"reference.csv"
+                    pd.DataFrame({"frequency_ghz":snapshot["curve"].frequency_ghz,"thickness_mm":1.1,
+                        "rl_db":snapshot["curve"].rl_db[0]}).to_csv(reference,index=False)
+                    target=export_reference_comparison(quick,reference,output/"reference-checks","Synthetic smoke reference only")
+                    record=json.loads((target/"reference_record.json").read_text(encoding="utf-8"))
+                    if record["validation_status"]!="pending": raise RuntimeError("对照意外改变验证状态")
+                    if len(preview_table(source))!=6: raise RuntimeError("导入预览失败")
+                    return quick
+                page._launch(optimization_check,page._analyzed)
+                phase="optimization-preview"
+            elif phase == "optimization-preview":
+                if not page.completed["record"]["configuration"].get("quick_preview"):
+                    raise RuntimeError(page.error.text() or "快速预览验收失败")
+                page.plot.selector.setCurrentIndex(page.plot.selector.findData("RL_3D"))
+                phase="optimization-thickness"
+            elif phase == "optimization-thickness":
+                if page.plot.current_figure() is None: raise RuntimeError("按需三维预览失败")
+                page.thickness_slider.setValue(1)
+                phase="optimization-finished"
+            elif phase == "optimization-finished":
+                if page.explored is None or page.explored["curve"].thickness_mm[0]!=1.1:
+                    raise RuntimeError("厚度滑块验收失败")
+                report["optimizations"]="PASS: quick preview, lazy 3D, grid thickness, reference evidence, import preview"
                 report["status"] = "success"
                 save_report()
                 window.close()

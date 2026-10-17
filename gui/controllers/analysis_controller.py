@@ -42,6 +42,7 @@ class AnalysisRequest:
     frequency_max: float | None = None
     dpi: int = 600
     full_science: bool = False
+    quick_preview: bool = False
     parser_options: dict = field(default_factory=lambda: {"imaginary_convention": "loss"})
 
 
@@ -81,7 +82,8 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
               "requested_thickness_range_mm": [r.thickness_min, r.thickness_max],
               "thickness_step_mm": r.thickness_step, "curve_thickness_mm": r.curve_thickness,
               "rl_threshold_db": r.threshold, "eab_threshold_crossing": "linear",
-              "parser_options": r.parser_options, "figure_dpi": r.dpi, "full_science": r.full_science}
+              "parser_options": r.parser_options, "figure_dpi": r.dpi, "full_science": r.full_science,
+              "quick_preview": r.quick_preview}
     directory, record = new_run(r.output, r.name, r.path, config)
     figures = {}
 
@@ -172,7 +174,8 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
             checkpoint(55 + index * 5, f"绘图与保存：{key}")
             fig = factory()
             figures[key] = fig
-            save_figure_bundle(fig, folder / f"{key}.png", dpi=r.dpi)
+            if not r.quick_preview:
+                save_figure_bundle(fig, folder / f"{key}.png", dpi=r.dpi)
             plt.close(fig)  # 解除 pyplot 管理；Figure 仍交由 Qt Canvas 持有。
         science = {}
         if r.full_science:
@@ -187,7 +190,13 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
                 save_figure_bundle(fig, folder / filename, dpi=r.dpi)
                 plt.close(fig)
 
-            record["phase2"] = export_phase2(sample, result, curve, directory, save_science, style)
+            record["phase2"] = export_phase2(sample, result, curve, directory, save_science, style,
+                                               render_figures=not r.quick_preview)
+            if r.quick_preview:
+                for key in ("loss_tangent","attenuation","C0","Cole_Cole","quarter_wave","impedance_curve","impedance"):
+                    figures[key] = None
+                if np.isfinite(result.rl_db).all():
+                    figures.update(RL_impedance=None, RL_quarter_wave=None)
             summary["phase2"] = record["phase2"]
             science = {"science_table": pd.read_csv(directory / "loss_parameters.csv"),
                        "quarter_comparison": pd.read_csv(directory / "quarter_wave_comparison.csv").to_dict("records")}
@@ -211,9 +220,13 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
             if len(d) > 1 and np.isfinite(result.rl_db).all():
                 extra.append("RL_3D")
             for key in extra:
-                save_science(make_figure(context, key, style), key + ".png")
+                if r.quick_preview:
+                    figures[key] = None
+                else:
+                    save_science(make_figure(context, key, style), key + ".png")
             (directory / "summary.json").write_text(json.dumps(json_safe(summary), ensure_ascii=False, indent=2), encoding="utf-8")
         checkpoint(98, "完成来源追踪")
+        record["figure_output"] = "deferred_until_explicit_export" if r.quick_preview else "saved"
         record.update(status="success", artifacts_sha256=artifact_hashes(directory))
         write_record(directory, record)
         progress(100, "分析完成")
@@ -221,7 +234,8 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
                 "summary": summary, "record": record, "figures": figures, **science}
     except Exception as error:
         for fig in figures.values():
-            plt.close(fig)
+            if fig is not None:
+                plt.close(fig)
         record.update(status="cancelled" if isinstance(error, Cancelled) else "failed",
                       error=f"{type(error).__name__}: {error}", artifacts_sha256=artifact_hashes(directory))
         write_record(directory, record)

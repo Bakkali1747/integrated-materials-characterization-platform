@@ -17,7 +17,7 @@ NOTES = [
 ]
 
 
-def export_phase2(sample, result, curve, directory, save, style, orders=(1,), tolerance=.1):
+def export_phase2(sample, result, curve, directory, save, style, orders=(1,), tolerance=.1, render_figures=True):
     """输入样品、RL/指定厚度结果、目录和图片保存函数；输出 Phase 2 摘要。
 
     保存 SI 制派生参数、完整复阻抗矩阵及理论厚度对照，警告追加到样品记录。
@@ -36,16 +36,17 @@ def export_phase2(sample, result, curve, directory, save, style, orders=(1,), to
     pd.DataFrame({"frequency_ghz": curve.frequency_ghz, "thickness_mm": curve.thickness_mm[0],
                   "z_real": zcurve.real, "z_imag": zcurve.imag, "z_abs": abs(zcurve)}).to_csv(directory / "impedance_curve.csv", index=False)
     (directory / "mechanism_notes.txt").write_text("\n".join(NOTES) + "\n", encoding="utf-8")
-    save(plot_loss_tangents(table, style), "loss_tangent.png")
-    save(plot_scalar_parameter(table, "alpha_per_m", style), "attenuation.png")
-    save(plot_scalar_parameter(table, "c0_seconds", style), "C0.png")
-    save(plot_cole_cole(table, style), "Cole_Cole.png")
-    save(plot_quarter_wave(table, comparison, orders, style), "quarter_wave.png")
-    save(plot_impedance_curve(curve, style, tolerance), "impedance_curve.png")
-    save(plot_impedance_2d(result, style, tolerance)[0], "impedance.png")
-    if np.isfinite(result.rl_db).all():
-        save(plot_rl_impedance(result, style, tolerance), "RL_impedance.png")
-        save(plot_quarter_wave_overlay(result, table, comparison, orders, style), "RL_quarter_wave.png")
+    if render_figures:
+        save(plot_loss_tangents(table, style), "loss_tangent.png")
+        save(plot_scalar_parameter(table, "alpha_per_m", style), "attenuation.png")
+        save(plot_scalar_parameter(table, "c0_seconds", style), "C0.png")
+        save(plot_cole_cole(table, style), "Cole_Cole.png")
+        save(plot_quarter_wave(table, comparison, orders, style), "quarter_wave.png")
+        save(plot_impedance_curve(curve, style, tolerance), "impedance_curve.png")
+        save(plot_impedance_2d(result, style, tolerance)[0], "impedance.png")
+        if np.isfinite(result.rl_db).all():
+            save(plot_rl_impedance(result, style, tolerance), "RL_impedance.png")
+            save(plot_quarter_wave_overlay(result, table, comparison, orders, style), "RL_quarter_wave.png")
     return {"impedance_at_global_minima": impedance_at_minima(result),
             "impedance_modulus_display_tolerance": tolerance, "quarter_wave_orders": list(orders),
             "units": {"tan_delta_eps": "dimensionless", "tan_delta_mu": "dimensionless",

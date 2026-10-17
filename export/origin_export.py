@@ -4,9 +4,22 @@ import json
 import os
 import tempfile
 import time
+import shutil
+from contextlib import contextmanager
 import numpy as np
 import pandas as pd
 from matplotlib.collections import PathCollection
+
+
+@contextmanager
+def recovery_staging(parent):
+    """事务未完成时保留备份；包括回滚失败和进程意外结束。"""
+    folder = Path(tempfile.mkdtemp(dir=parent, prefix=".f-"))
+    try:
+        yield folder
+    finally:
+        if not (folder / "RECOVERY.json").exists():
+            shutil.rmtree(folder)
 
 
 def replace_path(source, target):
@@ -77,7 +90,7 @@ def save_figure_bundle(figure, path, *, cancelled=lambda:False, cancel_error=Int
         marker = companion/"metadata.json"
         if not marker.is_file() or json.loads(marker.read_text(encoding="utf-8")).get("format") != "origin_csv_bundle_v1":
             raise ValueError(f"配套目录已存在且不是软件生成的数据目录：{companion}")
-    with tempfile.TemporaryDirectory(dir=path.parent, prefix=".f-") as temporary:
+    with recovery_staging(path.parent) as temporary:
         staging = Path(temporary)
         staged_image = staging/ ("image"+path.suffix)
         staged_data = staging/"data"
@@ -102,9 +115,15 @@ def save_figure_bundle(figure, path, *, cancelled=lambda:False, cancel_error=Int
         for entry in manifest["datasets"]:
             lines.append(f"{entry['file']}: {entry['label']} | X: {entry['x_label']} | Y: {entry['y_label']} | Z: {entry.get('z_label','')} | rows: {entry['rows']}")
         (staged_data/"README.txt").write_text("\n".join(lines),encoding="utf-8-sig")
+        pd.DataFrame(manifest["datasets"]).drop(columns=["columns"]).to_csv(
+            staged_data/"index.csv", index=False, encoding="utf-8-sig")
         checkpoint()
         old_image, old_data = staging/"old_image", staging/"old_data"
         moved_image = moved_data = installed_image = installed_data = False
+        recovery = staging / "RECOVERY.json"
+        recovery.write_text(json.dumps({"image":str(path.resolve()), "data":str(companion.resolve()),
+            "note":"未完成的导出事务。old_image / old_data 是旧输出备份；请勿删除本目录。"},
+            ensure_ascii=False, indent=2), encoding="utf-8")
         try:
             if path.exists():
                 replace_path(path,old_image); moved_image=True
@@ -112,14 +131,20 @@ def save_figure_bundle(figure, path, *, cancelled=lambda:False, cancel_error=Int
                 replace_path(companion,old_data); moved_data=True
             replace_path(staged_data,companion); installed_data=True
             replace_path(staged_image,path); installed_image=True
-        except Exception:
-            if installed_image:
-                replace_path(path,staged_image)
-            if installed_data:
-                replace_path(companion,staged_data)
-            if moved_image:
-                replace_path(old_image,path)
-            if moved_data:
-                replace_path(old_data,companion)
+        except Exception as error:
+            failures = []
+            for needed, source, target in ((installed_image,path,staged_image),
+                    (installed_data,companion,staged_data), (moved_image,old_image,path),
+                    (moved_data,old_data,companion)):
+                if needed:
+                    try:
+                        replace_path(source,target)
+                    except Exception as rollback_error:
+                        failures.append(str(rollback_error))
+            if failures:
+                raise RuntimeError(f"导出失败且恢复未完成。备份保留在：{staging.resolve()}；"
+                                   "请保留此目录，按 RECOVERY.json 恢复旧文件。") from error
+            recovery.unlink()
             raise
+        recovery.unlink()
     return path

@@ -34,6 +34,11 @@ class TaskPage(QWidget):
         self.cancel_button.setEnabled(False)
         self.cancel_button.clicked.connect(self.cancel)
         self.outer.addWidget(self.cancel_button)
+        self.last_data_directory = None
+        self.data_button = QPushButton("打开最近导出的图片数据目录")
+        self.data_button.setEnabled(False)
+        self.data_button.clicked.connect(self.open_export_data)
+        self.outer.addWidget(self.data_button)
 
     def text(self):
         """返回页面标题，供导航和辅助检查读取。"""
@@ -115,7 +120,17 @@ class TaskPage(QWidget):
                 return path
             finally:
                 plt.close(fig)
-        self.launch(operation, lambda p: self.message.emit(f"已保存：{p}"))
+        def saved(p):
+            self.last_data_directory=p.with_name(p.name+".data")
+            self.data_button.setEnabled(True)
+            self.message.emit(f"图片与独立数据已保存：{p}")
+        self.launch(operation, saved)
+
+    def open_export_data(self):
+        path=self.last_data_directory
+        if path is not None and path.is_dir():
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.resolve()))): self.show_error(f"无法打开：{path}")
+        else: self.show_error("最近导出的数据目录不存在。")
 
     def save_all_plots(self, builders):
         if not self.completed or self.busy:

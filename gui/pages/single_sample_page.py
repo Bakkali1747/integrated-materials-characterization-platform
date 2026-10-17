@@ -2,10 +2,10 @@
 
 from pathlib import Path
 import logging
-from PySide6.QtCore import Signal, QUrl, Qt
+from PySide6.QtCore import Signal, QUrl, Qt, QTimer
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-                               QSplitter, QTextBrowser, QProgressBar, QScrollArea, QFileDialog)
+                               QSplitter, QTextBrowser, QProgressBar, QScrollArea, QFileDialog, QSlider)
 from gui.controllers.analysis_controller import analyze_request, inspect_file, Cancelled, SUPPORTED
 from gui.controllers.export_controller import export_figure
 from gui.workers.analysis_worker import AnalysisWorker
@@ -27,6 +27,9 @@ class SingleSamplePage(QWidget):
         self.worker = None
         self.selected = None
         self.completed = None
+        self.explored = None
+        self.saved_data_paths = {}
+        self.dynamic_preview_key = None
         self.export_dpi = 600
         self.figure_format = "png"
         layout = QVBoxLayout(self)
@@ -46,6 +49,7 @@ class SingleSamplePage(QWidget):
         scroll.setWidget(self.parameters)
         scroll.setMinimumWidth(295)
         self.plot = PlotCanvas()
+        self.plot.preview_requested.connect(self.preview_figure)
         self.summary = QTextBrowser()
         self.summary.setMinimumWidth(245)
         self.summary.setPlainText("尚无分析结果。\n\n原始点保持不变；缺失数据不插值。")
@@ -54,6 +58,20 @@ class SingleSamplePage(QWidget):
         split.addWidget(self.summary)
         split.setSizes([315, 590, 270])
         layout.addWidget(split, 1)
+        self.thickness_slider = QSlider(Qt.Orientation.Horizontal)
+        self.thickness_slider.setTracking(False)
+        self.thickness_slider.setEnabled(False)
+        self.thickness_slider.valueChanged.connect(self.explore_thickness)
+        layout.addWidget(QLabel("查看已计算厚度（松开滑块更新；不插值）"))
+        layout.addWidget(self.thickness_slider)
+        self.thickness_summary = QLabel(); self.thickness_summary.setWordWrap(True)
+        layout.addWidget(self.thickness_summary)
+        extra_buttons = QHBoxLayout()
+        self.data_button = QPushButton("打开当前图数据目录")
+        self.data_button.clicked.connect(self.open_plot_data); extra_buttons.addWidget(self.data_button)
+        self.reference_button = QPushButton("参考 RL 数据对照…")
+        self.reference_button.clicked.connect(self.compare_reference); extra_buttons.addWidget(self.reference_button)
+        layout.addLayout(extra_buttons)
         self.error = QLabel()
         self.error.setWordWrap(True)
         self.error.setStyleSheet("color: #a03127;")
@@ -68,6 +86,7 @@ class SingleSamplePage(QWidget):
         self.open_button = QPushButton("打开结果文件夹")
         self.save_button = QPushButton("保存当前图片…")
         self.save_all_button = QPushButton("导出全部图片…")
+        self.save_all_button.setToolTip("导出原分析快照的完整图组。滑块选择的厚度曲线请使用保存当前图片。")
         self.save_all_button.clicked.connect(self.save_all_figures)
         self.save_all_button.setEnabled(False)
         self.start_button.setEnabled(False)
@@ -106,6 +125,8 @@ class SingleSamplePage(QWidget):
         """锁定任务快照相关控件；保留窗口导航和取消响应。"""
         for widget in (self.files, self.table, self.parameters, self.plot):
             widget.setEnabled(not busy)
+        for widget in (self.thickness_slider,self.data_button,self.reference_button):
+            widget.setEnabled(not busy and self.completed is not None)
         self.cancel_button.setEnabled(busy)
         ready = self.selected is not None and self.selected["status"] != "FAIL" and self.selected["format"] != ".sdat"
         self.start_button.setEnabled(not busy and ready)
@@ -215,6 +236,14 @@ class SingleSamplePage(QWidget):
     def _analyzed(self, result):
         """展示核心摘要，保留所有并列最小值和分离频带。"""
         self.completed = result
+        self.explored = None
+        self.saved_data_paths = {}
+        self.dynamic_preview_key = None
+        self.thickness_slider.blockSignals(True)
+        self.thickness_slider.setRange(0,len(result["result"].thickness_mm)-1)
+        self.thickness_slider.setValue(0)
+        self.thickness_slider.blockSignals(False)
+        self.thickness_summary.setText("当前显示原分析快照；移动滑块可查看网格中的其他厚度。")
         self.plot.set_figures(result["figures"])
         record, summary = result["record"], result["summary"]
         lines = ["[COMPUTED] 已完成的分析快照", f"样品：{record['sample']}",
@@ -249,6 +278,67 @@ class SingleSamplePage(QWidget):
         self.message.emit("分析完成；结果待外部验证。")
         self.analysis_completed.emit(result)
 
+    def preview_figure(self, key):
+        if not self.completed: return
+        if self.busy:
+            QTimer.singleShot(50,lambda:self.preview_figure(key) if self.plot.selector.currentData()==key else None)
+            return
+        from gui.controllers.science_figures import make_figure
+        from plotting.style import PlotStyle, plt
+        completed=self.completed
+        def operation(p,c):
+            fig=make_figure(completed,key,PlotStyle(dpi=100)); plt.close(fig)
+            return fig
+        def ready(fig):
+            previous=self.dynamic_preview_key
+            if previous and previous!=key: self.plot.figures[previous]=None
+            self.dynamic_preview_key=key
+            self.plot.install_preview(key,fig)
+        self._launch(operation,ready)
+
+    def explore_thickness(self, index):
+        if self.busy or not self.completed: return
+        from gui.controllers.exploration_controller import thickness_snapshot
+        from gui.controllers.science_figures import make_figure
+        from plotting.style import PlotStyle, plt
+        completed=self.completed
+        def operation(p,c):
+            snapshot,details=thickness_snapshot(completed,index)
+            fig=make_figure(snapshot,"RL_curve",PlotStyle(dpi=100)); plt.close(fig)
+            return snapshot,details,fig
+        def ready(payload):
+            snapshot,details,fig=payload; self.explored=snapshot
+            lines=[f"厚度 {details['thickness_mm']:g} mm；RLmin {details['minima'][0]['rl_min_db']:.6g} dB；"
+                   f"Maximum continuous EAB（−10 dB）{details['standard']['maximum_continuous_bandwidth_ghz']:.6g} GHz"]
+            lines += [f"Band {i}: {b['start_ghz']:.6g}–{b['end_ghz']:.6g} GHz" for i,b in enumerate(details['standard']['bands'],1)]
+            self.thickness_summary.setText("\n".join(lines))
+            self.plot.figures["RL_curve"]=fig
+            self.plot.selector.setCurrentIndex(self.plot.selector.findData("RL_curve"))
+            self.plot.show_selected()
+        self._launch(operation,ready)
+
+    def open_plot_data(self):
+        if not self.completed: return
+        key=self.plot.selector.currentData()
+        if key=="RL_curve" and self.explored is not None:
+            path=self.saved_data_paths.get((key,float(self.explored["curve"].thickness_mm[0])))
+        else:
+            path=self.saved_data_paths.get(key) or self.completed["directory"]/"figures"/(str(key)+".png.data")
+        if path is None or not path.is_dir():
+            self.show_error("当前图尚无对应导出数据，请先保存当前图片；图片和独立 CSV 将同时生成。")
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.resolve()))): self.show_error(f"无法打开：{path}")
+
+    def compare_reference(self):
+        if self.busy or not self.completed: return
+        from gui.widgets.reference_dialog import ReferenceDialog
+        from gui.controllers.reference_controller import export_reference_comparison
+        dialog=ReferenceDialog(self)
+        if not dialog.exec(): return
+        values=dialog.values(); completed=self.completed
+        self._launch(lambda p,c:export_reference_comparison(completed,**values,cancelled=c),
+            lambda directory:self.message.emit(f"对照报告已保存（验证仍待确认）：{directory}"))
+
     def show_error(self, text):
         self.error.setText(text)
         self.error.show()
@@ -280,9 +370,14 @@ class SingleSamplePage(QWidget):
         if path.resolve().is_relative_to(self.completed["directory"].resolve()):
             self.show_error("请另选导出位置，分析运行目录中的追溯产物保持不变。")
             return
-        completed, key = self.completed, self.plot.selector.currentData()
+        key = self.plot.selector.currentData()
+        completed = self.explored if key=="RL_curve" and self.explored is not None else self.completed
+        def saved(path):
+            index=(key,float(completed["curve"].thickness_mm[0])) if key=="RL_curve" and self.explored is not None else key
+            self.saved_data_paths[index]=path.with_name(path.name+".data")
+            self.message.emit(f"图片及独立数据已保存：{path}")
         self._launch(lambda progress, cancelled: export_figure(completed, key, path, progress, cancelled, dpi=dpi),
-                     lambda saved: self.message.emit(f"图片已保存：{saved}"))
+                     saved)
 
     def save_all_figures(self):
         if self.busy or not self.completed:

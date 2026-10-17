@@ -151,7 +151,6 @@ class SParameterPage(TaskPage):
         theory, measured = self.theory_runs[key], self.completed
         def builder():
             fig = plot_theory_measured(theory["curve"], measured["table"])
-            fig.suptitle("PENDING / candidate mapping", fontsize=10)
             plt.close(fig)
             return fig
         def completed(payload):

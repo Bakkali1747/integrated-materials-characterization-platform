@@ -1,4 +1,5 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QComboBox, QLabel
+from PySide6.QtCore import Signal
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from gui.controllers.science_figures import NAMES
 
@@ -10,6 +11,8 @@ class ScientificToolbar(NavigationToolbar2QT):
 
 class PlotCanvas(QWidget):
     """嵌入已有 Figure；不含计算公式、不弹出独立绘图窗口。"""
+
+    preview_requested = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -48,6 +51,14 @@ class PlotCanvas(QWidget):
             self.layout.addWidget(self.toolbar)
             self.layout.addWidget(self.canvas, 1)
             self.canvas.draw_idle()
+        elif self.selector.currentData() in self.figures:
+            self.placeholder.setText("此图按需生成；正在准备预览…")
+            self.preview_requested.emit(self.selector.currentData())
+
+    def install_preview(self, key, figure):
+        self.figures[key] = figure
+        if self.selector.currentData() == key:
+            self.show_selected()
 
     def current_figure(self):
         """返回当前图，供独立导出任务使用。"""
