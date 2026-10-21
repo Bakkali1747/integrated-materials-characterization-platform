@@ -60,6 +60,12 @@ def run_smoke(app, output):
                 def verify(progress, cancelled):
                     for extension in ("png", "tiff", "pdf", "svg"):
                         export_figure(result, "RL_2D", output / f"export.{extension}", progress, cancelled, dpi=40)
+                    from export.report import export_report
+                    report_files = export_report(result["directory"], output / "analysis_report.docx",
+                                                 formats=("docx", "pdf"), dpi=150)
+                    if not all(Path(item).is_file() for item in report_files):
+                        raise RuntimeError("分析报告验收失败")
+                    report["analysis_report"] = "PASS"
                     for extension in ("xlsx", "xls"):
                         path = output / f"synthetic.{extension}"
                         if extension == "xlsx":
@@ -72,8 +78,8 @@ def run_smoke(app, output):
                 page._launch(verify, lambda ok: report.update(exports_and_excel="PASS"))
                 phase = "verify"
             elif phase == "verify":
-                if report.get("exports_and_excel") != "PASS":
-                    raise RuntimeError(page.error.text())
+                if report.get("exports_and_excel") != "PASS" or report.get("analysis_report") != "PASS":
+                    raise RuntimeError(page.error.text() or "导出或报告验收失败")
                 window.grab().save(str(output / "client.png"))
                 path = output / "synthetic.sdat"
                 lines = ['<Cluster><Name>SYNTHETIC ONLY</Name></Cluster>']
@@ -177,7 +183,9 @@ def run_smoke(app, output):
                 if record["status"] != "success" or len(record["completed"]) != 17:
                     raise RuntimeError("全部图片导出验收失败")
                 report["all_figure_exports"] = len(record["completed"])
-                images = [p for p in output.rglob("*") if p.suffix.lower() in {".png", ".tiff", ".pdf", ".svg"} and not p.name.startswith("client")]
+                images = [p for p in output.rglob("*")
+                          if p.suffix.lower() in {".png", ".tiff", ".pdf", ".svg"}
+                          and not p.name.startswith("client") and p.stem != "analysis_report"]
                 for image_path in images:
                     data_folder = image_path.with_name(image_path.name + ".data")
                     manifest = json.loads((data_folder / "metadata.json").read_text(encoding="utf-8"))

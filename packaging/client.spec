@@ -1,7 +1,7 @@
 # PyInstaller：只收集 GUI 所用依赖，Qt 使用动态库，保留第三方许可。
 from pathlib import Path
 import os
-from PyInstaller.utils.hooks import copy_metadata
+from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 
 root = Path(SPECPATH).parent
 datas = [(str(root / 'output/packaging/build_info.json'), '.'),
@@ -14,11 +14,17 @@ datas += [(str(root / 'docs/gui_phase4.md'), 'docs')]
 datas += [(str(root / 'docs/multi_thickness_rl.md'), 'docs')]
 datas += [(str(root / 'docs/origin_data.md'), 'docs')]
 datas += [(str(root / 'docs/optimizations.md'), 'docs')]
-for package in ('numpy', 'pandas', 'matplotlib', 'openpyxl', 'xlrd', 'PySide6', 'PySide6_Essentials', 'PySide6_Addons', 'shiboken6', 'pillow'):
+datas += [(str(root / 'docs/report.md'), 'docs')]
+datas += [(str(root / 'docs/sparameters.md'), 'docs')]
+datas += collect_data_files('docx')
+datas += collect_data_files('reportlab')
+for package in ('numpy', 'pandas', 'matplotlib', 'openpyxl', 'xlrd', 'PySide6', 'PySide6_Essentials',
+                'PySide6_Addons', 'shiboken6', 'pillow', 'python-docx', 'reportlab'):
     datas += copy_metadata(package)
 
 a = Analysis([str(root / 'run_gui.py')], pathex=[str(root)], binaries=[], datas=datas,
-             hiddenimports=['matplotlib.backends.backend_qtagg', 'openpyxl', 'xlrd'],
+             hiddenimports=['matplotlib.backends.backend_qtagg', 'openpyxl', 'xlrd', 'export.report',
+                            'docx', 'reportlab.pdfbase._cidfontdata'],
              hookspath=[], runtime_hooks=[],
              excludes=['pytest', 'pytestqt', 'tkinter', 'IPython', 'scipy', 'PyQt5', 'PyQt6'],
              hooksconfig={'matplotlib': {'backends': ['Agg', 'QtAgg', 'pdf', 'svg']}})
