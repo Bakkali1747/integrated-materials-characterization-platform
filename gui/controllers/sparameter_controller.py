@@ -1,14 +1,15 @@
 """S 参数 GUI 适配；复用已验证的软件计算路径，候选状态不升级。"""
-from export.origin_export import save_figure_bundle
-from pathlib import Path
 import json
+
 import pandas as pd
-from run_sparameters import analyze_sparameter_file, write_sparameter_record
+
 from core.sparameter_mapping import load_sparameter_mapping
-from export.provenance import artifact_hashes
-from plotting.sparameter_plot import plot_sparameter_quantity, plot_rta
-from plotting.style import PlotStyle, plt
+from export.origin_export import save_figure_bundle
+from export.provenance import artifact_hashes, figure_provenance
 from gui.controllers.analysis_controller import Cancelled
+from plotting.sparameter_plot import plot_rta, plot_sparameter_quantity
+from plotting.style import PlotStyle, plt
+from run_sparameters import analyze_sparameter_file, write_sparameter_record
 
 
 def s_figure(result, quantity, channel="全部", dpi=600):
@@ -37,13 +38,14 @@ def analyze_s_request(path, name, output, schema, progress, cancelled, dpi=600):
         write_sparameter_record(directory, record)
         folder = directory / "figures"
         folder.mkdir(exist_ok=True)
+        provenance = figure_provenance(record, dpi=dpi)
         for i, quantity in enumerate(("magnitude", "db", "real_imag", "phase_deg", "RTA")):
             if cancelled():
                 raise Cancelled("S 参数任务已取消；已写入产物保留。")
             progress(30 + i * 13, f"绘制 {quantity}")
             fig = s_figure(result, quantity, dpi=dpi)
             result["figures"][quantity] = fig
-            save_figure_bundle(fig, folder / f"{quantity}.png", dpi=dpi)
+            save_figure_bundle(fig, folder / f"{quantity}.png", dpi=dpi, provenance=provenance)
         record.update(status="success", artifacts_sha256=artifact_hashes(directory))
         write_sparameter_record(directory, record)
         progress(100, "S 参数分析完成，schema 仍为候选")
@@ -59,9 +61,10 @@ def theory_comparison(theory, measured, progress, cancelled, dpi=600):
     """保存独立对照图和两份来源记录；不修改任一原分析目录。"""
     import uuid
     from datetime import datetime
-    from plotting.theory_measured import plot_theory_measured, CAUTION
-    from export.provenance import json_safe, git_state
+
     from core import __version__
+    from export.provenance import git_state, json_safe
+    from plotting.theory_measured import CAUTION, plot_theory_measured
     if cancelled():
         raise Cancelled("对照已取消")
     directory = measured["directory"].parent / ("theory_comparison_" + uuid.uuid4().hex[:12])
@@ -78,7 +81,10 @@ def theory_comparison(theory, measured, progress, cancelled, dpi=600):
         fig = plot_theory_measured(theory["curve"], measured["table"], PlotStyle(dpi=dpi))
         fig.suptitle("PENDING / candidate mapping", fontsize=10)
         plt.close(fig)
-        save_figure_bundle(fig, directory / "theory_measured.png", dpi=dpi)
+        save_figure_bundle(fig, directory / "theory_measured.png", dpi=dpi,
+                           provenance=figure_provenance(record, dpi=dpi,
+                               extra={"theory_run": str(theory["directory"]),
+                                      "measured_run": str(measured["directory"])}))
         if cancelled():
             raise Cancelled("对照已取消，已输出图保留")
         record.update(status="success", artifacts_sha256=artifact_hashes(directory))

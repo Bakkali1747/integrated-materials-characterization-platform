@@ -21,3 +21,7 @@ output/
 !.env.example
 .streamlit/secrets.toml
 settings/gui.json
+
+# 本地截图与 pip 临时目录
+page*.png
+pip-*

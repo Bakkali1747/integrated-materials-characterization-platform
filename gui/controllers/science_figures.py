@@ -1,9 +1,14 @@
 """图形目录与现有 plotting API 的适配；没有科学公式。"""
 from plotting.em_parameters import plot_parameters
-from plotting.rl_plot import plot_rl_curve, plot_rl_2d, plot_rl_3d, plot_rl_multi_thickness
-from plotting.impedance_plot import plot_impedance_curve, plot_impedance_2d, plot_rl_impedance
-from plotting.mechanism_plot import (plot_loss_tangents, plot_scalar_parameter, plot_cole_cole,
-                                    plot_quarter_wave, plot_quarter_wave_overlay)
+from plotting.impedance_plot import plot_impedance_2d, plot_impedance_curve, plot_rl_impedance
+from plotting.mechanism_plot import (
+    plot_cole_cole,
+    plot_loss_tangents,
+    plot_quarter_wave,
+    plot_quarter_wave_overlay,
+    plot_scalar_parameter,
+)
+from plotting.rl_plot import plot_rl_2d, plot_rl_3d, plot_rl_curve, plot_rl_multi_thickness
 
 NAMES = {"permittivity": "ε′ / ε″", "permeability": "μ′ / μ″", "RL_curve": "指定厚度 RL 曲线",
          "RL_2D": "RL 二维图", "RL_3D": "RL 三维图", "loss_tangent": "介电 / 磁损耗角正切",
@@ -22,11 +27,14 @@ def make_figure(completed, key, style):
     s, r, c = completed["sample"], completed["result"], completed["curve"]
     t = completed.get("science_table")
     q = completed.get("quarter_comparison")
+    record = completed["record"]
+    orders = tuple(record.get("phase2", {}).get("quarter_wave_orders", (1,)))
     builders = {
         "permittivity": lambda: plot_parameters(s, "permittivity", style),
         "permeability": lambda: plot_parameters(s, "permeability", style),
-        "RL_curve": lambda: plot_rl_curve(c, style=style, threshold=completed["record"]["rl_threshold_db"]),
-        "RL_multi_thickness": lambda: plot_rl_multi_thickness(r, completed["record"]["multi_thickness_rl"]["row_indices"], style),
+        "RL_curve": lambda: plot_rl_curve(c, style=style, threshold=record["rl_threshold_db"]),
+        "RL_multi_thickness": lambda: plot_rl_multi_thickness(
+            r, record["multi_thickness_rl"]["row_indices"], style, threshold=record["rl_threshold_db"]),
         "RL_2D": lambda: plot_rl_2d(r, style)[0], "RL_3D": lambda: plot_rl_3d(r, style)[0],
         "loss_tangent": lambda: plot_loss_tangents(t, style),
         "tan_delta_eps": lambda: plot_loss_tangents(t, style, "tan_delta_eps"),
@@ -34,10 +42,10 @@ def make_figure(completed, key, style):
         "attenuation": lambda: plot_scalar_parameter(t, "alpha_per_m", style),
         "C0": lambda: plot_scalar_parameter(t, "c0_seconds", style),
         "Cole_Cole": lambda: plot_cole_cole(t, style),
-        "quarter_wave": lambda: plot_quarter_wave(t, q, style=style),
+        "quarter_wave": lambda: plot_quarter_wave(t, q, orders, style),
         "impedance_curve": lambda: plot_impedance_curve(c, style),
         "impedance": lambda: plot_impedance_2d(r, style)[0],
         "RL_impedance": lambda: plot_rl_impedance(r, style),
-        "RL_quarter_wave": lambda: plot_quarter_wave_overlay(r, t, q, style=style),
+        "RL_quarter_wave": lambda: plot_quarter_wave_overlay(r, t, q, orders, style),
     }
     return builders[key]()

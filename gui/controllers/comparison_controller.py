@@ -1,15 +1,18 @@
 """样品比较编排：调用原分析、汇总、比较和 Excel API，不实现指标公式。"""
+import logging
+import uuid
 from dataclasses import replace
 from datetime import datetime
-import uuid
-import logging
+
 import pandas as pd
+
 from core import __version__
-from gui.controllers.analysis_controller import analyze_request, Cancelled
-from run_batch import summarize_sample, compare_runs, save_batch_record
-from export.provenance import git_state, artifact_hashes
+from export.csv_safety import escape_formula_cells
 from export.excel_export import export_batch_excel
+from export.provenance import artifact_hashes, git_state
+from gui.controllers.analysis_controller import Cancelled, analyze_request
 from plotting.style import PlotStyle
+from run_batch import compare_runs, save_batch_record, summarize_sample
 
 
 def comparison_hashes(directory):
@@ -62,7 +65,7 @@ def compare_requests(requests, output, progress, cancelled, dpi=600):
                 raise Cancelled("比较已取消，已输出的图保留。")
             progress(70 + len(figures) * 2, f"十项比较：{key}")
         record["comparison"] = compare_runs(runs, directory / "figures", PlotStyle(dpi=dpi), requests[0].curve_thickness, figure_callback=collect)
-        pd.DataFrame(summaries).to_csv(directory / "summary.csv", index=False)
+        escape_formula_cells(pd.DataFrame(summaries)).to_csv(directory / "summary.csv", index=False)
         export_batch_excel(directory / "summary.xlsx", summaries, minima, bands, provenance + [["Comparison", "Note", n] for n in record["comparison"].get("notes", [])])
         record.update(status="success" if len(runs) == len(requests) else "partial_failure" if runs else "failed",
                       success_count=len(runs), failure_count=len(requests)-len(runs), artifacts_sha256=comparison_hashes(directory))

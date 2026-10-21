@@ -1,24 +1,27 @@
 """Phase 3 批次入口：单样品失败隔离、公共扫描配置、可追溯比较与 Excel 汇总。"""
 
-from export.origin_export import save_figure_bundle
 import argparse
-from datetime import datetime
 import hashlib
 import json
-from pathlib import Path
 import sys
 import uuid
+from datetime import datetime
+from pathlib import Path
 
-from run_analysis import analyze
 import numpy as np
 import pandas as pd
+
 from core import __version__
-from core.batch import discover_samples, load_manifest, validate_entries, ANALYSIS_KEYS
+from core.batch import ANALYSIS_KEYS, discover_samples, load_manifest, validate_entries
+from core.reuse import index_completed_runs, run_key, sha256_file
 from core.sdat_inspector import inspect_sdat
-from export.provenance import git_state, json_safe
+from export.csv_safety import escape_formula_cells
 from export.excel_export import export_batch_excel
+from export.origin_export import save_figure_bundle
+from export.provenance import git_state, json_safe
 from plotting.comparison_plot import PARAMETERS, plot_comparison
 from plotting.style import PlotStyle, plt
+from run_analysis import analyze
 
 
 def save_batch_record(directory, record):
@@ -81,7 +84,7 @@ def compare_runs(runs, directory, style, curve_thickness, *, figure_callback=Non
                 frame, axis = tables["loss_parameters.csv"], "frequency_ghz"
             series.append({"name": name, "x": frame[axis].to_numpy(), "y": frame[metric].to_numpy()})
             long_rows.append(pd.DataFrame({"sample": name, axis: frame[axis], metric: frame[metric]}))
-        pd.concat(long_rows, ignore_index=True).to_csv(directory/f"{metric}.csv", index=False)
+        escape_formula_cells(pd.concat(long_rows, ignore_index=True)).to_csv(directory/f"{metric}.csv", index=False)
         fig = plot_comparison(series, metric, style, curve_thickness)
         fig.suptitle("PENDING VALIDATION", fontsize=10, color="0.35")
         save_figure_bundle(fig, directory/f"{metric}.png", dpi=style.dpi, bbox_inches="tight")
@@ -97,7 +100,20 @@ def compare_runs(runs, directory, style, curve_thickness, *, figure_callback=Non
             "interpolation": "OFF", "curve_thickness_mm": curve_thickness, "notes": notes}
 
 
-def analyze_batch(entries, *, output="output", analysis_options=None, compare_samples=None, style=None, source=None, skipped=()):
+def _reuse_configuration(options, parser):
+    """与 analysis_service 的配置字段一致，仅比较影响数值结果的项。"""
+    return {"requested_frequency_range_ghz": [options.get("frequency_min"), options.get("frequency_max")],
+            "requested_thickness_range_mm": [options.get("thickness_min", 1.), options.get("thickness_max", 5.)],
+            "thickness_step_mm": options.get("thickness_step", .01),
+            "curve_thickness_mm": options.get("curve_thickness", 2.),
+            "rl_threshold_db": options.get("threshold", -10.),
+            "eab_threshold_crossing": options.get("eab_crossing", "linear"),
+            "parser_options": dict(parser),
+            "quarter_wave_orders": options.get("quarter_wave_orders", [1]),
+            "impedance_tolerance": options.get("impedance_tolerance", .1)}
+
+
+def analyze_batch(entries, *, output="output", analysis_options=None, compare_samples=None, style=None, source=None, skipped=(), reuse=False):
     """输入显式样品清单及公共扫描配置；返回批次目录，单文件失败不丢失其他结果。
 
     每个成员使用同一分析配置，解析配置可单独指定；汇总科学字段失败时为空。
@@ -120,19 +136,32 @@ def analyze_batch(entries, *, output="output", analysis_options=None, compare_sa
         record["manifest_sha256"] = hashlib.sha256(Path(source).read_bytes()).hexdigest()
     save_batch_record(directory, record)
     summaries, minima, bands, provenance, successful = [], [], [], [], []
+    reuse_index = index_completed_runs(output) if reuse else {}
     try:
         for index, entry in enumerate(entries, 1):
             name = entry["name"]
             member_root = directory/"samples"/f"{index:04d}"
             print(f"[{index}/{len(entries)}] {name}")
             try:
-                run = analyze(entry["path"], output=member_root, name=name, style=style, **options, **entry.get("parser", {}))
+                cached = None
+                if reuse and Path(entry["path"]).suffix.lower() != ".sdat":
+                    key = run_key(name, sha256_file(entry["path"]),
+                                  _reuse_configuration(options, entry.get("parser", {})))
+                    cached = reuse_index.get(key)
+                if cached is not None:
+                    run = cached
+                    print(f"复用已完成运行：{run}")
+                else:
+                    run = analyze(entry["path"], output=member_root, name=name, style=style, **options, **entry.get("parser", {}))
+                    if reuse and Path(entry["path"]).suffix.lower() != ".sdat":
+                        reuse_index[key] = run
                 summary, points, eab_bands, sample_record = summarize_sample(name, run)
                 summaries.append(summary)
                 minima.extend(points)
                 bands.extend(eab_bands)
                 successful.append((name, run))
-                member = {"sample": name, "status": "success", "run_directory": str(run.resolve())}
+                member = {"sample": name, "status": "success", "run_directory": str(run.resolve()),
+                          **({"reused_from": str(run.resolve())} if cached is not None else {})}
                 provenance.extend([[name, "Raw file", sample_record["raw_file"]], [name, "Raw SHA-256", sample_record["raw_sha256"]],
                                    [name, "Run directory", str(run.resolve())], [name, "Validation", sample_record["validation_status"]],
                                    [name, "Frequency range (GHz)", str(sample_record["frequency_range_ghz"])],
@@ -171,7 +200,7 @@ def analyze_batch(entries, *, output="output", analysis_options=None, compare_sa
                             ["Batch", "Result type", "Snapshot of Python calculations, not an editable calculation workbook."],
                             ["Batch", "Validation", "Refer to per-sample records; commercial reference pending."]]
         provenance.extend([["Comparison", "Note", note] for note in record["comparison"].get("notes", [])])
-        pd.DataFrame(summaries).to_csv(directory/"all_samples_summary.csv", index=False)
+        escape_formula_cells(pd.DataFrame(summaries)).to_csv(directory/"all_samples_summary.csv", index=False)
         export_batch_excel(directory/"all_samples_summary.xlsx", summaries, minima, bands, provenance)
         succeeded = len(successful)
         record.update({"status": "success" if succeeded == len(entries) else "partial_failure" if succeeded else "failed",
@@ -197,6 +226,7 @@ def main():
     parser.add_argument("--output", default="output")
     parser.add_argument("--compare", nargs="+", help="只比较列出的样品，其余仍分析")
     parser.add_argument("--dpi", type=int, default=600)
+    parser.add_argument("--reuse", action="store_true", help="复用源 SHA-256 与配置相同的已完成运行")
     args = parser.parse_args()
     try:
         if args.manifest:
@@ -210,7 +240,8 @@ def main():
             entries, skipped = discover_samples(args.directory, {"imaginary_convention": args.imaginary_convention}, [args.output])
             options, selected = {}, None
         directory = analyze_batch(entries, output=args.output, analysis_options=options, compare_samples=args.compare or selected,
-                                   style=PlotStyle(dpi=args.dpi), source=args.manifest or args.directory, skipped=skipped)
+                                   style=PlotStyle(dpi=args.dpi), source=args.manifest or args.directory, skipped=skipped,
+                                   reuse=args.reuse)
         status = json.loads((directory/"batch_record.json").read_text(encoding="utf-8"))["status"]
         return {"success": 0, "partial_failure": 2, "failed": 1}[status]
     except Exception as error:

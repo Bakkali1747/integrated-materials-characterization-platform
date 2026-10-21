@@ -1,18 +1,19 @@
 """故障恢复、按需预览、原网格探索和对照证据的回归测试。"""
-from dataclasses import replace
-from pathlib import Path
 import hashlib
 import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
+
 from core.models import RLResult
+from export.origin_export import save_figure_bundle
 from gui.controllers.analysis_controller import AnalysisRequest, analyze_request
 from gui.controllers.exploration_controller import thickness_snapshot
-from gui.controllers.reference_controller import compare_reference, export_reference_comparison
-from gui.controllers.history_controller import load_history, history_index
+from gui.controllers.history_controller import history_index, load_history
 from gui.controllers.import_controller import preview_table, validate_template
-from export.origin_export import save_figure_bundle
+from gui.controllers.reference_controller import compare_reference, export_reference_comparison
 from plotting.style import plt
 
 
@@ -92,10 +93,10 @@ def test_lazy_preview_and_slider(qtbot,completed,monkeypatch):
     page.plot.selector.setCurrentIndex(page.plot.selector.findData("C0"))
     qtbot.waitUntil(lambda:not page.busy,timeout=10000)
     assert page.plot.figures["RL_3D"] is None
-    page.thickness_slider.setValue(1)
+    page.thickness_slider.setValue(0)
     qtbot.waitUntil(lambda:not page.busy,timeout=10000)
-    assert page.explored["curve"].thickness_mm.tolist()==[1.1]
-    assert "1.1 mm" in page.thickness_summary.text()
+    assert page.explored["curve"].thickness_mm.tolist()==[1.0]
+    assert "1 mm" in page.thickness_summary.text()
     assert "Maximum continuous EAB" in page.thickness_summary.text()
     page.open_plot_data()
     assert "先保存" in page.error.text()
@@ -104,7 +105,7 @@ def test_lazy_preview_and_slider(qtbot,completed,monkeypatch):
 def test_export_explored_curve_and_open_data(qtbot,completed,tmp_path,monkeypatch):
     from gui.pages.single_sample_page import SingleSamplePage
     page=SingleSamplePage(); qtbot.addWidget(page); page._analyzed(completed); page._set_busy(False)
-    page.thickness_slider.setValue(1); qtbot.waitUntil(lambda:not page.busy)
+    page.thickness_slider.setValue(0); qtbot.waitUntil(lambda:not page.busy)
     target=tmp_path/"selected.png"
     monkeypatch.setattr("gui.pages.single_sample_page.QFileDialog.getSaveFileName",lambda *a:(str(target),"PNG (*.png)"))
     opened=[]
@@ -113,7 +114,37 @@ def test_export_explored_curve_and_open_data(qtbot,completed,tmp_path,monkeypatc
     page.open_plot_data()
     assert opened and Path(opened[0])==target.with_name(target.name+".data")
     values=pd.read_csv(target.with_name(target.name+".data")/"01.csv")
-    np.testing.assert_allclose(values.Y,completed["result"].rl_db[1])
+    np.testing.assert_allclose(values.Y,completed["result"].rl_db[0])
+
+
+def test_slider_initial_position_tracks_curve_thickness(qtbot, completed):
+    from gui.pages.single_sample_page import SingleSamplePage
+    page = SingleSamplePage(); qtbot.addWidget(page)
+    page._analyzed(completed)
+    grid = completed["result"].thickness_mm
+    # 曲线厚度 2 mm 不在 [1.0, 1.1] 扫描网格中：滑块停在最近点并明确提示。
+    assert page.thickness_slider.value() == 1
+    assert grid[page.thickness_slider.value()] == pytest.approx(1.1)
+    assert "不在扫描网格" in page.thickness_summary.text()
+    completed["record"]["configuration"]["curve_thickness_mm"] = 1.1
+    page._analyzed(completed)
+    assert page.thickness_slider.value() == 1
+    assert "不在扫描网格" not in page.thickness_summary.text()
+
+
+def test_history_verify_uses_current_selection(qtbot, monkeypatch):
+    """下拉框选中 B 时，核验必须针对 B，而不是上次加载的 A。"""
+    from gui.pages import results_page as module
+    page = module.ResultsPage(); qtbot.addWidget(page)
+    page.runs.addItem("A", "pathA"); page.runs.addItem("B", "pathB")
+    page.completed = {"record_path": "pathA", "directory": Path("A")}
+    page.runs.setCurrentIndex(1)
+    calls = []
+    monkeypatch.setattr(module, "load_history",
+                        lambda path, p, c, verify: calls.append((path, verify)) or {})
+    page.launch = lambda operation, callback: operation(lambda *a: None, lambda: False)
+    page.verify_selected()
+    assert calls == [("pathB", True)]
 
 
 def test_mapping_preview_and_template(qtbot,tmp_path):

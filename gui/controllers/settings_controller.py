@@ -1,17 +1,18 @@
 """GUI 偏好配置；独立于科研核心配置，严格校验并原子保存。"""
-from pathlib import Path
 import json
-import math
 import logging
+import math
 import os
 import tempfile
+from pathlib import Path
+
 from application_paths import user_data_root
 
 
 def defaults():
     return dict(version=1, frequency_unit="GHz", thickness_min=1., thickness_max=5.,
                 thickness_step=.01, curve_thickness=2., threshold=-10.,
-                output=str(user_data_root()/"output"), dpi=600, figure_format="png", interpolation="OFF")
+                output=str(user_data_root()/"output"), dpi=300, figure_format="png", interpolation="OFF")
 
 
 def validate_settings(values):

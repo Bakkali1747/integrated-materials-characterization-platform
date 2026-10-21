@@ -1,23 +1,25 @@
-import hashlib
 import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
 from openpyxl import load_workbook
+
 from core.batch import discover_samples, load_manifest, validate_entries
 from core.sdat_inspector import inspect_sdat
 from export.excel_export import export_batch_excel
-from run_batch import analyze_batch, compare_runs, summarize_sample
 from plotting.style import PlotStyle
+from run_batch import analyze_batch, compare_runs, summarize_sample
 
 
 def test_discovery_snapshot_and_output_exclusion(tmp_path):
     (tmp_path/"group").mkdir()
     (tmp_path/"out").mkdir()
-    for name in ("group/a.csv", "b.memp", "c.sdat", "readme.txt", "out/result.csv"):
+    for name in ("group/a.csv", "b.memp", "c.sdat", "d.xls", "readme.txt", "out/result.csv"):
         (tmp_path/name).write_text("test")
     entries, skipped = discover_samples(tmp_path, {"imaginary_convention": "loss"}, [tmp_path/"out"])
-    assert {row["name"] for row in entries} == {"group/a", "b", "c"}
+    assert {row["name"] for row in entries} == {"group/a", "b", "c", "d"}
     assert skipped == ["readme.txt"]
 
 
@@ -50,6 +52,19 @@ def test_sdat_structure_does_not_assign_meaning(tmp_path):
     assert list(table.columns) == [f"column_{i}" for i in range(1, 10)]
     assert record["source_rows"] == [2, 3]
     assert original == path.read_bytes()
+
+
+def test_batch_reuse_matches_hash_and_configuration(tmp_path, frame):
+    path = tmp_path/"a.csv"
+    frame.to_csv(path, index=False)
+    entries = [{"name": "A", "path": str(path), "parser": {"imaginary_convention": "loss"}}]
+    options = {"thickness_min": 1, "thickness_max": 1.1, "thickness_step": .1}
+    first = analyze_batch(entries, output=tmp_path/"output", analysis_options=options, style=PlotStyle(dpi=35))
+    second = analyze_batch(entries, output=tmp_path/"output", analysis_options=options,
+                           style=PlotStyle(dpi=35), reuse=True)
+    record = json.loads((second/"batch_record.json").read_text(encoding="utf-8"))
+    first_record = json.loads((first/"batch_record.json").read_text(encoding="utf-8"))
+    assert Path(record["members"][0]["reused_from"]) == Path(first_record["members"][0]["run_directory"])
 
 
 def test_batch_partial_failure_native_grids_and_workbook(tmp_path, frame):

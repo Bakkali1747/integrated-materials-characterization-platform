@@ -1,7 +1,14 @@
 import numpy as np
 import pytest
-from core.mechanism import (attenuation_constant, loss_tangent, eddy_current_c0,
-                            quarter_wave_thickness, mechanism_parameters, quarter_wave_minima_comparison)
+
+from core.mechanism import (
+    attenuation_constant,
+    eddy_current_c0,
+    loss_tangent,
+    mechanism_parameters,
+    quarter_wave_minima_comparison,
+    quarter_wave_thickness,
+)
 from core.models import SampleData
 from core.rl_calculator import scan_rl
 from core.units import C

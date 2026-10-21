@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
+
 os.environ.setdefault("MPLCONFIGDIR", str(Path(__file__).resolve().parents[1] / ".mplconfig"))
 
 import numpy as np
 import pandas as pd
 import pytest
+
 from core.models import COLUMNS
 
 

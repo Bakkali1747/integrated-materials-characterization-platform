@@ -1,5 +1,6 @@
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
+from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+
 from gui.widgets.status_badge import StatusBadge
 
 

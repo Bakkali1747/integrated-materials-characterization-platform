@@ -1,8 +1,9 @@
 """按用户指定 Python/openpyxl 技术栈导出批次快照，不在 Excel 重做复数科学计算。"""
 
 import math
+
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 

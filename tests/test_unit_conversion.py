@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from core.units import ghz_to_hz, mm_to_m, thickness_grid
 
 

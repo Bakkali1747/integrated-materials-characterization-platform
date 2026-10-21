@@ -1,7 +1,9 @@
 """QThread 执行有界任务；取消不会强制终止线程或损坏正在写入的结果。"""
 
 import logging
+
 from PySide6.QtCore import QThread, Signal
+
 from gui.controllers.analysis_controller import Cancelled
 
 

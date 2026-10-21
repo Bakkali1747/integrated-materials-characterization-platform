@@ -1,19 +1,33 @@
 """单样品操作页面；任务期间锁定输入，结果绑定实际分析快照。"""
 
-from pathlib import Path
 import logging
-from PySide6.QtCore import Signal, QUrl, Qt, QTimer
+from pathlib import Path
+
+import numpy as np
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-                               QSplitter, QTextBrowser, QProgressBar, QScrollArea, QFileDialog, QSlider)
-from gui.controllers.analysis_controller import analyze_request, inspect_file, Cancelled, SUPPORTED
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSlider,
+    QSplitter,
+    QTextBrowser,
+    QVBoxLayout,
+    QWidget,
+)
+
+from gui.controllers.analysis_controller import SUPPORTED, Cancelled, analyze_request, inspect_file
 from gui.controllers.export_controller import export_figure
-from gui.workers.analysis_worker import AnalysisWorker
 from gui.widgets.file_selector import FileSelector
-from gui.widgets.sample_table import SampleTable
 from gui.widgets.parameter_panel import ParameterPanel
 from gui.widgets.plot_canvas import PlotCanvas
+from gui.widgets.sample_table import SampleTable
 from gui.widgets.status_badge import StatusBadge
+from gui.workers.analysis_worker import AnalysisWorker
 
 
 class SingleSamplePage(QWidget):
@@ -115,7 +129,7 @@ class SingleSamplePage(QWidget):
         self.worker.progress.connect(self.on_progress)
         self.worker.succeeded.connect(on_success)
         self.worker.failed.connect(self.show_error)
-        self.worker.cancelled.connect(self.show_error)
+        self.worker.cancelled.connect(self.show_cancelled)
         self.worker.finished.connect(self._finished)
         self._set_busy(True)
         self.progress.setValue(0)
@@ -239,13 +253,21 @@ class SingleSamplePage(QWidget):
         self.explored = None
         self.saved_data_paths = {}
         self.dynamic_preview_key = None
-        self.thickness_slider.blockSignals(True)
-        self.thickness_slider.setRange(0,len(result["result"].thickness_mm)-1)
-        self.thickness_slider.setValue(0)
-        self.thickness_slider.blockSignals(False)
-        self.thickness_summary.setText("当前显示原分析快照；移动滑块可查看网格中的其他厚度。")
-        self.plot.set_figures(result["figures"])
         record, summary = result["record"], result["summary"]
+        grid = np.asarray(result["result"].thickness_mm, dtype=float)
+        target = float(record["configuration"]["curve_thickness_mm"])
+        nearest = int(np.argmin(np.abs(grid - target)))
+        self.thickness_slider.blockSignals(True)
+        self.thickness_slider.setRange(0, len(grid) - 1)
+        self.thickness_slider.setValue(nearest)
+        self.thickness_slider.blockSignals(False)
+        if np.isclose(grid[nearest], target, rtol=0, atol=1e-12):
+            self.thickness_summary.setText("当前显示原分析快照；移动滑块可查看网格中的其他厚度。")
+        else:
+            self.thickness_summary.setText(
+                f"当前曲线厚度 {target:g} mm 不在扫描网格中；滑块停在最近的 {grid[nearest]:g} mm。"
+                "移动滑块可查看网格厚度，不插值。")
+        self.plot.set_figures(result["figures"])
         lines = ["[COMPUTED] 已完成的分析快照", f"样品：{record['sample']}",
                  "验证状态：PENDING（真实结果待验证）", f"来源：{record['raw_file']}",
                  f"Parser：{record['parser_version']}", f"频率：{record['frequency_range_ghz']} GHz",
@@ -331,8 +353,8 @@ class SingleSamplePage(QWidget):
 
     def compare_reference(self):
         if self.busy or not self.completed: return
-        from gui.widgets.reference_dialog import ReferenceDialog
         from gui.controllers.reference_controller import export_reference_comparison
+        from gui.widgets.reference_dialog import ReferenceDialog
         dialog=ReferenceDialog(self)
         if not dialog.exec(): return
         values=dialog.values(); completed=self.completed
@@ -340,9 +362,17 @@ class SingleSamplePage(QWidget):
             lambda directory:self.message.emit(f"对照报告已保存（验证仍待确认）：{directory}"))
 
     def show_error(self, text):
+        self.error.setStyleSheet("color: #a03127;")
         self.error.setText(text)
         self.error.show()
         self.message.emit(text.splitlines()[0])
+
+    def show_cancelled(self, text="已取消；已写入的结果保留，当前运行不标记为成功。"):
+        """用户主动取消是中性事件，不显示为红色错误。"""
+        self.error.setStyleSheet("color: #5b6b7c;")
+        self.error.setText(text)
+        self.error.show()
+        self.message.emit("已取消")
 
     def open_output(self):
         """打开已完成运行目录，而非当前尚未运行的输出输入框。"""

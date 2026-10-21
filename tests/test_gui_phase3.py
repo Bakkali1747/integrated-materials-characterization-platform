@@ -1,12 +1,14 @@
 """Phase 3 编排、取消、只读历史与 Qt 信号验收。"""
-from pathlib import Path
-from dataclasses import replace
 import hashlib
 import json
+from dataclasses import replace
+from pathlib import Path
+
 import pytest
-from gui.controllers.analysis_controller import AnalysisRequest, Cancelled
+
 from gui.controllers import batch_controller as batch
-from gui.controllers.history_controller import discover_history, load_history, contained
+from gui.controllers.analysis_controller import AnalysisRequest, Cancelled
+from gui.controllers.history_controller import contained, discover_history, load_history
 from gui.controllers.quality_controller import quality_rows
 from gui.pages.batch_page import BatchPage
 from gui.pages.results_page import ResultsPage
@@ -39,6 +41,17 @@ def test_scan_failure_isolation(mixed):
     assert len(items)==3 and sum(i["status"]=="FAIL" for i in items)==1
 
 
+def test_batch_reuses_completed_run(analysis_request):
+    first = batch.run_batch_requests([analysis_request], analysis_request.output, lambda *a: None, lambda: False,
+                                     reuse=True)
+    second = batch.run_batch_requests([analysis_request], analysis_request.output, lambda *a: None, lambda: False,
+                                      reuse=True)
+    assert second["record"]["reused_count"] == 1
+    member = second["record"]["members"][0]
+    assert member["reused_from"] == first["record"]["members"][0]["run_directory"]
+    assert member["status"] == "success"
+
+
 def test_scan_cancel(analysis_request):
     with pytest.raises(Cancelled):
         batch.scan_folder(analysis_request.path.parent, {}, lambda *a:None, lambda:True)
@@ -57,6 +70,9 @@ def test_mixed_batch_and_history(mixed):
     assert all(s=="PASS" for _,s in history["checks"])
     assert history["record"]["status"]=="partial_failure"
     assert "sources.csv" in history["summaries"]
+    progress_log = (result["directory"]/"members.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(progress_log) == len(r["members"]) == 3
+    assert {json.loads(line)["index"] for line in progress_log} == {0, 1, 2}
 
 
 def test_cancel_before_start(analysis_request):
@@ -141,7 +157,7 @@ def test_batch_thread_signals(qtbot,analysis_request,monkeypatch):
     page=BatchPage(); qtbot.addWidget(page)
     page.scanned([batch.inspect_file(analysis_request.path,{})]); page.parameters.output.setText(str(analysis_request.output))
     threads=[]
-    def fake(requests,output,progress,cancelled,member):
+    def fake(requests,output,progress,cancelled,member,reuse=False):
         threads.append(QThread.currentThread()); progress(100,"done")
         member(dict(index=0,status="success",sample="material"))
         return dict(directory=output,record=dict(status="success",success_count=1,failed_count=0,cancelled_count=0,not_started_count=0))

@@ -1,13 +1,15 @@
 """多厚度叠图必须逐行使用原 RL 矩阵，不能插值或修改旧结果。"""
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
+
 from core.rl_calculator import scan_rl
-from plotting.rl_plot import representative_thickness_indices, plot_rl_multi_thickness
-from plotting.style import PlotStyle, plt
 from gui.controllers.analysis_controller import AnalysisRequest, analyze_request
 from gui.controllers.export_controller import export_figure
+from plotting.rl_plot import plot_rl_multi_thickness, representative_thickness_indices
+from plotting.style import PlotStyle, plt
 
 
 @pytest.fixture

@@ -1,10 +1,10 @@
-import numpy as np
 import matplotlib.pyplot as plt
-from core.models import RLResult
+import numpy as np
+
+from core.mechanism import mechanism_parameters
+from core.models import RLResult, SampleData
 from plotting.impedance_plot import plot_impedance_2d, plot_impedance_curve
 from plotting.mechanism_plot import plot_quarter_wave_overlay
-from core.mechanism import mechanism_parameters
-from core.models import SampleData
 
 
 def test_impedance_color_range_and_curve():

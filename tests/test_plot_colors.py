@@ -1,5 +1,6 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+
 from core.models import RLResult
 from plotting.rl_plot import plot_rl_2d, plot_rl_3d, rl_normalization
 

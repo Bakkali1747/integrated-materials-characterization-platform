@@ -2,15 +2,17 @@
 
 import json
 from pathlib import Path
+
 from PySide6.QtCore import QTimer
+
 from application_paths import resource_root, user_data_root
 
 
 def run_smoke(app, output):
     """输入专用验收目录；记录 UI、解析、图形与追溯结果并返回退出码。"""
-    from gui.main_window import MainWindow
     from gui.controllers.analysis_controller import inspect_file
     from gui.controllers.export_controller import export_figure
+    from gui.main_window import MainWindow
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     report = {"status": "started", "user_data_root": str(user_data_root())}
@@ -146,6 +148,7 @@ def run_smoke(app, output):
                     raise RuntimeError("Quality Control 未展示")
                 window.grab().save(str(output / "client-history.png"))
                 window.navigation.setCurrentRow(6)
+                analysis_dpi = page.completed["record"]["configuration"]["figure_dpi"]
                 window.settings.dpi.setValue(120)
                 window.settings.format.setCurrentText("svg")
                 window.settings.fields["thickness_step"].setValue(.02)
@@ -158,7 +161,7 @@ def run_smoke(app, output):
                     raise RuntimeError("设置重启恢复失败")
                 reopened.close(); reopened.deleteLater()
                 report["settings_persistence"] = "PASS"
-                report["existing_snapshot_unchanged"] = page.completed["record"]["configuration"]["figure_dpi"] == 600
+                report["existing_snapshot_unchanged"] = page.completed["record"]["configuration"]["figure_dpi"] == analysis_dpi
                 window.grab().save(str(output / "client-settings.png"))
                 from gui.controllers.export_controller import export_all_builders
                 from gui.controllers.science_figures import make_figure
@@ -184,10 +187,11 @@ def run_smoke(app, output):
                 def optimization_check(progress,cancelled):
                     import numpy as np
                     import pandas as pd
-                    from gui.controllers.analysis_controller import AnalysisRequest,analyze_request
+
+                    from gui.controllers.analysis_controller import AnalysisRequest, analyze_request
                     from gui.controllers.exploration_controller import thickness_snapshot
-                    from gui.controllers.reference_controller import export_reference_comparison
                     from gui.controllers.import_controller import preview_table
+                    from gui.controllers.reference_controller import export_reference_comparison
                     quick=analyze_request(AnalysisRequest(source,"quick",output=output/"quick",thickness_max=1.1,
                         thickness_step=.1,dpi=120,full_science=True,quick_preview=True),progress,cancelled)
                     np.testing.assert_array_equal(quick["result"].rl_db,page.completed["result"].rl_db)
@@ -210,10 +214,14 @@ def run_smoke(app, output):
                 phase="optimization-thickness"
             elif phase == "optimization-thickness":
                 if page.plot.current_figure() is None: raise RuntimeError("按需三维预览失败")
-                page.thickness_slider.setValue(1)
+                grid = page.completed["result"].thickness_mm
+                target_index = 0 if page.thickness_slider.value() != 0 else min(1, len(grid) - 1)
+                report["slider_expected_mm"] = float(grid[target_index])
+                page.thickness_slider.setValue(target_index)
                 phase="optimization-finished"
             elif phase == "optimization-finished":
-                if page.explored is None or page.explored["curve"].thickness_mm[0]!=1.1:
+                expected = report.get("slider_expected_mm")
+                if page.explored is None or page.explored["curve"].thickness_mm[0] != expected:
                     raise RuntimeError("厚度滑块验收失败")
                 report["optimizations"]="PASS: quick preview, lazy 3D, grid thickness, reference evidence, import preview"
                 report["status"] = "success"

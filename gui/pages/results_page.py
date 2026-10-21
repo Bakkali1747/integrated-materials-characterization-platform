@@ -1,12 +1,26 @@
 """历史快照与保存图片浏览，不重新计算。"""
 import json
-from PySide6.QtCore import Qt
+from pathlib import Path
+
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QPushButton, QComboBox, QTextBrowser, QLabel, QSplitter, QScrollArea, QFileDialog, QTabWidget, QLineEdit
-from gui.widgets.image_view import ImageView
-from gui.pages.task_page import TaskPage
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
+    QInputDialog,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSplitter,
+    QTabWidget,
+    QTextBrowser,
+)
+
 from gui.controllers.history_controller import history_index, load_history, read_figure
 from gui.controllers.quality_controller import quality_text
+from gui.pages.task_page import TaskPage
+from gui.widgets.image_view import ImageView
 
 
 class ResultsPage(TaskPage):
@@ -30,6 +44,14 @@ class ResultsPage(TaskPage):
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(self.image); split.addWidget(scroll)
         split.setSizes([420, 700]); self.layout.addWidget(split, 1)
         button = QPushButton("打开结果文件夹"); button.clicked.connect(self.open_output); self.layout.addWidget(button)
+        self.folder = None
+        self.archive_button = QPushButton("归档旧运行…（移动到 _archive，默认先预演）")
+        self.archive_button.setEnabled(False)
+        self.archive_button.clicked.connect(self.archive_old)
+        self.layout.addWidget(self.archive_button)
+        self.share_button = QPushButton("导出可分享记录…（移除本地绝对路径）")
+        self.share_button.clicked.connect(self.export_share)
+        self.layout.addWidget(self.share_button)
         self.verify_button=QPushButton("核验当前运行的全部产物（SHA-256）")
         self.verify_button.clicked.connect(self.verify_selected); self.layout.addWidget(self.verify_button)
         data_button=QPushButton("打开当前历史图片的数据目录")
@@ -41,7 +63,74 @@ class ResultsPage(TaskPage):
             self.scan(folder)
 
     def scan(self, folder):
+        self.folder = str(folder)
+        self.archive_button.setEnabled(True)
         self.launch(lambda p,c: history_index(folder,p,c), self.discovered)
+
+    def _after_idle(self, callback):
+        """等待当前后台线程真正结束后再启动下一项，避免重入被忽略。"""
+        if self.busy:
+            QTimer.singleShot(50, lambda: self._after_idle(callback))
+        else:
+            callback()
+
+    def archive_old(self):
+        """先扫描并预演，用户确认后才移动；清单写入 _archive/archive_manifest.json。"""
+        if not self.folder:
+            self.show_error("请先选择输出目录并扫描历史。")
+            return
+        days, accepted = QInputDialog.getInt(self, "归档旧运行", "归档早于多少天的运行？", 30, 0, 3650)
+        if not accepted:
+            return
+        root = Path(self.folder)
+        from core.maintenance import archive_runs, scan_runs, select_runs
+
+        def preview(progress, cancelled):
+            selected = select_runs(scan_runs(root), days)
+            return archive_runs(selected, root, apply=False) if selected else None
+
+        def ready(report):
+            if not report:
+                self.message.emit("没有符合条件、可归档的运行。")
+                return
+            answer = QMessageBox.question(
+                self, "确认归档",
+                f"将移动 {len(report['runs'])} 个运行（{report['total_bytes']/1024/1024:.1f} MB）到 "
+                f"{root / '_archive'}。\n归档不删除文件，可随时移回。继续？")
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            self._after_idle(lambda: self._apply_archive(root, days))
+
+        self.launch(preview, ready)
+
+    def export_share(self):
+        """导出当前选中运行的脱敏副本；不修改原运行。"""
+        if not self.completed:
+            self.show_error("请先加载一个运行记录，再导出可分享副本。")
+            return
+        parent = QFileDialog.getExistingDirectory(self, "选择分享副本的存放目录")
+        if not parent:
+            return
+        source = Path(self.completed["directory"])
+        target = Path(parent) / (source.name + "_share")
+        from export.share_export import export_shareable
+        self.launch(lambda p, c: export_shareable(source, target),
+                    lambda output: self.message.emit(f"可分享副本：{output}"))
+
+    def _apply_archive(self, root, days):
+        from core.maintenance import archive_runs, scan_runs, select_runs
+
+        def operation(progress, cancelled):
+            return archive_runs(select_runs(scan_runs(root), days), root, apply=True)
+
+        def done(report):
+            self.message.emit(f"已归档 {len(report['runs'])} 个运行；清单见 "
+                              f"{root / '_archive' / 'archive_manifest.json'}")
+            if report.get("failures"):
+                self.show_error(f"{len(report['failures'])} 个运行归档失败，详见清单。")
+            self._after_idle(lambda: self.scan(str(root)))
+
+        self.launch(operation, done)
 
     def discovered(self, paths):
         self.entries=[p if isinstance(p,dict) else dict(path=p,label=str(p.parent),search=str(p),status="unknown") for p in paths]
@@ -57,9 +146,12 @@ class ResultsPage(TaskPage):
                 self.runs.addItem(entry["label"],entry["path"])
 
     def verify_selected(self):
-        if self.completed:
-            path=self.completed["record_path"]
-            self.launch(lambda p,c:load_history(path,p,c,verify=True),self.loaded)
+        """核验下拉框当前选中的运行，而不是上一次已加载的运行。"""
+        path = self.runs.currentData()
+        if not path:
+            self.show_error("请先选择一个运行记录，再核验全部产物。")
+            return
+        self.launch(lambda p,c: load_history(path,p,c,verify=True), self.loaded)
 
     def open_image_data(self):
         from PySide6.QtCore import QUrl

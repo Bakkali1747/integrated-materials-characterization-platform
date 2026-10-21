@@ -1,6 +1,19 @@
 """显式保存和应用默认参数，不触发科学计算。"""
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QDoubleSpinBox, QSpinBox, QLineEdit, QPushButton, QLabel, QFileDialog, QScrollArea
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
+
 from gui.controllers.settings_controller import defaults, validate_settings
 
 
@@ -21,10 +34,10 @@ class SettingsPage(QWidget):
             self.fields[key] = box; form.addRow(label, box)
         self.output = QLineEdit(); form.addRow("输出目录", self.output)
         choose = QPushButton("选择输出目录"); choose.clicked.connect(self.choose_output); form.addRow(choose)
-        self.dpi = QSpinBox(); self.dpi.setRange(72,1200); form.addRow("图片 DPI", self.dpi)
+        self.dpi = QSpinBox(); self.dpi.setRange(72,1200); form.addRow("分析图片 DPI（导出至少 600）", self.dpi)
         self.format = QComboBox(); self.format.addItems(["png", "tiff", "pdf", "svg"]); form.addRow("手动导出默认图片格式", self.format)
         form.addRow("缺失数据插值", QLabel("OFF（固定，不补点、不自动修正数据）"))
-        note = QLabel("分析运行继续保存 PNG 预览；手动导出使用上述默认格式。\n修改单位后需重新导入文件检查；MEMP 和 SDAT 仍按各自 parser/schema 解释。\n虚部约定与厂商验证状态不会通过设置自动确认。保存设置不会重新计算已有结果。")
+        note = QLabel("分析运行按“分析图片 DPI”保存预览；手动导出图片至少 600 dpi。\n修改单位后需重新导入文件检查；MEMP 和 SDAT 仍按各自 parser/schema 解释。\n虚部约定与厂商验证状态不会通过设置自动确认。保存设置不会重新计算已有结果。")
         note.setWordWrap(True); form.addRow(note)
         scroll.setWidget(body); layout.addWidget(scroll,1)
         self.message = QLabel(); self.message.setWordWrap(True); layout.addWidget(self.message)

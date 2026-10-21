@@ -6,7 +6,7 @@
 
 重新启动后会读取保存值。“恢复默认值”先恢复设置页草稿，点击保存才生效。正在分析或导出时，设置页锁定。
 
-默认值：GHz、1–5 mm、0.01 mm、曲线厚度 2 mm、阈值 −10 dB、600 dpi、PNG。缺失数据插值固定 OFF，不提供未经实现的 ON 开关。MEMP 的单位和 SDAT 的单位/字段映射仍由各自 parser/schema 解释；更改 CSV/Excel 默认单位后应重新导入文件检查。
+默认值：GHz、1–5 mm、0.01 mm、曲线厚度 2 mm、阈值 −10 dB、分析图 300 dpi、PNG。手动导出图片至少 600 dpi（用户设置更高时跟随），兼顾交互速度与投稿质量。缺失数据插值固定 OFF，不提供未经实现的 ON 开关。MEMP 的单位和 SDAT 的单位/字段映射仍由各自 parser/schema 解释；更改 CSV/Excel 默认单位后应重新导入文件检查。
 
 源码设置文件位于项目 `settings/gui.json`，不纳入 Git。客户端设置文件位于 `%LOCALAPPDATA%\MicrowaveAbsorptionAnalyzer\settings\gui.json`，与安装目录分离。配置无效时保留原文件，显示提示并使用默认值；只有明确再次保存才替换它。写入失败时当前参数保持不变。
 

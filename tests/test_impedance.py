@@ -1,8 +1,9 @@
 import numpy as np
-from core.rl_calculator import normalized_input_impedance, rl_from_impedance
-from core.units import C
+
 from core.impedance import impedance_at_minima
 from core.models import RLResult
+from core.rl_calculator import normalized_input_impedance, rl_from_impedance
+from core.units import C
 
 
 def test_standard_formula_for_positive_materials():

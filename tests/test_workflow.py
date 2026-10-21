@@ -1,8 +1,10 @@
 import hashlib
 import json
+
 import pytest
-from run_analysis import analyze
+
 from plotting.style import PlotStyle
+from run_analysis import analyze
 
 
 @pytest.mark.parametrize("threshold", [-5, 0])
@@ -29,7 +31,7 @@ def test_traceable_run_and_no_overwrite(tmp_path, frame, threshold):
     assert (first/"figures"/"RL_quarter_wave.png").exists()
     assert record["thickness_grid_mm"] == [1, 1.1]
     assert path.read_bytes() == original
-    summary = json.loads((first/"summary.json").read_text())
+    summary = json.loads((first/"summary.json").read_text(encoding="utf-8"))
     assert summary["standard_eab"]["metric"] == "EAB"
     assert "EAB" not in summary["selected_threshold_bandwidth"]["metric"]
     for relative, digest in record["artifacts_sha256"].items():
@@ -47,3 +49,23 @@ def test_failure_is_recorded(tmp_path, frame):
     record = json.loads(files[0].read_text(encoding="utf-8"))
     assert record["status"] == "failed" and "mu_imag" in record["error"]
     assert record["raw_sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_cli_reuse_returns_existing_run(tmp_path, frame):
+    path = tmp_path/"ok.csv"
+    frame.to_csv(path, index=False)
+    options = dict(output=tmp_path/"output", imaginary_convention="loss", thickness_min=1,
+                   thickness_max=1.1, thickness_step=.1, style=PlotStyle(dpi=30))
+    first = analyze(path, **options)
+    second = analyze(path, reuse=True, **options)
+    assert second == first
+    assert len(list((tmp_path/"output").rglob("analysis_record.json"))) == 1
+
+
+def test_invalid_parameters_do_not_create_run(tmp_path, frame):
+    path = tmp_path/"ok.csv"
+    frame.to_csv(path, index=False)
+    with pytest.raises(ValueError):
+        analyze(path, output=tmp_path/"output", imaginary_convention="loss",
+                thickness_min=5, thickness_max=1)
+    assert not (tmp_path/"output").exists()

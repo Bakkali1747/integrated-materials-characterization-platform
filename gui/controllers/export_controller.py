@@ -1,25 +1,36 @@
 """图片导出适配；使用已完成的核心结果，不接触 Qt Canvas。"""
 
+import json
 from pathlib import Path
-from plotting.style import PlotStyle, plt
+
+from export.origin_export import save_figure_bundle
+from export.provenance import figure_provenance
 from gui.controllers.analysis_controller import Cancelled
 from gui.controllers.science_figures import make_figure
-from export.origin_export import save_figure_bundle
+from plotting.style import PlotStyle, plt
 
 
 def export_all_builders(builders, source, output, extension, dpi, progress, cancelled):
     """新建独立导出目录；逐图原子保存，取消保留已完成产物及记录。"""
-    import json
-    import uuid
     import hashlib
-    from core import __version__
+    import uuid
     from datetime import datetime
+
+    from core import __version__
     from export.provenance import artifact_hashes
     if extension not in {"png", "tiff", "pdf", "svg"} or not builders:
         raise ValueError("请选择有效图片格式和已完成的图组。")
     output, source = Path(output).resolve(), Path(source).resolve()
     if output.is_relative_to(source):
         raise ValueError("请选择分析目录以外的导出位置，保留原追溯产物。")
+    provenance = None
+    source_record = source / "analysis_record.json"
+    if source_record.is_file():
+        try:
+            provenance = figure_provenance(json.loads(source_record.read_text(encoding="utf-8")),
+                                           dpi=dpi, extra={"source_run": str(source)})
+        except (OSError, ValueError):
+            provenance = None
     directory = output / ("figures_"+datetime.now().strftime("%Y%m%dT%H%M%S")+"_"+uuid.uuid4().hex[:8])
     directory.mkdir(parents=True)
     record = dict(status="started", software_version=__version__, analysis_date=datetime.now().astimezone().isoformat(),
@@ -35,7 +46,8 @@ def export_all_builders(builders, source, output, extension, dpi, progress, canc
             try:
                 figure = builder()
                 target = directory / f"{key}.{extension}"
-                save_figure_bundle(figure, target, dpi=dpi, bbox_inches="tight", cancelled=cancelled, cancel_error=Cancelled)
+                save_figure_bundle(figure, target, dpi=dpi, bbox_inches="tight", cancelled=cancelled,
+                                   cancel_error=Cancelled, provenance=provenance)
                 record["completed"].append(target.name)
                 progress(int(len(record["completed"])*100/len(builders)), "导出 "+key)
             finally:
@@ -62,9 +74,11 @@ def export_figure(completed, key, path, progress, cancelled, dpi=600):
         raise Cancelled("图片导出已取消。")
     style = PlotStyle(dpi=dpi)
     figure = make_figure(completed, key, style)
+    provenance = figure_provenance(completed.get("record"), dpi=dpi)
     try:
         progress(20, "保存图片…")
-        save_figure_bundle(figure, path, dpi=dpi, cancelled=cancelled, cancel_error=Cancelled)
+        save_figure_bundle(figure, path, dpi=dpi, cancelled=cancelled, cancel_error=Cancelled,
+                           provenance=provenance)
         progress(100, "图片保存完成")
         return path
     finally:

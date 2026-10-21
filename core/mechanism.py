@@ -1,8 +1,10 @@
 """[COMMON] 损耗辅助参数与四分之一波长估算；不自动推断材料机理。"""
 
 import numpy as np
+
 from core.electromagnetic import make_complex
 from core.units import C, ghz_to_hz
+from core.validation import summarize_values
 
 
 def checked_parameters(frequency_hz, eps_complex, mu_complex):
@@ -101,7 +103,8 @@ def mechanism_parameters(sample, orders=(1,)):
         invalid = ~np.isfinite(table[col])
         if invalid.any():
             points = table.loc[invalid, "frequency_ghz"].tolist()
-            warnings.append(f"[KNOWN] {col} 在 {points} GHz 未定义或数值溢出；派生结果保存为空值，绘图断线，不补值。")
+            warnings.append(f"[KNOWN] {col} 在 {summarize_values(points)} GHz 未定义或数值溢出；"
+                            f"共 {int(invalid.sum())} 点，派生结果保存为空值，绘图断线，不补值。")
             table.loc[invalid, col] = np.nan
     if (table.eps_imag < 0).any() or (table.mu_imag < 0).any():
         warnings.append("[COMMON] 存在负损耗系数；非负 α 公式不能据此证明被动性，需核查符号和反演。")

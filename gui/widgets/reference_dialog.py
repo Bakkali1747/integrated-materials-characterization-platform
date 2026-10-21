@@ -1,6 +1,16 @@
 from pathlib import Path
-from PySide6.QtWidgets import (QDialog,QFormLayout,QLineEdit,QPushButton,QDoubleSpinBox,
-    QPlainTextEdit,QLabel,QFileDialog,QDialogButtonBox)
+
+from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+)
 
 
 class ReferenceDialog(QDialog):

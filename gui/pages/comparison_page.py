@@ -1,17 +1,31 @@
 """勾选样品、共同条件、十项比较与全部并列明细；批量目录流程留给 Phase 3。"""
-from pathlib import Path
-from dataclasses import replace
-import json
 import hashlib
+import json
+from dataclasses import replace
+from pathlib import Path
+
 import pandas as pd
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QListWidget, QListWidgetItem, QPushButton, QHBoxLayout, QLabel,
-                               QSplitter, QScrollArea, QTextBrowser, QFileDialog, QWidget, QVBoxLayout, QTabWidget)
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QScrollArea,
+    QSplitter,
+    QTabWidget,
+    QTextBrowser,
+    QVBoxLayout,
+    QWidget,
+)
+
+from gui.controllers.comparison_controller import compare_requests
 from gui.pages.task_page import TaskPage
+from gui.widgets.metrics_table import MetricsTable
 from gui.widgets.parameter_panel import ParameterPanel
 from gui.widgets.plot_canvas import PlotCanvas
-from gui.widgets.metrics_table import MetricsTable
-from gui.controllers.comparison_controller import compare_requests
 from plotting.comparison_plot import plot_comparison
 from plotting.style import PlotStyle, plt
 

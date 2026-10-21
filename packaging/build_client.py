@@ -1,10 +1,10 @@
 """构建独立 Windows 客户端；只把已记录的代码状态写入构建清单。"""
 
 import json
-from pathlib import Path
+import os
 import subprocess
 import sys
-import os
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -16,6 +16,8 @@ def main():
     folder = ROOT / "output/packaging"
     folder.mkdir(parents=True, exist_ok=True)
     record = {**git_state(), "software_version": __version__}
+    if record.get("dirty") is True and "--allow-dirty" not in sys.argv:
+        raise SystemExit("构建时工作区存在未提交修改；请先提交，或显式加 --allow-dirty 生成开发版。")
     os.environ.setdefault("MPLCONFIGDIR", str(ROOT / ".mplconfig"))
     # 排除开发工具（例如 Poppler）的同名 DLL，Qt 使用 Windows 系统 ICU。
     windows = Path(os.environ.get("SystemRoot", "C:/Windows"))

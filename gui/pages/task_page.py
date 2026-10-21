@@ -1,11 +1,14 @@
 """Phase 2 页面共用的后台任务及导出生命周期。"""
 from pathlib import Path
-from PySide6.QtCore import Signal, QUrl
+
+from PySide6.QtCore import QUrl, Signal
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, QProgressBar, QFileDialog
-from gui.workers.analysis_worker import AnalysisWorker
-from gui.controllers.analysis_controller import Cancelled
+from PySide6.QtWidgets import QFileDialog, QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget
+
 from export.origin_export import save_figure_bundle
+from export.provenance import figure_provenance
+from gui.controllers.analysis_controller import Cancelled
+from gui.workers.analysis_worker import AnalysisWorker
 
 
 class TaskPage(QWidget):
@@ -58,7 +61,7 @@ class TaskPage(QWidget):
         self.worker.progress.connect(self.on_progress)
         self.worker.succeeded.connect(callback)
         self.worker.failed.connect(self.show_error)
-        self.worker.cancelled.connect(self.show_error)
+        self.worker.cancelled.connect(self.show_cancelled)
         self.worker.finished.connect(self.finished)
         self.body.setEnabled(False)
         self.cancel_button.setEnabled(True)
@@ -70,8 +73,15 @@ class TaskPage(QWidget):
         self.message.emit(text)
 
     def show_error(self, text):
+        self.error.setStyleSheet("color: #a03127;")
         self.error.setText(text)
         self.message.emit(text.splitlines()[0])
+
+    def show_cancelled(self, text="已取消；已生成的文件保留。"):
+        """主动取消是中性结果，不用红色错误呈现。"""
+        self.error.setStyleSheet("color: #5b6b7c;")
+        self.error.setText(text)
+        self.message.emit("已取消")
 
     def finished(self):
         worker, self.worker = self.worker, None
@@ -96,6 +106,7 @@ class TaskPage(QWidget):
         if not self.completed or self.busy:
             return
         dpi, extension = self.export_dpi, self.figure_format
+        provenance = figure_provenance(self.completed.get("record"), dpi=dpi)
         filters = [f"{fmt.upper()} (*.{fmt})" for fmt in (extension, *[f for f in ("png","tiff","pdf","svg") if f != extension])]
         path, selected = QFileDialog.getSaveFileName(self, f"保存图片（{dpi} dpi）", f"figure.{extension}", ";;".join(filters))
         if not path:
@@ -116,7 +127,8 @@ class TaskPage(QWidget):
                 raise Cancelled("导出已取消")
             fig = builder()
             try:
-                save_figure_bundle(fig, path, dpi=dpi, bbox_inches="tight", cancelled=cancelled, cancel_error=Cancelled)
+                save_figure_bundle(fig, path, dpi=dpi, bbox_inches="tight", cancelled=cancelled,
+                                   cancel_error=Cancelled, provenance=provenance)
                 return path
             finally:
                 plt.close(fig)

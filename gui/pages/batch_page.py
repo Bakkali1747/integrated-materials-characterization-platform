@@ -1,12 +1,14 @@
 """批量来源表与后台任务界面。"""
-from pathlib import Path
 from dataclasses import replace
+from pathlib import Path
+
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QPushButton, QLabel, QTreeWidget, QTreeWidgetItem, QSplitter, QScrollArea, QTextBrowser
+from PySide6.QtWidgets import QLabel, QPushButton, QScrollArea, QSplitter, QTextBrowser, QTreeWidget, QTreeWidgetItem
+
+from gui.controllers.batch_controller import run_batch_requests, scan_folder
 from gui.pages.task_page import TaskPage
 from gui.widgets.parameter_panel import ParameterPanel
 from gui.widgets.status_badge import StatusBadge
-from gui.controllers.batch_controller import scan_folder, run_batch_requests
 
 
 class BatchPage(TaskPage):
@@ -74,7 +76,8 @@ class BatchPage(TaskPage):
             self.states = [dict(sample=i["sample"], status="not_started") for i in self.items]
             for row in self.rows:
                 row.setText(3, "not_started")
-            self.launch(lambda p,c: run_batch_requests(requests, output, p,c, self.member_changed.emit), self.analyzed)
+            self.launch(lambda p,c: run_batch_requests(requests, output, p,c, self.member_changed.emit,
+                                                       reuse=self.parameters.reuse.isChecked()), self.analyzed)
         except Exception as error:
             self.show_error(str(error))
 

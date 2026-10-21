@@ -1,6 +1,7 @@
 """单位在这里统一转换，函数名显式写出单位。"""
 
-from decimal import Decimal, ROUND_FLOOR
+from decimal import ROUND_FLOOR, Decimal
+
 import numpy as np
 
 C = 299_792_458.0  # [KNOWN] 真空光速，m/s。

@@ -3,6 +3,7 @@
 import json
 import sys
 from pathlib import Path
+
 import application_paths
 from export.provenance import git_state
 

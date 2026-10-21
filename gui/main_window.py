@@ -1,15 +1,16 @@
 """中文桌面主窗口；Phase 1 以外的导航明确显示未开放。"""
 
-from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QListWidget, QStackedWidget, QLabel
+from PySide6.QtWidgets import QHBoxLayout, QListWidget, QMainWindow, QStackedWidget, QWidget
+
 from core import __version__
-from gui.pages.home_page import HomePage
-from gui.pages.single_sample_page import SingleSamplePage
-from gui.pages.sparameter_page import SParameterPage
-from gui.pages.comparison_page import ComparisonPage
+from gui.controllers.settings_controller import SettingsStore
 from gui.pages.batch_page import BatchPage
+from gui.pages.comparison_page import ComparisonPage
+from gui.pages.home_page import HomePage
 from gui.pages.results_page import ResultsPage
 from gui.pages.settings_page import SettingsPage
-from gui.controllers.settings_controller import SettingsStore
+from gui.pages.single_sample_page import SingleSamplePage
+from gui.pages.sparameter_page import SParameterPage
 
 
 class MainWindow(QMainWindow):
@@ -43,6 +44,8 @@ class MainWindow(QMainWindow):
             page.parameters.mapping_button.clicked.connect(lambda checked=False,p=page:configure_mapping(p,p.parameters))
         for page in (self.comparison,self.batch):
             page.parameters.quick_preview.hide()
+        for page in (self.comparison,):
+            page.parameters.reuse.hide()
         self.single.analysis_completed.connect(self.sparameters.add_theory)
         self.single.analysis_completed.connect(lambda r: self.comparison.add_source(r["record"]["raw_file"], r["sample"].name))
         self.single.table.source_selected.connect(self.transfer_source)
@@ -86,7 +89,8 @@ class MainWindow(QMainWindow):
             page.parameters.apply_defaults(values)
         self.sparameters.output.setText(values["output"])
         for page in self.task_pages:
-            page.export_dpi = values["dpi"]
+            # 交互分析按设置 DPI；手动导出至少 600 dpi，便于投稿和印刷。
+            page.export_dpi = max(600, values["dpi"])
             page.figure_format = values["figure_format"]
 
     def save_settings(self, values):

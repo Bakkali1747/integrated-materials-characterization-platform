@@ -1,10 +1,13 @@
 """无量纲阻抗图与 RL 并排对照，标出模长范围但不宣称完整匹配。"""
 
 import numpy as np
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.colors import Normalize
-from plotting.style import PlotStyle, new_axes, plt
-from plotting.rl_plot import rl_normalization
+from matplotlib.figure import Figure
+
 from export.origin_export import attach_grid
+from plotting.rl_plot import rl_normalization
+from plotting.style import PlotStyle, new_axes
 
 
 def draw_impedance_map(ax, result, style, tolerance):
@@ -62,7 +65,9 @@ def plot_impedance_curve(result, style=None, tolerance=.1):
 def plot_rl_impedance(result, style=None, tolerance=.1):
     """输入扫描结果；返回同一坐标范围的 RL / |z| 并排图，两侧各用自己的色标。"""
     style = style or PlotStyle()
-    fig, axes = plt.subplots(1, 2, figsize=(style.width*2, style.height), layout="constrained", sharex=True, sharey=True)
+    fig = Figure(figsize=(style.width*2, style.height), layout="constrained")
+    FigureCanvasAgg(fig)
+    axes = fig.subplots(1, 2, sharex=True, sharey=True)
     norm = rl_normalization(result.rl_db)
     attach_grid(axes[0], result.frequency_ghz, result.thickness_mm, result.rl_db, "RL (dB)")
     if len(result.thickness_mm) > 1:

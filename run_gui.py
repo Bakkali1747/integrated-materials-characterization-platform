@@ -1,10 +1,11 @@
 r"""Windows 本地 GUI 入口：.\.venv\Scripts\python.exe run_gui.py。"""
 
-import os
-from pathlib import Path
 import logging
-from logging.handlers import RotatingFileHandler
+import os
 import sys
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
 from application_paths import user_data_root
 
 ROOT = user_data_root()
@@ -26,6 +27,32 @@ def configure_logging():
         logger.setLevel(logging.INFO)
 
 
+def install_error_reporting():
+    """把未捕获异常与 Qt 消息写入 app.log，避免槽函数异常只落在 stderr。"""
+    from PySide6.QtCore import QtMsgType, qInstallMessageHandler
+    logger = logging.getLogger("microwave.gui")
+
+    def hook(kind, value, tb):
+        if issubclass(kind, KeyboardInterrupt):
+            sys.__excepthook__(kind, value, tb)
+            return
+        logger.error("未捕获异常", exc_info=(kind, value, tb))
+        try:
+            from PySide6.QtWidgets import QApplication, QMessageBox
+            if QApplication.instance() is not None:
+                QMessageBox.critical(None, "程序错误",
+                                     f"{kind.__name__}: {value}\n\n详细信息已写入日志：{ROOT / 'logs/app.log'}")
+        except Exception:
+            pass
+
+    def qt_message(mode, context, message):
+        level = logging.DEBUG if mode == QtMsgType.QtDebugMsg else logging.WARNING
+        logger.log(level, "Qt: %s", message)
+
+    sys.excepthook = hook
+    qInstallMessageHandler(qt_message)
+
+
 def main():
     """建立 QApplication 与主窗口；CLI 不导入任何 Qt 依赖。"""
     try:
@@ -45,6 +72,7 @@ def main():
     app.setStyle("Fusion")
     try:
         configure_logging()
+        install_error_reporting()
         if len(sys.argv) == 3 and sys.argv[1] == "--self-test":
             from gui.packaging_smoke import run_smoke
             return run_smoke(app, Path(sys.argv[2]))

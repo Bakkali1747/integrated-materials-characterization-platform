@@ -1,16 +1,20 @@
 """配套 CSV 必须使用图片数据，且不能改图或留下不匹配的输出。"""
-from pathlib import Path
 import json
+import os
+import shutil
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
+
 from core.rl_calculator import scan_rl
-from plotting.style import plt, PlotStyle
-from plotting.rl_plot import plot_rl_2d, plot_rl_3d, plot_rl_multi_thickness
-from plotting.impedance_plot import plot_impedance_2d, plot_rl_impedance, plot_impedance_curve
-from plotting.mechanism_plot import plot_quarter_wave, plot_quarter_wave_overlay
-from plotting.comparison_plot import plot_comparison
 from export.origin_export import save_figure_bundle
+from plotting.comparison_plot import plot_comparison
+from plotting.impedance_plot import plot_impedance_2d, plot_impedance_curve, plot_rl_impedance
+from plotting.mechanism_plot import plot_quarter_wave, plot_quarter_wave_overlay
+from plotting.rl_plot import plot_rl_2d, plot_rl_3d, plot_rl_multi_thickness
+from plotting.style import plt
 
 
 @pytest.fixture
@@ -165,3 +169,57 @@ def test_permanent_windows_denial_has_bounded_retries(monkeypatch):
     with pytest.raises(PermissionError):
         module.replace_path("source","target")
     assert len(calls)==6
+
+
+def test_identical_grids_share_storage(tmp_path, matrix):
+    first = tmp_path / "first.png"
+    second = tmp_path / "second.png"
+    save_figure_bundle(plot_rl_2d(matrix)[0], first, dpi=25)
+    save_figure_bundle(plot_rl_2d(matrix)[0], second, dpi=25)
+    left = first.with_name(first.name + ".data") / "01.csv"
+    right = second.with_name(second.name + ".data") / "01.csv"
+    assert os.stat(left).st_ino == os.stat(right).st_ino
+    shutil.rmtree(left.parent)
+    values = pd.read_csv(right)
+    assert len(values) == 3 * 3
+
+
+def test_multi_thickness_reference_uses_requested_threshold(matrix):
+    fig = plot_rl_multi_thickness(matrix, [0, 2], threshold=-15)
+    reference = [line for line in fig.axes[0].lines if line.get_label() == "-15 dB"]
+    assert reference and reference[0].get_ydata()[0] == -15
+    plt.close(fig)
+
+
+def test_bundle_records_provenance_and_default_unknown(tmp_path):
+    fig, ax = plt.subplots(); ax.plot([1, 2], [1, 2], label="curve")
+    provenance = {"software_version": "9.9.9", "run_id": "run-1", "sample": "S",
+                  "raw_sha256": "a" * 64, "validation_status": "pending_x",
+                  "configuration_sha256": "b" * 64, "dpi": 30, "created_at": "2026-01-01T00:00:00+08:00"}
+    path = tmp_path / "p.png"
+    save_figure_bundle(fig, path, dpi=30, provenance=provenance)
+    directory = path.with_name(path.name + ".data")
+    manifest = json.loads((directory / "metadata.json").read_text(encoding="utf-8"))
+    assert manifest["provenance"]["run_id"] == "run-1"
+    assert manifest["provenance"]["validation_status"] == "pending_x"
+    assert json.loads((directory / "provenance.json").read_text(encoding="utf-8"))["raw_sha256"] == "a" * 64
+    index = pd.read_csv(directory / "index.csv")
+    assert list(index.columns[:2]) == ["run_id", "validation_status"]
+    assert index.iloc[0]["run_id"] == "run-1"
+    plt.close(fig)
+
+    fig, ax = plt.subplots(); ax.plot([1, 2], [1, 2])
+    anonymous = tmp_path / "q.png"
+    save_figure_bundle(fig, anonymous, dpi=30)
+    manifest = json.loads((anonymous.with_name(anonymous.name + ".data") / "metadata.json").read_text(encoding="utf-8"))
+    assert manifest["provenance"]["validation_status"] == "unknown"
+    plt.close(fig)
+
+
+def test_companion_file_conflict_has_clear_error(tmp_path):
+    fig, ax = plt.subplots(); ax.plot([1, 2], [1, 2])
+    target = tmp_path / "conflict.png"
+    target.with_name(target.name + ".data").write_text("occupied", encoding="utf-8")
+    with pytest.raises(ValueError, match="同名文件"):
+        save_figure_bundle(fig, target, dpi=30)
+    plt.close(fig)

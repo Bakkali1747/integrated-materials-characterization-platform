@@ -1,8 +1,20 @@
 import json
 from pathlib import Path
-from PySide6.QtWidgets import (QWidget, QFormLayout, QDoubleSpinBox, QLineEdit, QComboBox,
-                               QCheckBox, QPushButton, QFileDialog, QLabel)
-from gui.controllers.analysis_controller import AnalysisRequest, ROOT
+
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+    QWidget,
+)
+
+from gui.controllers.analysis_controller import ROOT, AnalysisRequest
 
 
 class ParameterPanel(QWidget):
@@ -10,7 +22,7 @@ class ParameterPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.figure_dpi = 600
+        self.figure_dpi = 300
         form = QFormLayout(self)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.name = QLineEdit()
@@ -34,9 +46,32 @@ class ParameterPanel(QWidget):
             form.addRow(label, box)
         self.crop = QCheckBox("裁选频率范围（仅保留原始点）")
         form.addRow(self.crop)
+        self.eab_crossing = QComboBox()
+        self.eab_crossing.addItem("linear：相邻点线性交点（默认）", "linear")
+        self.eab_crossing.addItem("sample：只用达标采样点首尾", "sample")
+        form.addRow("EAB 阈值交点", self.eab_crossing)
+        self.quarter_orders = QLineEdit("1")
+        self.quarter_orders.setPlaceholderText("正奇数，逗号分隔，例如 1,3,5")
+        form.addRow("四分之一波长阶数", self.quarter_orders)
+        self.impedance_tolerance = QDoubleSpinBox()
+        self.impedance_tolerance.setRange(.01, .99)
+        self.impedance_tolerance.setDecimals(2)
+        self.impedance_tolerance.setSingleStep(.05)
+        self.impedance_tolerance.setValue(.1)
+        form.addRow("阻抗模长显示容差 ±", self.impedance_tolerance)
         self.unit = QComboBox()
         self.unit.addItems(["GHz", "MHz", "kHz", "Hz"])
         form.addRow("文件频率单位", self.unit)
+        self.sheet = QLineEdit()
+        self.sheet.setPlaceholderText("Excel 工作表名称或序号；留空=第一个")
+        self.sheet.setToolTip("工作表名称区分大小写；填写 0、1… 表示第几个工作表。CSV/MEMP 忽略此项。")
+        form.addRow("Excel 工作表", self.sheet)
+        self.header_row = QSpinBox()
+        self.header_row.setRange(1, 10000)
+        self.header_row.setValue(1)
+        self.header_row.setSuffix(" 行")
+        self.header_row.setToolTip("表头所在行（从 1 开始）；标题/说明行在表头之前。CSV/MEMP 忽略此项。")
+        form.addRow("Excel 表头行", self.header_row)
         self.convention = QComboBox()
         self.convention.setMinimumContentsLength(10)
         self.convention.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
@@ -52,6 +87,9 @@ class ParameterPanel(QWidget):
         self.quick_preview = QCheckBox("快速预览（高清图片稍后手动导出）")
         self.quick_preview.setToolTip("数值表照常保存；只预览基础图，其余图按需生成。保持默认完整自动导出行为。")
         form.addRow(self.quick_preview)
+        self.reuse = QCheckBox("批量复用相同源 + 配置的已完成运行")
+        self.reuse.setToolTip("仅在批量页生效；匹配源 SHA-256 与数值配置，复用目录记录在 reused_from。")
+        form.addRow(self.reuse)
         self.output = QLineEdit(str(ROOT / "output"))
         form.addRow("输出目录", self.output)
         choose = QPushButton("选择输出目录")
@@ -79,6 +117,10 @@ class ParameterPanel(QWidget):
         options = {"imaginary_convention": self.convention.currentData(), "convention_confirmed": False}
         if path is None or Path(path).suffix.lower() != ".memp":
             options["frequency_unit"] = self.unit.currentText()
+            options["header_row"] = self.header_row.value() - 1
+            sheet = self.sheet.text().strip()
+            if sheet:
+                options["sheet"] = int(sheet) if sheet.isdigit() else sheet
             if self.mapping.text().strip():
                 value = json.loads(self.mapping.text())
                 if not isinstance(value, dict):
@@ -93,9 +135,28 @@ class ParameterPanel(QWidget):
         if not self.name.text().strip():
             raise ValueError("请输入样品名称。")
         values = {key: box.value() for key, box in self.fields.items()}
+        if values["thickness_min"] > values["thickness_max"]:
+            raise ValueError("厚度下限不能大于上限。")
+        if values["thickness_step"] <= 0:
+            raise ValueError("厚度步长必须大于 0。")
+        if values["curve_thickness"] <= 0:
+            raise ValueError("RL 曲线厚度必须大于 0。")
+        if self.crop.isChecked() and values["frequency_min"] > values["frequency_max"]:
+            raise ValueError("频率下限不能大于上限。")
+        raw_orders = self.quarter_orders.text().replace("，", ",").replace(" ", ",").split(",")
+        try:
+            orders = tuple(int(item) for item in raw_orders if item.strip())
+        except ValueError:
+            raise ValueError("四分之一波长阶数必须是逗号分隔的整数。") from None
+        if not orders or any(order < 1 or order % 2 == 0 for order in orders) or len(set(orders)) != len(orders):
+            raise ValueError("四分之一波长阶数必须是非空、不重复的正奇数。")
         if not self.crop.isChecked():
             values.update(frequency_min=None, frequency_max=None)
         return AnalysisRequest(path=Path(path), name=self.name.text().strip(),
                                output=Path(self.output.text()).expanduser().resolve(),
                                parser_options=self.parser_options(path), full_science=True,
-                               quick_preview=self.quick_preview.isChecked(), dpi=self.figure_dpi, **values)
+                               quick_preview=self.quick_preview.isChecked(), dpi=self.figure_dpi,
+                               eab_crossing=self.eab_crossing.currentData(),
+                               quarter_wave_orders=orders,
+                               impedance_tolerance=self.impedance_tolerance.value(),
+                               reuse=self.reuse.isChecked(), **values)

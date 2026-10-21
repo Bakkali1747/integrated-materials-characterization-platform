@@ -1,26 +1,28 @@
 """候选 S 参数独立入口；不改变 .memp 或材料 RL 批量入口。"""
 
-from export.origin_export import save_figure_bundle
 import argparse
-from dataclasses import asdict
-from datetime import datetime
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import sys
 import uuid
+from dataclasses import asdict
+from datetime import datetime
+from pathlib import Path
+
+from export.origin_export import save_figure_bundle
 
 os.environ.setdefault("MPLCONFIGDIR", str(Path(__file__).resolve().parent/".mplconfig"))
 
 import numpy as np
+
 from core import __version__
 from core.sparameter_mapping import SParameterMapping, load_sparameter_mapping
 from core.sparameter_parser import read_sparameters
 from core.sparameters import SParameterTolerances, analyze_sparameters
-from export.provenance import json_safe, git_state, artifact_hashes
-from plotting.sparameter_plot import plot_sparameter_quantity, plot_rta
+from export.provenance import artifact_hashes, figure_provenance, git_state, json_safe
+from plotting.sparameter_plot import plot_rta, plot_sparameter_quantity
 from plotting.style import PlotStyle, plt
 
 
@@ -78,10 +80,11 @@ def analyze_sparameter_file(path, *, mapping=None, tolerances=None, output="outp
         if make_figures:
             figures = directory/"figures"
             figures.mkdir()
+            provenance = figure_provenance(record, dpi=style.dpi)
             for quantity in ("magnitude", "db", "phase_deg", "RTA"):
                 fig = plot_rta(table, style) if quantity == "RTA" else plot_sparameter_quantity(table, quantity, style)
                 fig.suptitle(mapping.schema_status + " (not manufacturer-confirmed)", fontsize=9, color="0.35")
-                save_figure_bundle(fig, figures/f"{quantity}.png", dpi=style.dpi)
+                save_figure_bundle(fig, figures/f"{quantity}.png", dpi=style.dpi, provenance=provenance)
                 plt.close(fig)
         record.update({"status": "success", "source": data.metadata, "frequency_points": len(table),
                        "frequency_range_ghz": [float(data.frequency_ghz[0]), float(data.frequency_ghz[-1])],

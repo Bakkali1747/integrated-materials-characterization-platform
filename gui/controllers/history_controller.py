@@ -1,8 +1,9 @@
 """只读历史产物，不导入任何计算入口。"""
-from pathlib import Path
 import hashlib
 import json
 import os
+from pathlib import Path
+
 from gui.controllers.analysis_controller import Cancelled
 
 RECORDS = {"analysis_record.json", "batch_record.json", "comparison_record.json", "reference_record.json"}
@@ -14,7 +15,7 @@ def discover_history(folder, progress, cancelled):
     for current, directories, files in os.walk(root, followlinks=False):
         if cancelled():
             raise Cancelled("历史扫描已取消")
-        directories[:]=[d for d in directories if not d.endswith(".data") and not d.startswith(".f-") and d not in {".git",".venv"}]
+        directories[:]=[d for d in directories if not d.endswith(".data") and not d.startswith(".f-") and d not in {".git",".venv","_archive"}]
         for name in RECORDS.intersection(files):
             path=Path(current)/name
             if path.resolve().is_relative_to(root): paths.append(path)

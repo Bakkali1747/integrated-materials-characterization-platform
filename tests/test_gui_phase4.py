@@ -1,12 +1,13 @@
 """设置持久化、参数快照、导出和可缩放历史图片测试。"""
-from pathlib import Path
 import json
+
 import pytest
-from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
-from gui.controllers.settings_controller import SettingsStore, defaults, validate_settings
-from gui.controllers.export_controller import export_all_builders
+from PySide6.QtGui import QPixmap
+
 from gui.controllers.analysis_controller import Cancelled
+from gui.controllers.export_controller import export_all_builders
+from gui.controllers.settings_controller import SettingsStore, defaults, validate_settings
 from gui.main_window import MainWindow
 from gui.widgets.image_view import ImageView
 from plotting.style import plt
@@ -19,7 +20,7 @@ def store(tmp_path):
 
 def test_defaults_do_not_create_file(store):
     values, warning = store.load()
-    assert values["interpolation"]=="OFF" and values["dpi"]==600 and not warning
+    assert values["interpolation"]=="OFF" and values["dpi"]==300 and not warning
     assert not store.path.exists()
 
 
@@ -44,7 +45,7 @@ def test_unknown_settings_not_silently_accepted():
 def test_corrupt_settings_preserved(store):
     store.path.parent.mkdir(); store.path.write_text("invalid")
     values,warning=store.load()
-    assert warning and values==defaults() and store.path.read_text()=="invalid"
+    assert warning and values==defaults() and store.path.read_text(encoding="utf-8")=="invalid"
 
 
 def test_atomic_save_failure_keeps_old_settings(store,monkeypatch):
@@ -76,7 +77,7 @@ def test_settings_gui_restart_and_no_analysis(qtbot,store,tmp_path):
         assert page.parameters.figure_dpi==300 and page.parameters.fields["thickness_step"].value()==.02
         assert page.figure_format=="svg"
     assert other.sparameters.output.text()==str(tmp_path)
-    assert other.sparameters.export_dpi==300
+    assert other.sparameters.export_dpi==600
 
 
 def test_setting_apply_does_not_change_existing_snapshot(qtbot,store):
@@ -100,7 +101,7 @@ def test_failed_save_not_applied(qtbot,store,monkeypatch):
         raise PermissionError("no write")
     monkeypatch.setattr(store,"save",fail)
     window.save_settings(dict(defaults(),dpi=300))
-    assert window.single.parameters.figure_dpi==600 and "保存失败" in window.settings.message.text()
+    assert window.single.parameters.figure_dpi==300 and "保存失败" in window.settings.message.text()
 
 
 def test_running_task_rejects_settings(qtbot,store):
@@ -130,9 +131,9 @@ def make_test_figure():
 
 @pytest.mark.parametrize("extension",["png","tiff","pdf","svg"])
 def test_export_all_formats(tmp_path,extension):
-    source=tmp_path/"source"; source.mkdir(); (source/"analysis_record.json").write_text('{}')
+    source=tmp_path/"source"; source.mkdir(); (source/"analysis_record.json").write_text('{}', encoding="utf-8")
     directory=export_all_builders({"synthetic":make_test_figure},source,tmp_path/"exports",extension,72,lambda *a:None,lambda:False)
-    record=json.loads((directory/"export_record.json").read_text())
+    record=json.loads((directory/"export_record.json").read_text(encoding="utf-8"))
     assert record["status"]=="success" and record["dpi"]==72
     assert (directory/f"synthetic.{extension}").stat().st_size>100
     assert "analysis_record.json" in record["source_records_sha256"]

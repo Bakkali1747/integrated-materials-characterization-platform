@@ -1,11 +1,13 @@
 """将图中实际数据导出为 Origin 可导入 CSV；不计算任何科学指标。"""
-from pathlib import Path
+import hashlib
 import json
 import os
+import shutil
 import tempfile
 import time
-import shutil
 from contextlib import contextmanager
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from matplotlib.collections import PathCollection
@@ -74,8 +76,41 @@ def datasets(figure):
                     "Y_lower":[patch.get_y()], "Y_upper":[patch.get_y()+patch.get_height()]})
 
 
-def save_figure_bundle(figure, path, *, cancelled=lambda:False, cancel_error=InterruptedError, **save_options):
-    """图片与数据目录一起替换；失败/取消回滚旧输出，防止只更新一半。"""
+_DATA_LINKS = {}
+
+
+def _digest_file(path):
+    value = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            value.update(block)
+    return value.hexdigest()
+
+
+def _deduplicate(path, digest):
+    """同一卷上内容相同的导出数据用硬链接复用，减少多图重复网格占用。
+
+    失败（跨卷、文件系统不支持）时保留独立副本，不改变任何数据内容。
+    """
+    device = os.stat(path.parent).st_dev
+    existing = _DATA_LINKS.get((device, digest))
+    if existing is None or not existing.is_file():
+        return
+    temporary = path.with_name(path.name + ".link")
+    try:
+        os.link(existing, temporary)
+        os.replace(temporary, path)
+    except OSError:
+        temporary.unlink(missing_ok=True)
+
+
+def save_figure_bundle(figure, path, *, cancelled=lambda:False, cancel_error=InterruptedError,
+                       provenance=None, **save_options):
+    """图片与数据目录一起替换；失败/取消回滚旧输出，防止只更新一半。
+
+    provenance 记录运行来源与验证状态；独立导出没有上下文时由调用方省略，
+    metadata 中明确写 validation_status=unknown。
+    """
     path = Path(path)
     companion = path.with_name(path.name + ".data")
     def checkpoint():
@@ -87,9 +122,14 @@ def save_figure_bundle(figure, path, *, cancelled=lambda:False, cancel_error=Int
     if companion.is_symlink() or path.is_symlink():
         raise ValueError("拒绝覆盖符号链接输出。")
     if companion.exists():
+        if not companion.is_dir():
+            raise ValueError(f"配套数据路径已被同名文件占用：{companion}")
         marker = companion/"metadata.json"
         if not marker.is_file() or json.loads(marker.read_text(encoding="utf-8")).get("format") != "origin_csv_bundle_v1":
             raise ValueError(f"配套目录已存在且不是软件生成的数据目录：{companion}")
+    if provenance is None:
+        from export.provenance import figure_provenance
+        provenance = figure_provenance(dpi=save_options.get("dpi"))
     with recovery_staging(path.parent) as temporary:
         staging = Path(temporary)
         staged_image = staging/ ("image"+path.suffix)
@@ -98,25 +138,36 @@ def save_figure_bundle(figure, path, *, cancelled=lambda:False, cancel_error=Int
         figure.savefig(staged_image, **save_options)
         manifest = {"format":"origin_csv_bundle_v1", "image":path.name,
                     "figure_title":figure._suptitle.get_text() if figure._suptitle else "",
-                    "encoding":"UTF-8 BOM", "delimiter":",", "missing":"NaN", "interpolation":"OFF", "datasets":[]}
+                    "encoding":"UTF-8 BOM", "delimiter":",", "missing":"NaN", "interpolation":"OFF",
+                    "provenance": provenance, "datasets":[]}
+        digests = {}
         for number, (info, table) in enumerate(datasets(figure), 1):
             checkpoint()
             name = f"{number:02d}.csv"
-            table.to_csv(staged_data/name,index=False,encoding="utf-8-sig",float_format="%.17g",na_rep="NaN")
+            staged = staged_data/name
+            table.to_csv(staged,index=False,encoding="utf-8-sig",float_format="%.17g",na_rep="NaN")
+            digests[name] = _digest_file(staged)
+            _deduplicate(staged, digests[name])
             manifest["datasets"].append(dict(info,file=name,rows=len(table),columns=list(table.columns)))
         if not manifest["datasets"]:
             raise ValueError("图片没有可导出的数据；未写入不完整的图片输出。")
         (staged_data/"metadata.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding="utf-8")
+        (staged_data/"provenance.json").write_text(json.dumps(provenance,ensure_ascii=False,indent=2),encoding="utf-8")
         lines = ["Origin import: Data > Import From File > CSV / Single ASCII (menu varies by version).",
                  "Encoding UTF-8; delimiter comma; first row column names. Set X/Y or X/Y/Z column roles.",
                  "Each CSV is an independent series/grid. No resampling. NaN means undefined; inf/-inf are retained.",
                  "Grid rows: Y (thickness) outer loop, X (frequency) inner loop; original full grid, not contour vertices.",
-                 "Reference lines/bands are display guides, not measured samples. Labels and units follow the figure.", ""]
+                 "Reference lines/bands are display guides, not measured samples. Labels and units follow the figure.",
+                 f"Provenance: run_id={provenance.get('run_id') or 'unknown'}; "
+                 f"validation_status={provenance.get('validation_status') or 'unknown'}; "
+                 f"software_version={provenance.get('software_version')}.", ""]
         for entry in manifest["datasets"]:
             lines.append(f"{entry['file']}: {entry['label']} | X: {entry['x_label']} | Y: {entry['y_label']} | Z: {entry.get('z_label','')} | rows: {entry['rows']}")
         (staged_data/"README.txt").write_text("\n".join(lines),encoding="utf-8-sig")
-        pd.DataFrame(manifest["datasets"]).drop(columns=["columns"]).to_csv(
-            staged_data/"index.csv", index=False, encoding="utf-8-sig")
+        index = pd.DataFrame(manifest["datasets"]).drop(columns=["columns"])
+        index.insert(0, "run_id", provenance.get("run_id") or "")
+        index.insert(1, "validation_status", provenance.get("validation_status") or "unknown")
+        index.to_csv(staged_data/"index.csv", index=False, encoding="utf-8-sig")
         checkpoint()
         old_image, old_data = staging/"old_image", staging/"old_data"
         moved_image = moved_data = installed_image = installed_data = False
@@ -131,6 +182,9 @@ def save_figure_bundle(figure, path, *, cancelled=lambda:False, cancel_error=Int
                 replace_path(companion,old_data); moved_data=True
             replace_path(staged_data,companion); installed_data=True
             replace_path(staged_image,path); installed_image=True
+            device = os.stat(companion).st_dev
+            for name, digest in digests.items():
+                _DATA_LINKS[(device, digest)] = companion / name
         except Exception as error:
             failures = []
             for needed, source, target in ((installed_image,path,staged_image),

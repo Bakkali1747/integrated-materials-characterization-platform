@@ -1,12 +1,14 @@
 """已知 sdat 的结构解析与候选语义映射；不使用 ε/μ 的虚部符号转换。"""
 
-from dataclasses import dataclass
-from pathlib import Path
 import hashlib
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from core.sparameter_mapping import SParameterMapping, S_NAMES
+
+from core.sparameter_mapping import S_NAMES, SParameterMapping
 
 
 @dataclass
@@ -22,12 +24,13 @@ class SParameterData:
 def decode_sdat(raw, encoding=None):
     """输入字节及可选显式编码；返回严格解码文本与采用的编码，不替换错误字节。
 
-    无 BOM 时优先 GB18030，再尝试 GBK/UTF-8；存在 UTF-8 BOM 时使用明确标识。
+    无 BOM 时先严格尝试 UTF-8，失败再退回 GB18030/GBK；存在 UTF-8 BOM 时直接按 UTF-8 解码。
+    先试 UTF-8 是因为 GB18030 几乎能解码任意字节，会把无 BOM 的 UTF-8 中文静默解成乱码。
     解码成功代表兼容，不宣称自动识别出了唯一原始编码。
     """
     if b"\x00" in raw:
         raise ValueError("sdat 含 NUL 字节；当前仅支持已观察的文本结构。")
-    candidates = [encoding] if encoding else (["utf-8-sig"] if raw.startswith(b"\xef\xbb\xbf") else ["gb18030", "gbk", "utf-8-sig"])
+    candidates = [encoding] if encoding else (["utf-8-sig"] if raw.startswith(b"\xef\xbb\xbf") else ["utf-8-sig", "gb18030", "gbk"])
     for candidate in candidates:
         try:
             return raw.decode(candidate, errors="strict"), candidate

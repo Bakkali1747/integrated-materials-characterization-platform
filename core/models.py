@@ -1,6 +1,7 @@
 """少量数据对象，集中声明单位和矩阵方向。"""
 
 from dataclasses import dataclass, field
+
 import numpy as np
 import pandas as pd
 

@@ -1,14 +1,15 @@
 """参考 RL 逐点对照；不计算 RL，不自动授予科研验证状态。"""
-from pathlib import Path
-from io import StringIO
-from datetime import datetime
 import hashlib
 import json
 import uuid
+from datetime import datetime
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from core.parser import decode_text, read_csv_table
+
 from core import __version__
+from core.parser import decode_text, read_csv_table
 from export.provenance import artifact_hashes
 from gui.controllers.analysis_controller import Cancelled
 
@@ -67,7 +68,8 @@ def export_reference_comparison(completed, reference, output, notes, tolerance_d
         "scope":"Calculated metal-backed RL only; not measured S11 or manufacturer schema validation"}
     try:
         (directory/"reference_source.csv").write_bytes(raw)
-        compared.to_csv(directory/"point_comparison.csv",index=False,encoding="utf-8-sig",float_format="%.17g")
+        from export.csv_safety import escape_formula_cells
+        escape_formula_cells(compared).to_csv(directory/"point_comparison.csv",index=False,encoding="utf-8-sig",float_format="%.17g")
         record["status"]="success"
     except Exception as error:
         record.update(status="failed",error=str(error)); raise

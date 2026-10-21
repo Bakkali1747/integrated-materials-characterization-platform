@@ -1,10 +1,12 @@
 """只检查已观察到的 sdat 结构，不推断 S 参数定义、频率单位或几何含义。"""
 
-from pathlib import Path
 import hashlib
 import xml.etree.ElementTree as ET
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+
 from core.parser import decode_text
 
 

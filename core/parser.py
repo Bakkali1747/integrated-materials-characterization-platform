@@ -1,12 +1,14 @@
 """读取已知文本结构；未知扩展名或列结构必须拒绝，不能猜测。"""
 
-from io import BytesIO, StringIO
-from pathlib import Path
 import csv
 import hashlib
 import re
+from io import BytesIO, StringIO
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+
 from core.models import COLUMNS, SampleData
 from core.validation import validate_data
 
@@ -90,18 +92,38 @@ def read_memp(text):
     return frame, metadata, source_rows
 
 
+def _excel_columns(positions):
+    """输入 1 起始列号；返回紧凑的中文列号描述（连续用破折号）。"""
+    groups, start, previous = [], None, None
+    for column in positions:
+        if start is None:
+            start = previous = column
+        elif column == previous + 1:
+            previous = column
+        else:
+            groups.append(f"{start}–{previous}" if previous > start else str(start))
+            start = previous = column
+    if start is not None:
+        groups.append(f"{start}–{previous}" if previous > start else str(start))
+    return "、".join(groups)
+
+
 def read_sample(path, *, name=None, frequency_unit=None, imaginary_convention=None,
-                convention_confirmed=False, column_map=None, sheet=0, encoding=None, delimiter=","):
+                convention_confirmed=False, column_map=None, sheet=0, header_row=0, encoding=None, delimiter=","):
     """输入只读文件路径及显式解析配置；返回 SampleData。
 
     imaginary_convention='loss' 表示文件是损耗系数；'signed' 表示 e^(jωt)
     约定下 Python 复数的带符号虚部，需先取负号转为内部损耗系数。
     convention_confirmed=False 时即使选择一种约定，结果也必须标为待验证。
     column_map 方向为：内部字段名 -> 文件列名。频率统一为 GHz。
+    header_row 为 Excel 表头所在行的 0 起始序号，之前的内容视为报告标题/说明。
     """
     path = Path(path)
     if not isinstance(convention_confirmed, bool):
         raise ValueError("convention_confirmed 必须为布尔值 true/false，不能使用字符串。")
+    if isinstance(header_row, bool) or not isinstance(header_row, (int, np.integer)) or header_row < 0:
+        raise ValueError("header_row 必须是非负整数；0 表示第一行就是表头。")
+    header_row = int(header_row)
     raw = path.read_bytes()
     suffix = path.suffix.lower()
     metadata = {"raw_file": str(path.resolve()), "sha256": hashlib.sha256(raw).hexdigest(),
@@ -126,22 +148,45 @@ def read_sample(path, *, name=None, frequency_unit=None, imaginary_convention=No
             metadata.update({"encoding": actual_encoding, "delimiter": delimiter})
         else:
             with pd.ExcelFile(BytesIO(raw), engine="xlrd" if suffix == ".xls" else "openpyxl") as workbook:
-                sheet_name = workbook.sheet_names[sheet] if isinstance(sheet, int) else sheet
+                sheet_names = workbook.sheet_names
+                if isinstance(sheet, (int, np.integer)) and not isinstance(sheet, bool):
+                    if not 0 <= int(sheet) < len(sheet_names):
+                        raise ValueError(f"工作表序号 {int(sheet)} 超出范围；文件共有 {len(sheet_names)} 个工作表：{sheet_names}")
+                    sheet_name = sheet_names[int(sheet)]
+                elif sheet in sheet_names:
+                    sheet_name = sheet
+                else:
+                    raise ValueError(f"未找到工作表 {sheet!r}；现有工作表：{sheet_names}")
                 table = pd.read_excel(workbook, sheet_name=sheet_name, header=None)
             if table.empty:
-                raise ValueError("Excel 工作表为空。")
-            header = table.iloc[0].tolist()
-            if len(set(header)) != len(header):
-                raise ValueError("Excel 存在重复列名，拒绝自动重命名。")
-            frame = table.iloc[1:].reset_index(drop=True)
+                raise ValueError(f"Excel 工作表 {sheet_name!r} 为空。")
+            if header_row >= len(table):
+                raise ValueError(f"Excel 表头行 {header_row + 1} 超出工作表行数 {len(table)}。")
+            raw_header = table.iloc[header_row].tolist()
+            header = ["" if pd.isna(value) else str(value).strip() for value in raw_header]
+            nonempty = [value for value in header if value]
+            duplicates = sorted({value for value in nonempty if nonempty.count(value) > 1})
+            if duplicates:
+                raise ValueError(f"Excel 表头存在重复列名 {duplicates}，拒绝自动重命名。")
+            if not nonempty:
+                raise ValueError(f"Excel 第 {header_row + 1} 行为空，无法作为表头；"
+                                 "请指定实际包含 frequency/eps/mu 列名的表头行。")
+            blank = [number for number, value in enumerate(header, 1) if not value]
+            if blank and column_map is None:
+                raise ValueError(f"Excel 第 {header_row + 1} 行第 {_excel_columns(blank)} 列为空；"
+                                 "这看起来像标题行，不是表头。请指定表头行，或选择包含五列数据的工作表。")
+            frame = table.iloc[header_row + 1:].reset_index(drop=True)
             frame.columns = header
-            source_rows = list(range(2, len(frame) + 2))
-            metadata["sheet"] = sheet_name
+            source_rows = list(range(header_row + 2, header_row + 2 + len(frame)))
+            metadata.update({"sheet": sheet_name, "header_row": header_row + 1})
         mapping = column_map or {col: col for col in COLUMNS}
         if set(mapping) != set(COLUMNS) or len(set(mapping.values())) != 5:
             raise ValueError("列映射必须为五个内部字段指定五个不同源列。")
         missing = set(mapping.values()) - set(frame.columns)
         if missing:
+            if suffix in (".xlsx", ".xls") and column_map is None:
+                raise ValueError(f"未找到标准列 {sorted(missing)}；当前表头为 {list(frame.columns)}。"
+                                 "请选择正确的表头行/工作表，或提供显式列映射。")
             raise ValueError(f"缺少源列 {sorted(missing)}；请提供显式列映射。")
         frame = frame[[mapping[col] for col in COLUMNS]].copy()
         frame.columns = COLUMNS
@@ -167,7 +212,8 @@ def read_sample(path, *, name=None, frequency_unit=None, imaginary_convention=No
     frame["frequency_ghz"] *= factors[frequency_unit]
     if imaginary_convention == "signed":
         frame[["eps_imag", "mu_imag"]] *= -1
-    warnings = validate_data(frame, name, source_rows)
+    warnings, quality = validate_data(frame, name, source_rows)
+    metadata["data_quality"] = quality
     if not convention_confirmed:
         warnings.insert(0, "[KNOWN] 文件虚部定义待确认；当前采用显式临时假设，真实数据结果待验证。")
     metadata.update({"source_rows": source_rows, "raw_frequency_unit": frequency_unit,

@@ -1,6 +1,45 @@
 import numpy as np
+import pandas as pd
 import pytest
+
 from core.parser import read_sample
+
+
+def test_excel_title_row_reports_blank_header(tmp_path):
+    """标题行 + 空单元格应提示“像标题行”，而不是误报重复列名。"""
+    rows = [["检验报告", None, None, None, None],
+            ["frequency_ghz", "eps_real", "eps_imag", "mu_real", "mu_imag"],
+            [2, 4, .2, 1, .3], [3, 4, .2, 1, .3], [4, 4, .2, 1, .3]]
+    path = tmp_path / "report.xlsx"
+    pd.DataFrame(rows).to_excel(path, header=False, index=False)
+    with pytest.raises(ValueError, match="标题行"):
+        read_sample(path, imaginary_convention="loss")
+    sample = read_sample(path, imaginary_convention="loss", header_row=1)
+    assert len(sample.data) == 3
+    assert sample.metadata["header_row"] == 2
+    assert sample.data.frequency_ghz.tolist() == [2, 3, 4]
+
+
+def test_excel_duplicate_nonempty_header_still_refused(tmp_path):
+    rows = [["frequency_ghz", "eps_real", "eps_imag", "mu_real", "mu_real"],
+            [2, 4, .2, 1, .3], [3, 4, .2, 1, .3]]
+    path = tmp_path / "duplicate.xlsx"
+    pd.DataFrame(rows).to_excel(path, header=False, index=False)
+    with pytest.raises(ValueError, match="重复列名"):
+        read_sample(path, imaginary_convention="loss")
+
+
+def test_excel_sheet_and_header_row_errors_are_actionable(tmp_path):
+    rows = [["frequency_ghz", "eps_real", "eps_imag", "mu_real", "mu_imag"],
+            [2, 4, .2, 1, .3], [3, 4, .2, 1, .3]]
+    path = tmp_path / "sheets.xlsx"
+    pd.DataFrame(rows).to_excel(path, header=False, index=False, sheet_name="only")
+    with pytest.raises(ValueError, match="未找到工作表"):
+        read_sample(path, imaginary_convention="loss", sheet="missing")
+    with pytest.raises(ValueError, match="超出范围"):
+        read_sample(path, imaginary_convention="loss", sheet=3)
+    with pytest.raises(ValueError, match="超出工作表行数"):
+        read_sample(path, imaginary_convention="loss", header_row=9)
 
 
 def test_csv_and_signed_conversion(tmp_path, frame):

@@ -1,22 +1,24 @@
 """GUI Phase 2 适配与交互，不重写科学数值测试。"""
-from pathlib import Path
-from dataclasses import replace
-import json
 import hashlib
+import json
+from dataclasses import replace
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
 from PySide6.QtCore import Qt
-from gui.controllers.analysis_controller import AnalysisRequest, analyze_request, Cancelled
-from gui.controllers.sparameter_controller import analyze_s_request, s_figure
+
+from gui.controllers.analysis_controller import AnalysisRequest, Cancelled, analyze_request
 from gui.controllers.comparison_controller import compare_requests
-from gui.controllers.science_figures import make_figure
 from gui.controllers.export_controller import export_figure
-from gui.widgets.metrics_table import MetricsTable
+from gui.controllers.science_figures import make_figure
+from gui.controllers.sparameter_controller import analyze_s_request, s_figure
 from gui.pages.comparison_page import ComparisonPage
 from gui.pages.sparameter_page import SParameterPage
+from gui.widgets.metrics_table import MetricsTable
 from plotting.style import PlotStyle, plt
-from plotting.theory_measured import plot_theory_measured, CAUTION
+from plotting.theory_measured import CAUTION, plot_theory_measured
 
 
 @pytest.fixture(scope="module")
@@ -160,6 +162,7 @@ def test_different_grid_preserved(scientific, tmp_path):
 
 def test_cross_page_worker_lock(qtbot):
     import threading
+
     from gui.main_window import MainWindow
     window = MainWindow(); qtbot.addWidget(window)
     release = threading.Event()

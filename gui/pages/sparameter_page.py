@@ -1,15 +1,28 @@
 """独立的实测 S 参数页面；理论 RL 只在显式选择对照来源后叠图。"""
-from pathlib import Path
 import json
-from PySide6.QtWidgets import (QLineEdit, QPushButton, QHBoxLayout, QComboBox, QLabel, QTextBrowser, QAbstractItemView,
-                               QFileDialog, QSplitter, QTableWidget, QTableWidgetItem)
+from pathlib import Path
+
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextBrowser,
+)
+
+from gui.controllers.analysis_controller import ROOT
+from gui.controllers.sparameter_controller import analyze_s_request, s_figure, theory_comparison
 from gui.pages.task_page import TaskPage
 from gui.widgets.plot_canvas import PlotCanvas
 from gui.widgets.status_badge import StatusBadge
-from gui.controllers.analysis_controller import ROOT
-from gui.controllers.sparameter_controller import analyze_s_request, s_figure, theory_comparison
-from plotting.theory_measured import plot_theory_measured, CAUTION
 from plotting.style import plt
+from plotting.theory_measured import CAUTION, plot_theory_measured
 
 
 class SParameterPage(TaskPage):
@@ -109,10 +122,14 @@ class SParameterPage(TaskPage):
             self.show_error("WARNING：存在负 A 或幅度/能量超限；请查看右侧 QC，原始数值没有裁剪。")
         columns = ["frequency_ghz"] + [f"{s}_db" for s in ("S11", "S21", "S12", "S22")] + ["R", "T", "A"]
         table = result["table"]
-        self.points.setRowCount(len(table)); self.points.setColumnCount(len(columns)); self.points.setHorizontalHeaderLabels(columns)
-        for i, values in enumerate(table[columns].itertuples(index=False, name=None)):
+        limit = 2000
+        shown = table[columns].head(limit)
+        self.points.setRowCount(len(shown)); self.points.setColumnCount(len(columns)); self.points.setHorizontalHeaderLabels(columns)
+        for i, values in enumerate(shown.itertuples(index=False, name=None)):
             for j, value in enumerate(values):
                 self.points.setItem(i, j, QTableWidgetItem(f"{value:.8g}"))
+        if len(table) > limit:
+            self.summary.append(f"仅预览前 {limit} 行；完整 {len(table)} 行见 sparameters_by_frequency.csv。")
         self.quantity.setCurrentIndex(0); self.channel.setCurrentIndex(0)
         self.plot.set_figures({"Magnitude": result["figures"]["magnitude"]})
         self.display_builder = lambda r=result: s_figure(r, "magnitude")

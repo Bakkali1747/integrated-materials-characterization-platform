@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
-from core.rl_calculator import calculate_rl, scan_rl, minimum_points
+
+from core.rl_calculator import calculate_rl, minimum_points, scan_rl
 from core.units import C
 
 

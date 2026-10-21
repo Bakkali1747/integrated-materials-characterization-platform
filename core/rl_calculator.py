@@ -1,16 +1,33 @@
 """[COMMON] 法向入射、均匀单层、理想金属背板的传输线模型。"""
 
 import numpy as np
-from core.units import C, ghz_to_hz, mm_to_m
+
 from core.models import RLResult
+from core.units import C, ghz_to_hz, mm_to_m
 
 
-def normalized_input_impedance(frequency_hz, eps_complex, mu_complex, thickness_m):
+def _impedance_block(f, mu, n, d):
+    """计算一段厚度的归一化阻抗；供整块或分块路径共用。"""
+    k0d = 2 * np.pi * d[:, None] * f[None, :] / C
+    x = 1j * k0d * n[None, :]
+    ratio = np.empty_like(x)
+    small = np.abs(x) < 1e-5
+    ratio[small] = 1 - x[small] ** 2 / 3 + 2 * x[small] ** 4 / 15
+    with np.errstate(over="raise", invalid="raise", divide="raise"):
+        try:
+            ratio[~small] = np.tanh(x[~small]) / x[~small]
+            return 1j * k0d * mu[None, :] * ratio
+        except FloatingPointError as error:
+            raise ValueError("输入阻抗计算遇到数值奇异，请检查参数。") from error
+
+
+def normalized_input_impedance(frequency_hz, eps_complex, mu_complex, thickness_m, chunk_points=500_000):
     """输入一维 f(Hz)、相对 ε/μ 复数及一维 d(m)，返回 z=Zin/Z0。
 
     shape=(Nd,Nf)。2πfd/c 必须无量纲，因此 f 与 d 必须为 SI 单位。
     使用同一个折射率分支构造 zc=μ/n，保证 zc*n=μ；翻转 n 的符号不改变
     有限层结果。小传播相位使用 tanh(x)/x 的级数，避免 n=0 时出现 0/0。
+    chunk_points 按厚度分块，降低大网格的峰值内存；数值与整块计算一致。
     """
     f = np.asarray(frequency_hz, dtype=float)
     eps, mu = np.asarray(eps_complex, dtype=complex), np.asarray(mu_complex, dtype=complex)
@@ -21,18 +38,14 @@ def normalized_input_impedance(frequency_hz, eps_complex, mu_complex, thickness_
         raise ValueError("计算输入必须有限，f > 0 Hz，d >= 0 m。")
     if len(f) * len(d) > 5_000_000:
         raise ValueError("RL 网格超过 500 万点，请缩小范围或增大步长。")
-    k0d = 2 * np.pi * d[:, None] * f[None, :] / C
     n = np.sqrt(eps * mu)
-    x = 1j * k0d * n[None, :]
-    ratio = np.empty_like(x)
-    small = np.abs(x) < 1e-5
-    ratio[small] = 1 - x[small] ** 2 / 3 + 2 * x[small] ** 4 / 15
-    with np.errstate(over="raise", invalid="raise", divide="raise"):
-        try:
-            ratio[~small] = np.tanh(x[~small]) / x[~small]
-            z = 1j * k0d * mu[None, :] * ratio
-        except FloatingPointError as error:
-            raise ValueError("输入阻抗计算遇到数值奇异，请检查参数。") from error
+    total = len(f) * len(d)
+    if chunk_points is None or total <= chunk_points:
+        z = _impedance_block(f, mu, n, d)
+    else:
+        rows = max(1, int(chunk_points) // len(f))
+        z = np.concatenate([_impedance_block(f, mu, n, d[start:start + rows])
+                            for start in range(0, len(d), rows)], axis=0)
     if not np.isfinite(z).all():
         raise ValueError("输入阻抗包含非有限值。")
     return z

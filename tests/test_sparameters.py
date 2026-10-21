@@ -1,10 +1,12 @@
 """首行数值来自用户明确提供的真实片段；其余测试数据为合成，不依赖本机真实文件。"""
 
-from dataclasses import replace
 import hashlib
 import json
+from dataclasses import replace
+
 import numpy as np
 import pytest
+
 from core.sparameter_mapping import SParameterMapping, load_sparameter_mapping
 from core.sparameter_parser import read_sparameters
 from core.sparameters import SParameterTolerances, analyze_sparameters
@@ -74,6 +76,14 @@ def test_hz_frequency_configuration(tmp_path):
 def test_encoding_options(tmp_path, encoding):
     data = read_sparameters(write_fixture(tmp_path/"enc.sdat", [FIRST], encoding), SHORT, encoding=encoding)
     assert "夹具" in data.metadata["metadata_xml"]
+
+
+def test_utf8_without_bom_is_not_misread_as_gb18030(tmp_path):
+    path = write_fixture(tmp_path/"utf8.sdat", [FIRST], encoding="utf-8")
+    data = read_sparameters(path, SHORT)
+    assert data.metadata["encoding_used"] == "utf-8-sig"
+    assert "夹具" in data.metadata["metadata_xml"]
+    assert "\ufffd" not in data.metadata["metadata_xml"]
 
 
 @pytest.mark.parametrize("kind", ["missing", "nan", "infinity", "extra", "duplicate", "reversed", "blank"])

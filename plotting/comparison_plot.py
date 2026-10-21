@@ -1,6 +1,5 @@
 """跨样品曲线只使用原生采样点；不构造共同频率网格，不插值。"""
 
-import numpy as np
 from plotting.style import PlotStyle, new_axes, plt
 
 PARAMETERS = {

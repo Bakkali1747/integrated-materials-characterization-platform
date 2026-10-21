@@ -19,6 +19,8 @@ def absorption_bands(frequency_ghz, rl_db, threshold=-10.0, crossing="linear"):
 
     输出宽度单位 GHz。linear 只估计相邻有效采样点间的阈值交点，不补缺失数据；
     sample 使用合格采样点的首尾。相等阈值也合格，孤立触点宽度为零。
+    -inf 是精确零反射的极限值：跨越 -inf 时交点取该采样点本身，宽度贡献为零，
+    并在结果中记录 uses_infinite_limit / infinite_limit_crossings_ghz，不把 -inf 截断成有限值。
     测量端点处合格的频段标为 touches_*_boundary，不推断测量范围外响应。
     """
     f, y = np.asarray(frequency_ghz, dtype=float), np.asarray(rl_db, dtype=float)
@@ -32,6 +34,7 @@ def absorption_bands(frequency_ghz, rl_db, threshold=-10.0, crossing="linear"):
         raise ValueError("阈值边界方法必须为 linear 或 sample。")
     inside = y <= threshold
     intervals = []
+    limit_crossings = []
     if crossing == "sample":
         start = None
         for index, hit in enumerate(inside):
@@ -47,20 +50,28 @@ def absorption_bands(frequency_ghz, rl_db, threshold=-10.0, crossing="linear"):
             if left and right:
                 intervals.append([f[index], f[index + 1]])
             elif left != right:
-                if not np.isfinite(y[index:index + 2]).all():
-                    raise ValueError("阈值跨越涉及 -inf，无法线性估计交点；可显式选择 sample 模式。")
-                fraction = (threshold - y[index]) / (y[index + 1] - y[index])
-                edge = f[index] + fraction * (f[index + 1] - f[index])
+                if np.isfinite(y[index:index + 2]).all():
+                    fraction = (threshold - y[index]) / (y[index + 1] - y[index])
+                    edge = f[index] + fraction * (f[index + 1] - f[index])
+                else:
+                    # 精确 -inf 是极限值，不能线性插值：交点只能落在该采样点，
+                    # 宽度贡献为零；原始 -inf 不被裁剪或替换。
+                    edge = float(f[index] if not np.isfinite(y[index]) else f[index + 1])
+                    limit_crossings.append(edge)
                 intervals.append([f[index], edge] if left else [edge, f[index + 1]])
     bands = []
     for start, end in merge_intervals(intervals):
         bands.append({"start_ghz": start, "end_ghz": end, "width_ghz": end - start,
-                      "touches_lower_boundary": bool(start == f[0]), "touches_upper_boundary": bool(end == f[-1])})
+                      "touches_lower_boundary": bool(start == f[0]), "touches_upper_boundary": bool(end == f[-1]),
+                      "uses_infinite_limit": any(np.isclose(start, edge, rtol=0, atol=1e-12) or
+                                                 np.isclose(end, edge, rtol=0, atol=1e-12)
+                                                 for edge in limit_crossings)})
     maximum = max((band["width_ghz"] for band in bands), default=0.)
     # 1e-12 GHz 仅用于浮点并列判断，不修改阈值条件或频段边界。
     widest = [band for band in bands if np.isclose(band["width_ghz"], maximum, rtol=0, atol=1e-12)]
     return {"threshold_db": float(threshold), "crossing": crossing, "maximum_continuous_bandwidth_ghz": maximum,
-            "bands": bands, "widest_bands": widest}
+            "bands": bands, "widest_bands": widest,
+            "infinite_limit_crossings_ghz": sorted(set(limit_crossings))}
 
 
 def summarize_bandwidths(result, threshold=-10.0, crossing="linear"):

@@ -1,8 +1,9 @@
 """S 参数列映射与已知数据网格配置，独立于物理计算。索引从 0 开始。"""
 
+import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-import json
+
 import numpy as np
 
 S_NAMES = ("S11", "S21", "S12", "S22")

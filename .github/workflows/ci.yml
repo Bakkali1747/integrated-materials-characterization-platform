@@ -1,0 +1,33 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      MPLCONFIGDIR: ${{ github.workspace }}\.mplconfig
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+      - name: Lint
+        run: python -m ruff check .
+      - name: Compile
+        run: python -m compileall -q core gui export plotting run_analysis.py run_batch.py run_sparameters.py run_gui.py run_maintenance.py run_share.py
+      - name: Test
+        run: python -m pytest -q

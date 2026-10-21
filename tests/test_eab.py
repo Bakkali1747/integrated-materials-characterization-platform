@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from core.eab import absorption_bands, cumulative_frequency_coverage, summarize_bandwidths
 from core.models import RLResult
 
@@ -46,8 +47,23 @@ def test_missing_not_bridged(curve):
 
 def test_infinity_limit_explicit():
     assert absorption_bands([2, 3], [-np.inf, -np.inf])["maximum_continuous_bandwidth_ghz"] == 1
-    with pytest.raises(ValueError, match="无法线性"):
-        absorption_bands([2, 3], [0, -np.inf])
+    # -inf 是极限值：交点落在该采样点本身，宽度贡献为零，但不让整次分析失败。
+    result = absorption_bands([2, 3], [0, -np.inf])
+    assert result["maximum_continuous_bandwidth_ghz"] == 0
+    assert result["infinite_limit_crossings_ghz"] == [3.]
+    assert result["bands"][0]["uses_infinite_limit"]
+    mirrored = absorption_bands([2, 3], [-np.inf, 0])
+    assert mirrored["maximum_continuous_bandwidth_ghz"] == 0
+    assert mirrored["infinite_limit_crossings_ghz"] == [2.]
+    # 常规有限交点不受影响，也不误标极限。
+    assert not absorption_bands([2, 3], [0, -20])["bands"][0]["uses_infinite_limit"]
+
+
+def test_summarize_keeps_running_with_infinite_thickness():
+    result = RLResult(np.array([2, 3, 4]), np.array([1, 2]),
+                      np.array([[0, -20, -np.inf], [-20, -20, -20]]), np.zeros((2, 3)))
+    summary = summarize_bandwidths(result)
+    assert summary["maximum_bandwidth_ghz"] == 2
 
 
 def test_best_thickness_and_custom_name():

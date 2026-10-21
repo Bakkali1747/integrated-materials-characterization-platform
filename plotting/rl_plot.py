@@ -2,8 +2,9 @@
 
 import numpy as np
 from matplotlib.colors import Normalize
-from plotting.style import PlotStyle, new_axes
+
 from export.origin_export import attach_grid
+from plotting.style import PlotStyle, new_axes
 
 
 def rl_normalization(rl_db):
@@ -59,7 +60,7 @@ def representative_thickness_indices(result, important_thicknesses=()):
     return sorted(indices)
 
 
-def plot_rl_multi_thickness(result, indices, style=None):
+def plot_rl_multi_thickness(result, indices, style=None, threshold=-10.0):
     """直接绘制已计算矩阵的指定行；不插值、不重新实现 RL 公式。"""
     style = style or PlotStyle()
     if not indices or any(i < 0 or i >= len(result.thickness_mm) for i in indices):
@@ -70,7 +71,7 @@ def plot_rl_multi_thickness(result, indices, style=None):
     for index in indices:
         ax.plot(result.frequency_ghz, result.rl_db[index], linewidth=style.linewidth,
                 label=f"{result.thickness_mm[index]:.12g} mm")
-    ax.axhline(-10, color="0.3", linestyle="--", linewidth=.8, label="-10 dB")
+    ax.axhline(threshold, color="0.3", linestyle="--", linewidth=.8, label=f"{threshold:g} dB")
     ax.set(xlabel="Frequency (GHz)", ylabel="RL (dB)", title="Calculated reflection loss at different thicknesses")
     ax.grid(True, alpha=.18)
     ax.legend(frameon=False, ncol=2, fontsize=9)

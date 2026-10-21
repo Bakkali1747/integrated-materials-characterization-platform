@@ -1,6 +1,7 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QComboBox, QLabel
-from PySide6.QtCore import Signal
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QComboBox, QLabel, QVBoxLayout, QWidget
+
 from gui.controllers.science_figures import NAMES
 
 

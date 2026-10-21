@@ -1,8 +1,9 @@
 """可排序的结果快照；仅同网格比较高亮 RLmin/EAB 的全部并列最佳值。"""
 import math
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView
+from PySide6.QtWidgets import QAbstractItemView, QTableWidget, QTableWidgetItem
 
 
 class NumericItem(QTableWidgetItem):

@@ -1,5 +1,41 @@
 # 变更记录
 
+## v0.9.5 — 评审问题修复：导入、极限值、溯源与交互
+
+- Excel 表头规范化：空表头不再误报“重复列名”，标题行给出“请指定表头行/工作表”的可操作提示。
+- 新增 `header_row`（CLI `--header-row`、GUI 表头行/工作表输入、批次 parser 配置）；源行号随表头行顺延。
+- 精确 `-inf` RL：跨越时按采样点极限处理，记录 `uses_infinite_limit`，不再让整次 EAB/分析失败；`NaN`/`+inf` 仍拒绝。
+- 图片 `.data` 增加 `provenance` 与 `provenance.json`（run_id、raw_sha256、validation_status、配置哈希、版本、DPI）；`index.csv` 增加 run_id/validation_status 列。
+- 独立导出无上下文时明确写 `validation_status=unknown`；分析、S 参数、对照、单图与全部图片导出均传入来源。
+- 修复 `.data` 被同名普通文件占用时的模糊异常。
+- 批量发现支持 `.xls`；sdat UTF-8 优先解码，中文元数据不再乱码。
+- GUI 与 CLI 统一累计频段覆盖、7 列 `thickness_summary.csv`、EAB 交点方法、四分之一波长阶数、阻抗容差与验证状态规则。
+- 抽出 `core/analysis_service.py`：两入口共用校验、读取、RL/EAB、数值产物与摘要；参数错误不再创建失败运行目录，读取/计算失败与取消仍分别记录。
+- 多厚度 RL 参考线使用请求阈值；四分之一波长图使用实际阶数；`artifact_hashes` 分块读取。
+- 新增版本一致性测试；构建脚本默认拒绝 dirty 工作区（可用 `--allow-dirty` 显式放行）。
+- 警告与错误只列前 20 个坏点并注明总数；完整质量清单写入 `data_quality.json` / `validation_errors.json`。
+- 新增 `run_maintenance.py`：查看运行占用、按日期/样品/状态归档旧运行；默认预演，归档保留完整目录与清单。
+- 历史页新增“归档旧运行…”：预演 → 确认 → 移动，完成后自动重新扫描。
+- CSV 导出转义以 `= + - @` 开头的用户文本，防止 Excel 公式注入；纯数值保持原样。
+- 批量进度改为追加 `members.jsonl`，结束时再写 `batch_record.json`；原始文件哈希改为分块读取。
+- GUI 默认分析 300 dpi；手动导出至少 600 dpi（用户设更高值时跟随），降低交互运行体积。
+- `.data` 中内容相同的网格 CSV 用硬链接复用；跨卷或文件系统不支持时自动保留独立副本。
+- 批量新增复用：匹配源 SHA-256 与数值配置时复用已完成运行，记录 `reused_from`；GUI 复选框或 CLI `--reuse` 显式开启。
+- 单样品复用：GUI 复选框与 CLI `--reuse` 均可直接加载已有运行，不重复计算；维护入口 `--duplicates` 列出可回收的重复运行。
+- 新增 `requirements-lock.txt` 精确版本、`requirements-dev.txt` 与 GitHub Actions Windows CI（Python 3.11/3.12，ruff + 编译 + 离屏 Qt 测试）。
+- 通过 ruff 检查并清理未使用导入/导入顺序；`plotting.style.plt` 作为显式再导出保留。
+- 构建并验收 0.9.5 Windows 客户端（PyInstaller + Inno Setup）：冻结版自检 `success`，17 图、109 个图片数据目录、滑块/设置/历史/批量均通过；哈希见 `output/releases/SHA256SUMS-0.9.5.txt`。构建来自无 Git 的未提交工作区，正式发布应在干净提交上重建。
+- `run_maintenance.py --delete` 将旧运行移入 Windows 回收站，写 `deletion_manifest.json`；失败逐个隔离。
+- 新增 `run_share.py` 与历史页“导出可分享记录…”：移除本地绝对路径，保留哈希、验证状态与摘要。
+- 绘图改用未注册到 pyplot 的 `Figure` + Agg canvas；RL 计算按厚度分块，降低大网格峰值内存。
+- GUI 参数面板新增 EAB 交点方法、四分之一波长阶数、阻抗显示容差，分析请求与运行记录同步保存。
+- 历史“核验”改为当前选中运行；厚度滑块初始化到曲线厚度网格位置；取消改为中性提示；新增全局异常与 Qt 消息日志。
+- S 参数表最多预览 2000 行；CSV 映射预览只读取前 12 行。
+- 版本号统一为 0.9.5；中文 Windows 下 4 项测试解码失败已修复。
+- 全量 328 项测试通过；真实虚部定义与商业软件对照仍为 PENDING。
+
+详细对照见 docs/review_fixes.md。
+
 ## v0.9.4 — 导出恢复与分析操作优化
 
 - 修复回滚本身失败时旧文件可能被临时目录清理删除的问题；保留恢复备份和明确路径。

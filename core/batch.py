@@ -1,9 +1,9 @@
 """批次输入发现和清单校验；物理计算复用单样品流程。"""
 
-from pathlib import Path
 import json
+from pathlib import Path
 
-PARSER_KEYS = {"frequency_unit", "imaginary_convention", "convention_confirmed", "column_map", "sheet", "encoding", "delimiter"}
+PARSER_KEYS = {"frequency_unit", "imaginary_convention", "convention_confirmed", "column_map", "sheet", "header_row", "encoding", "delimiter"}
 ANALYSIS_KEYS = {"frequency_min", "frequency_max", "thickness_min", "thickness_max", "thickness_step",
                  "curve_thickness", "threshold", "eab_crossing", "quarter_wave_orders", "impedance_tolerance"}
 
@@ -41,7 +41,7 @@ def discover_samples(directory, parser_options, excluded_roots=()):
             continue
         if any(path.resolve().is_relative_to(item) for item in excluded):
             continue
-        if path.name.startswith("~$") or path.suffix.lower() not in (".csv", ".xlsx", ".memp", ".sdat"):
+        if path.name.startswith("~$") or path.suffix.lower() not in (".csv", ".xlsx", ".xls", ".memp", ".sdat"):
             skipped.append(str(relative))
             continue
         entries.append({"name": relative.with_suffix("").as_posix(), "path": str(path), "parser": dict(parser_options)})

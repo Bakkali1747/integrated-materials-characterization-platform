@@ -1,21 +1,23 @@
 """GUI 流程/信号/科学 API 等价性测试；不比较像素。"""
 
-import json
 import hashlib
+import json
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
-from PySide6.QtCore import Qt, QTimer, QUrl, QMimeData
-from PySide6.QtGui import QDropEvent, QDragEnterEvent
+from PySide6.QtCore import QMimeData, Qt, QUrl
+from PySide6.QtGui import QDragEnterEvent, QDropEvent
+
+from gui.controllers.analysis_controller import AnalysisRequest, Cancelled, analyze_request, inspect_file
+from gui.controllers.export_controller import export_figure
 from gui.main_window import MainWindow
-from gui.widgets.status_badge import StatusBadge
 from gui.widgets.file_selector import FileSelector
 from gui.widgets.parameter_panel import ParameterPanel
 from gui.widgets.sample_table import SampleTable
+from gui.widgets.status_badge import StatusBadge
 from gui.workers.analysis_worker import AnalysisWorker
-from gui.controllers.analysis_controller import AnalysisRequest, analyze_request, inspect_file, Cancelled
-from gui.controllers.export_controller import export_figure
 
 
 @pytest.fixture
@@ -90,6 +92,19 @@ def test_unsupported_format_message(window, tmp_path, qtbot):
     assert not window.single.start_button.isEnabled()
 
 
+def test_single_reuse_returns_completed_run(tmp_path, frame):
+    path = tmp_path / "reuse.csv"
+    frame.to_csv(path, index=False)
+    request = AnalysisRequest(path, "reuse", output=tmp_path / "out", thickness_max=1.1,
+                              thickness_step=.1, dpi=25, full_science=True, reuse=True)
+    first = analyze_request(request)
+    second = analyze_request(request)
+    assert second["directory"] == first["directory"]
+    assert second["result"].rl_db.shape == first["result"].rl_db.shape
+    assert second["figures"] and all(figure is None for figure in second["figures"].values())
+    assert second["summary"]["standard_eab"] == first["summary"]["standard_eab"]
+
+
 def test_parameter_snapshot_and_no_automatic_analysis(window, source, qtbot):
     panel = window.single.parameters
     panel.name.setText("CIP")
@@ -99,7 +114,25 @@ def test_parameter_snapshot_and_no_automatic_analysis(window, source, qtbot):
     assert request.thickness_step == .02 and request.threshold == -10
     assert request.frequency_min is None
     assert request.parser_options["convention_confirmed"] is False
+    assert request.eab_crossing == "linear" and request.quarter_wave_orders == (1,)
+    assert request.impedance_tolerance == .1
     assert window.single.worker is None
+
+
+def test_advanced_analysis_parameters(qtbot, source):
+    panel = ParameterPanel()
+    qtbot.addWidget(panel)
+    panel.name.setText("CIP")
+    panel.eab_crossing.setCurrentIndex(panel.eab_crossing.findData("sample"))
+    panel.quarter_orders.setText("1, 3，5")
+    panel.impedance_tolerance.setValue(.2)
+    request = panel.request(source)
+    assert request.eab_crossing == "sample"
+    assert request.quarter_wave_orders == (1, 3, 5)
+    assert request.impedance_tolerance == .2
+    panel.quarter_orders.setText("2")
+    with pytest.raises(ValueError, match="正奇数"):
+        panel.request(source)
 
 
 def test_mapping_and_crop(qtbot, source):
@@ -182,6 +215,7 @@ def test_worker_error_logs_traceback(qtbot, caplog):
 
 def test_analysis_button_runs_off_main_thread(window, source, qtbot, monkeypatch, result):
     from PySide6.QtCore import QThread
+
     import gui.pages.single_sample_page as module
     info = inspect_file(source, {"imaginary_convention": "loss"})
     window.single.select_source(info)
@@ -202,13 +236,17 @@ def test_analysis_button_runs_off_main_thread(window, source, qtbot, monkeypatch
 
 
 def test_controller_matches_cli(source, tmp_path, result):
-    from run_analysis import analyze
     from plotting.style import PlotStyle
+    from run_analysis import analyze
     directory = analyze(source, output=tmp_path / "cli", name="synthetic", imaginary_convention="loss",
                         thickness_max=1.1, thickness_step=.1, style=PlotStyle(dpi=30))
-    expected = json.loads((directory / "summary.json").read_text())
+    expected = json.loads((directory / "summary.json").read_text(encoding="utf-8"))
     assert result["summary"]["global_minima"] == expected["global_minima"]
     assert result["summary"]["standard_eab"] == expected["standard_eab"]
+    assert result["summary"]["cumulative_frequency_coverage"] == expected["cumulative_frequency_coverage"]
+    gui_table = pd.read_csv(result["directory"] / "thickness_summary.csv")
+    cli_table = pd.read_csv(directory / "thickness_summary.csv")
+    assert list(gui_table.columns) == list(cli_table.columns)
     np.testing.assert_array_equal(pd.read_csv(directory / "RL_matrix.csv").to_numpy(),
                                   pd.read_csv(result["directory"] / "RL_matrix.csv").to_numpy())
 
@@ -226,11 +264,17 @@ def test_provenance_output_and_original_unchanged(source, result):
         assert hashlib.sha256((result["directory"] / name).read_bytes()).hexdigest() == digest
 
 
-def test_failure_record(source, tmp_path):
+def test_invalid_parameters_do_not_create_run(source, tmp_path):
     with pytest.raises(ValueError):
         analyze_request(AnalysisRequest(source, "bad", output=tmp_path / "fail", thickness_min=5, thickness_max=1))
+    assert not (tmp_path / "fail").exists()
+
+
+def test_failure_record_after_validation(tmp_path):
+    with pytest.raises(Exception):
+        analyze_request(AnalysisRequest(tmp_path / "missing.csv", "bad", output=tmp_path / "fail"))
     record = json.loads(next((tmp_path / "fail").rglob("analysis_record.json")).read_text(encoding="utf-8"))
-    assert record["status"] == "failed"
+    assert record["status"] == "failed" and record["error"]
 
 
 def test_cancel_preserves_completed_run(source, result, tmp_path):

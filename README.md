@@ -4,9 +4,9 @@
 
 新增 [自动多厚度 RL 曲线](docs/multi_thickness_rl.md)：单样品分析后，从图类型列表选择“多厚度 RL 曲线（自动）”，无需逐个输入厚度。
 
-当前为 v0.9.4（新增导出恢复、厚度交互、快速预览及参考对照；见 [使用说明](docs/optimizations.md)）：GUI Phase 4 增加持久化设置、全部图片导出和历史视图布局优化。CLI 及已有科研计算继续保留，真实数据仍待外部验证。见 [Phase 4 使用说明](docs/gui_phase4.md)、[批量与历史](docs/gui_phase3.md)、[完整科研图与比较](docs/gui_phase2.md)。
+当前为 v0.9.5（按评审报告修复导入、EAB 极限值、图片溯源与交互问题；见 [评审修复说明](docs/review_fixes.md)）。CLI 与 GUI 已改用共享分析服务，摘要、累计覆盖、验证状态和 `thickness_summary.csv` 由同一段代码生成；输出目录可用 [维护入口](docs/maintenance.md) 查看占用、归档或删除到回收站；可分享脱敏记录与批量复用见 [分享与复用](docs/share_and_reuse.md)；真实数据虚部定义与商业软件对照仍待外部验证。见 [Phase 4 使用说明](docs/gui_phase4.md)、[批量与历史](docs/gui_phase3.md)、[完整科研图与比较](docs/gui_phase2.md)。
 
-无需 Python 的客户端：双击 `output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.9.3-win64.exe` 安装，见 [客户端使用说明](docs/client_usage.md)。
+无需 Python 的客户端：`output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.9.5-win64.exe`（SHA-256 见同目录 `SHA256SUMS-0.9.5.txt`），见 [客户端使用说明](docs/client_usage.md)。本次构建来自未提交工作区（无 Git 可用），正式发布前应在干净提交上重建。
 
 启动桌面界面：`.\.venv\Scripts\python.exe run_gui.py`。新环境安装 `requirements-gui.txt`。具体步骤和阶段边界见 [GUI 使用说明](docs/gui_usage.md)。
 
@@ -16,12 +16,20 @@
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+# 精确复现当前验证环境（推荐）；或使用 requirements.txt 的宽范围
+.\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe run_analysis.py "你的文件.memp" --imaginary-convention loss
 ```
 
-本次开发环境已在 `.venv` 配置，可直接运行最后两条命令。`loss` 在真实文件定义未确认时仅是显式假设，默认结果标注待验证。只有获得外部定义后才添加 `--convention-confirmed`；该开关不代表完成商业软件对照。
+开发环境可安装 `requirements-dev.txt`（锁定依赖 + ruff）：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m ruff check .
+```
+
+CI 在 GitHub Actions 的 Windows 上对 Python 3.11/3.12 执行 ruff、编译与全量测试（离屏 Qt）。当前开发环境已在 `.venv` 配置，可直接运行最后两条命令。`loss` 在真实文件定义未确认时仅是显式假设，默认结果标注待验证。只有获得外部定义后才添加 `--convention-confirmed`；该开关不代表完成商业软件对照。
 
 使用合成样品试运行：
 
@@ -112,7 +120,7 @@ tm = n c / [4 f sqrt(|εr||μr|)]             m，展示/导出为 mm
 
 ## 当前验收范围
 
-原有 75 项自动测试保持通过，S 参数新增 31 项，总计 106 项。覆盖 Phase 1–2、批次失败隔离、不同网格比较、清单覆盖、并列汇总、Excel 数值类型、候选 sdat 映射和首行数值回归。测试通过不代表已确认厂商格式或商业软件一致性。
+原有 75 项自动测试保持通过，S 参数新增 31 项；当前全量测试为 328 项，覆盖 Phase 1–2、共享分析管线、批次失败隔离、不同网格比较、清单覆盖、并列汇总、Excel 数值类型与表头行、候选 sdat 映射、UTF-8 编码、`-inf` 极限交点、图片溯源和 GUI 交互回归。测试通过不代表已确认厂商格式或商业软件一致性。
 
 本阶段没有 GUI、单样品完整 Excel 报告或自动插值。ε′/μ′ 不存在跨材料通用的“明显异常”上限；当前报告负值、近零值与非有限值，不把未经校准的数值阈值伪装成物理判据。
 

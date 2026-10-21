@@ -1,6 +1,6 @@
 """仅复用已完成矩阵和正式 EAB API；不重新计算材料模型。"""
-from core.models import RLResult
 from core.eab import absorption_bands
+from core.models import RLResult
 from core.rl_calculator import minimum_points
 
 

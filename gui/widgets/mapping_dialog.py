@@ -1,8 +1,20 @@
 """列映射选择及六行预览，不改变文件或推断虚部约定。"""
 import json
 from pathlib import Path
-from PySide6.QtWidgets import (QDialog,QVBoxLayout,QFormLayout,QComboBox,QTableWidget,
-    QTableWidgetItem,QDialogButtonBox,QPushButton,QFileDialog,QLabel)
+
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+)
+
 from core.models import COLUMNS
 from gui.controllers.import_controller import validate_template
 

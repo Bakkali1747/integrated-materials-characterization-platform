@@ -1,6 +1,5 @@
-from pathlib import Path
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QFileDialog
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QPushButton, QWidget
 
 
 class FileSelector(QWidget):

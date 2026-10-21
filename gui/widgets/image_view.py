@@ -1,5 +1,5 @@
 """随可用区域缩放已保存图片，不产生新的科研图。"""
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLabel, QSizePolicy
 
