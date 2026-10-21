@@ -24,7 +24,7 @@
 - 单样品复用：GUI 复选框与 CLI `--reuse` 均可直接加载已有运行，不重复计算；维护入口 `--duplicates` 列出可回收的重复运行。
 - 新增 `requirements-lock.txt` 精确版本、`requirements-dev.txt` 与 GitHub Actions Windows CI（Python 3.11/3.12，ruff + 编译 + 离屏 Qt 测试）。
 - 通过 ruff 检查并清理未使用导入/导入顺序；`plotting.style.plt` 作为显式再导出保留。
-- 构建并验收 0.9.5 Windows 客户端（PyInstaller + Inno Setup）：冻结版自检 `success`，17 图、109 个图片数据目录、滑块/设置/历史/批量均通过；哈希见 `output/releases/SHA256SUMS-0.9.5.txt`。构建来自无 Git 的未提交工作区，正式发布应在干净提交上重建。
+- 构建并验收 0.9.5 Windows 客户端（PyInstaller + Inno Setup）：冻结版自检 `success`，17 图、109 个图片数据目录、滑块/设置/历史/批量均通过；构建自干净提交 `bb6f7e5`（`dirty: false`），哈希见 `output/releases/SHA256SUMS-0.9.5.txt`。
 - `run_maintenance.py --delete` 将旧运行移入 Windows 回收站，写 `deletion_manifest.json`；失败逐个隔离。
 - 新增 `run_share.py` 与历史页“导出可分享记录…”：移除本地绝对路径，保留哈希、验证状态与摘要。
 - 绘图改用未注册到 pyplot 的 `Figure` + Agg canvas；RL 计算按厚度分块，降低大网格峰值内存。

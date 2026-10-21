@@ -6,7 +6,7 @@
 
 当前为 v0.9.5（按评审报告修复导入、EAB 极限值、图片溯源与交互问题；见 [评审修复说明](docs/review_fixes.md)）。CLI 与 GUI 已改用共享分析服务，摘要、累计覆盖、验证状态和 `thickness_summary.csv` 由同一段代码生成；输出目录可用 [维护入口](docs/maintenance.md) 查看占用、归档或删除到回收站；可分享脱敏记录与批量复用见 [分享与复用](docs/share_and_reuse.md)；真实数据虚部定义与商业软件对照仍待外部验证。见 [Phase 4 使用说明](docs/gui_phase4.md)、[批量与历史](docs/gui_phase3.md)、[完整科研图与比较](docs/gui_phase2.md)。
 
-无需 Python 的客户端：`output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.9.5-win64.exe`（SHA-256 见同目录 `SHA256SUMS-0.9.5.txt`），见 [客户端使用说明](docs/client_usage.md)。本次构建来自未提交工作区（无 Git 可用），正式发布前应在干净提交上重建。
+无需 Python 的客户端：`output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.9.5-win64.exe`（SHA-256 见同目录 `SHA256SUMS-0.9.5.txt`），见 [客户端使用说明](docs/client_usage.md)。本次构建来自干净提交 `bb6f7e5`（`dirty: false`）。
 
 启动桌面界面：`.\.venv\Scripts\python.exe run_gui.py`。新环境安装 `requirements-gui.txt`。具体步骤和阶段边界见 [GUI 使用说明](docs/gui_usage.md)。
 
