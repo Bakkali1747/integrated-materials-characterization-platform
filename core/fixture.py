@@ -79,12 +79,13 @@ def find_fixture_for_sample(memp_path):
     memp_path = Path(memp_path)
     sample_id = memp_path.stem.split("_", 1)[0]
     directory = memp_path.parent
-    candidates = sorted(directory.glob(f"{sample_id}_S-parameter_*.sdat"),
-                        key=lambda item: item.stat().st_mtime, reverse=True)
-    if not candidates:
-        candidates = sorted(directory.glob(f"{sample_id}_S-parameter*.sdat"),
-                            key=lambda item: item.stat().st_mtime, reverse=True)
-    for candidate in candidates:
+    candidates = {}
+    for stem in {memp_path.stem, sample_id}:
+        for pattern in (f"{stem}.sdat", f"{stem}_S-parameter*.sdat", f"{stem}_*.sdat"):
+            for candidate in directory.glob(pattern):
+                if candidate.is_file():
+                    candidates[candidate] = candidate.stat().st_mtime
+    for candidate in sorted(candidates, key=candidates.get, reverse=True):
         try:
             fixture = read_fixture(candidate)
         except (OSError, ValueError, ET.ParseError):

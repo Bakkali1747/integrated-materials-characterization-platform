@@ -4,9 +4,9 @@
 
 新增 [自动多厚度 RL 曲线](docs/multi_thickness_rl.md)：单样品分析后，从图类型列表选择“多厚度 RL 曲线（自动）”，无需逐个输入厚度。新增 [实测 S 参数屏蔽效能/Smith 图与单样品报告](docs/report.md)。
 
-当前为 v0.11.0（默认“日常模式”，并从同目录 S 参数夹具自动读取样品厚度 D；见 [日常流程](docs/daily_workflow.md)）。同时包含界面主题、实测 S 参数屏蔽效能/Smith 图、期刊图尺寸与单样品中文报告。CLI 与 GUI 共用分析服务，摘要、累计覆盖、验证状态和 `thickness_summary.csv` 由同一段代码生成；输出目录可用 [维护入口](docs/maintenance.md) 查看占用、归档或删除到回收站；可分享脱敏记录与批量复用见 [分享与复用](docs/share_and_reuse.md)；真实数据虚部定义与商业软件对照仍待外部验证。见 [Phase 4 使用说明](docs/gui_phase4.md)、[批量与历史](docs/gui_phase3.md)、[完整科研图与比较](docs/gui_phase2.md)。
+当前为 v0.11.1（默认“日常模式”，并从同目录 S 参数夹具自动读取样品厚度 D；支持只剩样品名的配对文件名；见 [日常流程](docs/daily_workflow.md)）。同时包含界面主题、实测 S 参数屏蔽效能/Smith 图、期刊图尺寸与单样品中文报告。CLI 与 GUI 共用分析服务，摘要、累计覆盖、验证状态和 `thickness_summary.csv` 由同一段代码生成；输出目录可用 [维护入口](docs/maintenance.md) 查看占用、归档或删除到回收站；可分享脱敏记录与批量复用见 [分享与复用](docs/share_and_reuse.md)；真实数据虚部定义与商业软件对照仍待外部验证。见 [Phase 4 使用说明](docs/gui_phase4.md)、[批量与历史](docs/gui_phase3.md)、[完整科研图与比较](docs/gui_phase2.md)。
 
-无需 Python 的客户端：`output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.11.0-win64.exe`（SHA-256 见同目录 `SHA256SUMS-0.11.0.txt`），见 [客户端使用说明](docs/client_usage.md)。本次构建来自干净工作区；具体提交见安装目录 `_internal/build_info.json`。
+无需 Python 的客户端：`output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.11.1-win64.exe`（SHA-256 见同目录 `SHA256SUMS-0.11.1.txt`），见 [客户端使用说明](docs/client_usage.md)。本次构建来自干净工作区；具体提交见安装目录 `_internal/build_info.json`。
 
 启动桌面界面：`.\.venv\Scripts\python.exe run_gui.py`。新环境安装 `requirements-gui.txt`。具体步骤和阶段边界见 [GUI 使用说明](docs/gui_usage.md)。
 

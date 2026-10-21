@@ -41,6 +41,23 @@ def make_files(tmp_path):
     return memp, sdat
 
 
+def test_pairs_when_only_sample_name_remains(tmp_path):
+    memp, sdat = make_files(tmp_path)
+    simple_memp = memp.with_name("0.2.memp")
+    simple_sdat = sdat.with_name("0.2.sdat")
+    memp.rename(simple_memp)
+    sdat.rename(simple_sdat)
+    assert find_fixture_for_sample(simple_memp)["thickness_mm"] == 2.12
+
+
+def test_does_not_pair_neighbouring_sample_id(tmp_path):
+    memp, sdat = make_files(tmp_path)
+    sdat.unlink()
+    other = tmp_path / "0.25.sdat"
+    other.write_text(SDAT_HEADER.replace("2.12", "9.99"), encoding="gbk")
+    assert find_fixture_for_sample(memp) == {}
+
+
 def test_read_fixture_and_sibling(tmp_path):
     memp, sdat = make_files(tmp_path)
     fixture = read_fixture(sdat)
