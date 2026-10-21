@@ -27,7 +27,7 @@ from plotting.theory_measured import CAUTION, plot_theory_measured
 
 class SParameterPage(TaskPage):
     def __init__(self):
-        super().__init__("GUI Phase 2 · Measured S Parameters")
+        super().__init__("S 参数分析 · 实测 .sdat（候选映射）")
         self.theory_runs = {}
         self.badge = StatusBadge("candidate_high_confidence", "S21/S12 字段顺序待厂商确认；与 Calculated RL from ε/μ 独立。")
         self.layout.addWidget(self.badge)
@@ -53,6 +53,7 @@ class SParameterPage(TaskPage):
         out.clicked.connect(self.choose_output)
         row.addWidget(out)
         self.start_button = QPushButton("开始 S 参数分析")
+        self.start_button.setObjectName("primaryButton")
         self.start_button.clicked.connect(self.start_analysis)
         row.addWidget(self.start_button)
         self.layout.addLayout(row)
@@ -68,7 +69,9 @@ class SParameterPage(TaskPage):
         open_button = QPushButton("打开结果目录"); open_button.clicked.connect(self.open_output); row.addWidget(open_button)
         self.layout.addLayout(row)
         self.plot = PlotCanvas(); self.plot.selector.hide()
+        self.plot.set_placeholder("选择 .sdat 并开始 S 参数分析\n幅度 / 相位 / RTA / SE / Smith 将在此显示")
         self.summary = QTextBrowser(); self.summary.setMinimumWidth(280)
+        self.summary.setPlainText("完成 S 参数分析后，这里显示验证状态、QC 与逐点筛查结果。")
         split = QSplitter(); split.addWidget(self.plot); split.addWidget(self.summary); split.setSizes([800, 330])
         self.layout.addWidget(split, 1)
         self.points = QTableWidget(); self.points.setMaximumHeight(160)
@@ -80,7 +83,10 @@ class SParameterPage(TaskPage):
         compare = QPushButton("理论 / 实验对比"); compare.clicked.connect(self.compare_theory); row.addWidget(compare)
         self.layout.addLayout(row)
         self.caution = QLabel(CAUTION)
-        self.caution.setWordWrap(True); self.caution.setStyleSheet("background:#fff1cc;padding:6px;")
+        self.caution.setWordWrap(True)
+        self.caution.setStyleSheet(
+            "background:#FFFBEB; color:#7C4A03; border:1px solid #FDE68A;"
+            " border-left:4px solid #F59E0B; border-radius:8px; padding:8px 12px;")
         self.layout.addWidget(self.caution)
         self.display_builder = None
 

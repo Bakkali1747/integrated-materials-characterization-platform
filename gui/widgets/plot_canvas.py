@@ -25,6 +25,10 @@ class PlotCanvas(QWidget):
         self.figures, self.canvas, self.toolbar = {}, None, None
         self.selector.currentIndexChanged.connect(self.show_selected)
 
+    def set_placeholder(self, text):
+        """设置空图区域提示文字，不触发任何计算。"""
+        self.placeholder.setText(text)
+
     def set_figures(self, figures):
         """输入后台完成的 Figure 集合；只在主线程连接 Qt canvas。"""
         self.selector.blockSignals(True)

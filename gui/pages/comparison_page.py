@@ -32,7 +32,7 @@ from plotting.style import PlotStyle, plt
 
 class ComparisonPage(TaskPage):
     def __init__(self):
-        super().__init__("GUI Phase 2 · 多样品比较（十项指标 / 原始采样点）")
+        super().__init__("多样品比较 · 十项指标 / 原始采样点")
         self.samples = QListWidget(); self.samples.setMaximumHeight(145)
         row = QHBoxLayout()
         for label, callback in [("添加文件", self.choose_files), ("全选", lambda: self.check_all(True)),
@@ -46,7 +46,7 @@ class ComparisonPage(TaskPage):
         self.parameters = ParameterPanel()
         self.parameters.name.setText("比较使用列表名称")
         self.parameters.name.setEnabled(False)
-        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(self.parameters); scroll.setMinimumWidth(300)
+        scroll = QScrollArea(); scroll.setObjectName("panelCard"); scroll.setWidgetResizable(True); scroll.setWidget(self.parameters); scroll.setMinimumWidth(300)
         self.plot = PlotCanvas()
         controls_layout.addWidget(scroll, 1)
         self.tabs = QTabWidget()
@@ -58,7 +58,7 @@ class ComparisonPage(TaskPage):
         self.note = QLabel("* 摘要位置为首个并列代表值；所有并列位置和频段见下方明细及 Excel。不同频率网格不作同条件排名。")
         self.note.setWordWrap(True); self.layout.addWidget(self.note)
         row = QHBoxLayout()
-        self.start_button = QPushButton("分析勾选样品并比较"); self.start_button.clicked.connect(self.start_comparison)
+        self.start_button = QPushButton("分析勾选样品并比较"); self.start_button.setObjectName("primaryButton"); self.start_button.clicked.connect(self.start_comparison)
         row.addWidget(self.start_button)
         for label, callback in [("保存当前图", self.save_selected), ("导出全部图片", self.save_all), ("打开结果 / Excel", self.open_output)]:
             button = QPushButton(label); button.clicked.connect(callback); row.addWidget(button)

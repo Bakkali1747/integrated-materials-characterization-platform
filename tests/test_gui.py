@@ -50,7 +50,7 @@ def test_main_window_start_and_navigation(window, qtbot):
     window.navigation.setCurrentRow(1)
     assert window.stack.currentWidget() is window.single
     window.navigation.setCurrentRow(2)
-    assert "Phase 2" in window.stack.currentWidget().text()
+    assert "S 参数" in window.stack.currentWidget().text()
 
 
 def test_file_dialog_multiselect(qtbot, monkeypatch, source):
@@ -174,7 +174,7 @@ def test_table_pairing_and_separate_sources(qtbot, source):
 def test_candidate_badge_not_green(qtbot, status):
     badge = StatusBadge(status, "待验证")
     qtbot.addWidget(badge)
-    assert "#fff1cc" in badge.styleSheet()
+    assert "#fffbeb" in badge.styleSheet().lower()
     assert "Validated" not in badge.text()
 
 

@@ -47,6 +47,12 @@ class SingleSamplePage(QWidget):
         self.export_dpi = 600
         self.figure_format = "png"
         layout = QVBoxLayout(self)
+        self.page_title = QLabel("单样品分析")
+        self.page_title.setObjectName("pageTitle")
+        layout.addWidget(self.page_title)
+        subtitle = QLabel("ε/μ 输入 · 均匀单层 · 法向入射 · 金属背板")
+        subtitle.setObjectName("pageSubtitle")
+        layout.addWidget(subtitle)
         self.badge = StatusBadge("PENDING", "MEMP 可计算 / 待商业软件验证；虚部定义尚未交叉确认。所有真实结果待验证。")
         layout.addWidget(self.badge)
         self.files = FileSelector()
@@ -59,6 +65,7 @@ class SingleSamplePage(QWidget):
         split = QSplitter()
         self.parameters = ParameterPanel()
         scroll = QScrollArea()
+        scroll.setObjectName("panelCard")
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.parameters)
         scroll.setMinimumWidth(295)
@@ -96,7 +103,9 @@ class SingleSamplePage(QWidget):
         layout.addWidget(self.source_label)
         buttons = QHBoxLayout()
         self.start_button = QPushButton("开始分析")
+        self.start_button.setObjectName("primaryButton")
         self.cancel_button = QPushButton("取消（当前步骤结束后生效）")
+        self.cancel_button.setObjectName("ghostButton")
         self.open_button = QPushButton("打开结果文件夹")
         self.save_button = QPushButton("保存当前图片…")
         self.save_all_button = QPushButton("导出全部图片…")
@@ -112,6 +121,7 @@ class SingleSamplePage(QWidget):
         layout.addLayout(buttons)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
+        self.progress.setVisible(False)
         layout.addWidget(self.progress)
         self.start_button.clicked.connect(self.start_analysis)
         self.cancel_button.clicked.connect(self.cancel)
@@ -133,6 +143,7 @@ class SingleSamplePage(QWidget):
         self.worker.finished.connect(self._finished)
         self._set_busy(True)
         self.progress.setValue(0)
+        self.progress.setVisible(True)
         self.worker.start()
 
     def _set_busy(self, busy):
@@ -155,6 +166,7 @@ class SingleSamplePage(QWidget):
         self.worker = None
         worker.deleteLater()
         self._set_busy(False)
+        self.progress.setVisible(False)
 
     def on_progress(self, percent, text):
         self.progress.setValue(percent)

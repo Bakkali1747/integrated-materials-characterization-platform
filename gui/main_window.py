@@ -1,6 +1,17 @@
 """中文桌面主窗口；Phase 1 以外的导航明确显示未开放。"""
 
-from PySide6.QtWidgets import QHBoxLayout, QListWidget, QMainWindow, QStackedWidget, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QMainWindow,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core import __version__
 from gui.controllers.settings_controller import SettingsStore
@@ -11,20 +22,55 @@ from gui.pages.results_page import ResultsPage
 from gui.pages.settings_page import SettingsPage
 from gui.pages.single_sample_page import SingleSamplePage
 from gui.pages.sparameter_page import SParameterPage
+from gui.theme import apply_theme
 
 
 class MainWindow(QMainWindow):
     def __init__(self, settings_store=None):
         super().__init__()
+        apply_theme(QApplication.instance())
         self.setWindowTitle(f"微波吸收材料分析软件 · v{__version__} · GUI Phase 4")
         self.resize(1400, 900)
         self.setMinimumSize(1200, 750)
         self.setAcceptDrops(True)
         body = QWidget()
+        body.setObjectName("appRoot")
         layout = QHBoxLayout(body)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        sidebar = QFrame()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(210)
+        side_layout = QVBoxLayout(sidebar)
+        side_layout.setContentsMargins(6, 20, 6, 10)
+        side_layout.setSpacing(4)
+        brand = QLabel("微波吸收分析")
+        brand.setObjectName("brandTitle")
+        brand_sub = QLabel("MICROWAVE ABSORPTION")
+        brand_sub.setObjectName("brandSub")
+        version = QLabel(f"v{__version__}")
+        version.setObjectName("brandBadge")
+        version.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        version.setMaximumWidth(64)
+        brand_row = QHBoxLayout()
+        brand_row.setContentsMargins(12, 0, 8, 0)
+        brand_row.addWidget(brand)
+        brand_row.addStretch()
+        brand_row.addWidget(version)
+        side_layout.addLayout(brand_row)
+        brand_hint = QLabel("LOCAL SCIENTIFIC ANALYSIS")
+        brand_hint.setObjectName("brandSub")
+        brand_hint.setContentsMargins(12, 0, 0, 8)
+        side_layout.addWidget(brand_hint)
         self.navigation = QListWidget()
+        self.navigation.setObjectName("nav")
         self.navigation.addItems(["首页", "单样品分析", "S参数分析", "多样品比较", "批量分析", "结果查看", "设置"])
-        self.navigation.setFixedWidth(170)
+        side_layout.addWidget(self.navigation, 1)
+        footer = QLabel("本地计算 · 数据不外传\n缺失数据插值 OFF")
+        footer.setObjectName("sideFooter")
+        footer.setWordWrap(True)
+        side_layout.addWidget(footer)
+        layout.addWidget(sidebar)
         self.stack = QStackedWidget()
         self.home = HomePage()
         self.single = SingleSamplePage()
@@ -59,8 +105,12 @@ class MainWindow(QMainWindow):
         preferences, settings_warning = self.settings_store.load()
         self.apply_preferences(preferences)
         self.settings.message.setText(settings_warning)
-        layout.addWidget(self.navigation)
-        layout.addWidget(self.stack, 1)
+        content = QWidget()
+        content.setObjectName("contentHost")
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(22, 18, 22, 16)
+        content_layout.addWidget(self.stack)
+        layout.addWidget(content, 1)
         self.setCentralWidget(body)
         self.navigation.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.home.navigate.connect(self.navigation.setCurrentRow)
@@ -69,19 +119,6 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("就绪 · 缺失数据插值 OFF · 真实数据验证 PENDING")
         if settings_warning:
             self.statusBar().showMessage(settings_warning)
-        self.setStyleSheet("""
-            QMainWindow, QWidget { background-color: #f5f7fa; color: #25364a; }
-            QLineEdit, QDoubleSpinBox, QComboBox, QTreeWidget, QTextBrowser { background: white; }
-            QPushButton { background: #e5edf5; border: 1px solid #bccbd9; border-radius: 4px; padding: 7px; }
-            QPushButton:hover { background: #d6e5f3; }
-            QPushButton:disabled { color: #8796a4; background: #edf0f3; }
-            QListWidget { background: #e9eef4; border: none; font-size: 15px; }
-            QListWidget::item { padding: 17px 10px; }
-            QListWidget::item:selected { background: #cedeee; color: #173e65; }
-            QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox { padding: 4px; border: 1px solid #bccbd9; border-radius: 3px; }
-            QTabWidget::pane { border: 1px solid #d4dde6; }
-            QHeaderView::section { background: #e9eef4; padding: 5px; border: none; }
-        """)
 
     def apply_preferences(self, values):
         self.settings.populate(values)

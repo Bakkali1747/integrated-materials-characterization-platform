@@ -23,9 +23,14 @@ class SettingsPage(QWidget):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("默认设置 · 保存后应用到参数面板，重新启动仍保留"))
-        scroll = QScrollArea(); scroll.setWidgetResizable(True)
-        body = QWidget(); form = QFormLayout(body); form.setSpacing(16)
+        title = QLabel("设置")
+        title.setObjectName("pageTitle")
+        layout.addWidget(title)
+        subtitle = QLabel("默认设置 · 保存后应用到参数面板，重新启动仍保留")
+        subtitle.setObjectName("pageSubtitle")
+        layout.addWidget(subtitle)
+        scroll = QScrollArea(); scroll.setObjectName("panelCard"); scroll.setWidgetResizable(True)
+        body = QWidget(); body.setMaximumWidth(900); form = QFormLayout(body); form.setSpacing(16)
         self.unit = QComboBox(); self.unit.addItems(["GHz", "MHz", "kHz", "Hz"])
         form.addRow("CSV / Excel 默认频率单位", self.unit)
         self.fields = {}
@@ -41,7 +46,7 @@ class SettingsPage(QWidget):
         note.setWordWrap(True); form.addRow(note)
         scroll.setWidget(body); layout.addWidget(scroll,1)
         self.message = QLabel(); self.message.setWordWrap(True); layout.addWidget(self.message)
-        self.save_button = QPushButton("保存并应用到参数面板"); self.save_button.clicked.connect(self.request_apply); layout.addWidget(self.save_button)
+        self.save_button = QPushButton("保存并应用到参数面板"); self.save_button.setObjectName("primaryButton"); self.save_button.clicked.connect(self.request_apply); layout.addWidget(self.save_button)
         reset = QPushButton("恢复默认值（保存后生效）"); reset.clicked.connect(lambda: self.populate(defaults())); layout.addWidget(reset)
         self.populate(defaults())
 
