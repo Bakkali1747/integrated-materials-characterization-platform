@@ -25,3 +25,7 @@ settings/gui.json
 # 本地截图与 pip 临时目录
 page*.png
 pip-*
+
+pytest-of-*/
+.pytest_*.txt
+.build_*.log

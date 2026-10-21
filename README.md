@@ -1,4 +1,4 @@
-# 本地微波吸收分析软件
+﻿# 本地微波吸收分析软件
 
 新增 [图片配套 Origin 数据](docs/origin_data.md)：图片内容不变，每张输出图片旁额外保存独立 CSV 数据与坐标说明。
 
@@ -6,7 +6,7 @@
 
 当前为 v0.9.5（按评审报告修复导入、EAB 极限值、图片溯源与交互问题；见 [评审修复说明](docs/review_fixes.md)）。CLI 与 GUI 已改用共享分析服务，摘要、累计覆盖、验证状态和 `thickness_summary.csv` 由同一段代码生成；输出目录可用 [维护入口](docs/maintenance.md) 查看占用、归档或删除到回收站；可分享脱敏记录与批量复用见 [分享与复用](docs/share_and_reuse.md)；真实数据虚部定义与商业软件对照仍待外部验证。见 [Phase 4 使用说明](docs/gui_phase4.md)、[批量与历史](docs/gui_phase3.md)、[完整科研图与比较](docs/gui_phase2.md)。
 
-无需 Python 的客户端：`output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.9.5-win64.exe`（SHA-256 见同目录 `SHA256SUMS-0.9.5.txt`），见 [客户端使用说明](docs/client_usage.md)。本次构建来自干净提交 `bb6f7e5`（`dirty: false`）。
+无需 Python 的客户端：`output/releases/MicrowaveAbsorptionAnalyzer-Setup-0.9.5-win64.exe`（SHA-256 见同目录 `SHA256SUMS-0.9.5.txt`），见 [客户端使用说明](docs/client_usage.md)。本次构建来自干净工作区；具体提交见安装目录 `_internal/build_info.json`。
 
 启动桌面界面：`.\.venv\Scripts\python.exe run_gui.py`。新环境安装 `requirements-gui.txt`。具体步骤和阶段边界见 [GUI 使用说明](docs/gui_usage.md)。
 
@@ -120,7 +120,7 @@ tm = n c / [4 f sqrt(|εr||μr|)]             m，展示/导出为 mm
 
 ## 当前验收范围
 
-原有 75 项自动测试保持通过，S 参数新增 31 项；当前全量测试为 328 项，覆盖 Phase 1–2、共享分析管线、批次失败隔离、不同网格比较、清单覆盖、并列汇总、Excel 数值类型与表头行、候选 sdat 映射、UTF-8 编码、`-inf` 极限交点、图片溯源和 GUI 交互回归。测试通过不代表已确认厂商格式或商业软件一致性。
+原有 75 项自动测试保持通过，S 参数新增 31 项；当前全量测试为 329 项，覆盖 Phase 1–2、共享分析管线、批次失败隔离、不同网格比较、清单覆盖、并列汇总、Excel 数值类型与表头行、候选 sdat 映射、UTF-8 编码、`-inf` 极限交点、图片溯源和 GUI 交互回归。测试通过不代表已确认厂商格式或商业软件一致性。
 
 本阶段没有 GUI、单样品完整 Excel 报告或自动插值。ε′/μ′ 不存在跨材料通用的“明显异常”上限；当前报告负值、近零值与非有限值，不把未经校准的数值阈值伪装成物理判据。
 

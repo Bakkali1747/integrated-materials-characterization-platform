@@ -1,5 +1,6 @@
 """Git 溯源：安装 Git 后应能读到真实提交，而不是 unavailable。"""
 import pytest
+
 from export.provenance import git_state
 
 
