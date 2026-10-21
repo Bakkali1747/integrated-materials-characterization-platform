@@ -49,15 +49,30 @@
 
 每次独立保存在 `output/s_parameters/sample_样品名/时间_唯一编号/`：
 
-- `sparameters_by_frequency.csv`：原频率、源行号、schema 状态、四组复数实虚部/字符串/幅度/dB/相位、R/T/A、逐点 QC 标记。
+- `sparameters_by_frequency.csv`：原频率、源行号、schema 状态、四组复数实虚部/字符串/幅度/dB/相位、R/T/A、SE_R/SE_A/SE_T、逐点 QC 标记。
 - `sparameters_complex.npz`：频率和真正的四组复数组，附 schema 标识与状态，可用 NumPy 加载。
 - `raw_numeric_columns.csv`：未映射的九列数值，列名从 column_0 到 column_8。
 - `metadata.xml`：header 的 UTF-8 解码副本，不改原文件。
 - `quality_checks.json`：相关系数、复数差、幅度/能量/负 A 异常计数及容差。
 - `analysis_record.json` / `.txt`：源哈希、配置、软件版本、Git 提交/工作区状态、结果哈希、候选状态及成功/失败记录。
-- `figures/`：幅度、dB、相位、R/T/A，默认 600 dpi；可用 `--no-figures` 只导出数据。
+- `figures/`：幅度、dB、相位、R/T/A、SE、Smith，默认 600 dpi；可用 `--no-figures` 只导出数据。
 
 Python 读取 pandas 表时，透射列必须使用 `table["T"]`；`table.T` 在 pandas 中表示转置。
+
+## 屏蔽效能 SE（v0.10.0）
+
+在 R=|S11|²、T=|S21|² 的基础上：
+
+```text
+SE_R = -10 log10(1 - R)
+SE_A = -10 log10(T / (1 - R))
+SE_T = SE_R + SE_A = -10 log10(T)
+```
+
+- R≥1 时 SE_R/SE_A 无定义，保存空值并计入 `se_undefined_count`；
+- T=0 时 SE_T=+inf，不裁剪；
+- 公式依赖功率波与相容端口归一化，归一化仍未外部确认；
+- SE 是筛查/辅助量，不替代完整二端口无源性与厂商 schema 确认。
 
 ## 回归验证
 

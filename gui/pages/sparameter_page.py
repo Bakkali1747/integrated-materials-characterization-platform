@@ -59,7 +59,7 @@ class SParameterPage(TaskPage):
         row = QHBoxLayout()
         self.channel = QComboBox(); self.channel.addItems(["全部", "S11", "S21", "S12", "S22"])
         self.quantity = QComboBox()
-        for label, key in [("Magnitude", "magnitude"), ("dB", "db"), ("Real / Imag", "real_imag"), ("Phase", "phase_deg"), ("R / T / A", "RTA")]:
+        for label, key in [("Magnitude", "magnitude"), ("dB", "db"), ("Real / Imag", "real_imag"), ("Phase", "phase_deg"), ("R / T / A", "RTA"), ("Shielding effectiveness (SE)", "SE"), ("Smith chart", "smith")]:
             self.quantity.addItem(label, key)
         row.addWidget(self.channel); row.addWidget(self.quantity)
         update = QPushButton("更新显示"); update.clicked.connect(self.render_selected); row.addWidget(update)
@@ -114,13 +114,16 @@ class SParameterPage(TaskPage):
             f"[COMPUTED] R+T 超容差点数：{qc['energy_violation_count']}",
             f"[COMPUTED] A<0 点数：{qc['negative_absorption_count']}（未 clip）",
             f"[COMPUTED] 互易性超容差点数：{qc['reciprocity']['violation_count']}",
+            f"[COMPUTED] 屏蔽效能无定义点数：{qc.get('se_undefined_count', 0)}（R≥1 或 T=0；不裁剪）",
+            f"[COMMON] SE 定义：{qc.get('se_definition', 'SE_R/SE_A/SE_T')}",
             "容差：" + json.dumps(qc["tolerances"]), *qc["warnings"],
             "[COMMON] 一致性筛查不证明完整二端口无源性，也不确认厂商映射。", "S11_dB 不命名为 RL。"] ))
         from gui.controllers.quality_controller import quality_text
         self.summary.setPlainText(quality_text(record) + "\n\n" + self.summary.toPlainText())
-        if qc["negative_absorption_count"] or qc["energy_violation_count"] or sum(qc["magnitude_violation_counts"].values()):
+        if qc["negative_absorption_count"] or qc["energy_violation_count"] or sum(qc["magnitude_violation_counts"].values()) or qc.get("se_undefined_count"):
             self.show_error("WARNING：存在负 A 或幅度/能量超限；请查看右侧 QC，原始数值没有裁剪。")
-        columns = ["frequency_ghz"] + [f"{s}_db" for s in ("S11", "S21", "S12", "S22")] + ["R", "T", "A"]
+        columns = (["frequency_ghz"] + [f"{s}_db" for s in ("S11", "S21", "S12", "S22")]
+                   + ["R", "T", "A", "SE_R_db", "SE_A_db", "SE_T_db"])
         table = result["table"]
         limit = 2000
         shown = table[columns].head(limit)

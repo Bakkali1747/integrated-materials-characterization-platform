@@ -7,7 +7,7 @@ from core.sparameter_mapping import load_sparameter_mapping
 from export.origin_export import save_figure_bundle
 from export.provenance import artifact_hashes, figure_provenance
 from gui.controllers.analysis_controller import Cancelled
-from plotting.sparameter_plot import plot_rta, plot_sparameter_quantity
+from plotting.sparameter_plot import plot_rta, plot_shielding_effectiveness, plot_smith, plot_sparameter_quantity
 from plotting.style import PlotStyle, plt
 from run_sparameters import analyze_sparameter_file, write_sparameter_record
 
@@ -15,8 +15,15 @@ from run_sparameters import analyze_sparameter_file, write_sparameter_record
 def s_figure(result, quantity, channel="全部", dpi=600):
     """根据已计算结果选择通道/显示形式，仅调用 plotting。"""
     style = PlotStyle(dpi=dpi)
-    fig = plot_rta(result["table"], style) if quantity == "RTA" else plot_sparameter_quantity(
-        result["table"], quantity, style, None if channel == "全部" else [channel])
+    if quantity == "RTA":
+        fig = plot_rta(result["table"], style)
+    elif quantity == "SE":
+        fig = plot_shielding_effectiveness(result["table"], style)
+    elif quantity == "smith":
+        fig = plot_smith(result["table"], style)
+    else:
+        fig = plot_sparameter_quantity(result["table"], quantity, style,
+                                       None if channel == "全部" else [channel])
     fig.suptitle(result["record"]["schema_status"] + " / NOT manufacturer-confirmed", fontsize=9)
     plt.close(fig)
     return fig
@@ -39,7 +46,7 @@ def analyze_s_request(path, name, output, schema, progress, cancelled, dpi=600):
         folder = directory / "figures"
         folder.mkdir(exist_ok=True)
         provenance = figure_provenance(record, dpi=dpi)
-        for i, quantity in enumerate(("magnitude", "db", "real_imag", "phase_deg", "RTA")):
+        for i, quantity in enumerate(("magnitude", "db", "real_imag", "phase_deg", "RTA", "SE", "smith")):
             if cancelled():
                 raise Cancelled("S 参数任务已取消；已写入产物保留。")
             progress(30 + i * 13, f"绘制 {quantity}")

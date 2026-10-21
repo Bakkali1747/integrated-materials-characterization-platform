@@ -52,6 +52,9 @@ class ResultsPage(TaskPage):
         self.share_button = QPushButton("导出可分享记录…（移除本地绝对路径）")
         self.share_button.clicked.connect(self.export_share)
         self.layout.addWidget(self.share_button)
+        self.report_button = QPushButton("导出分析报告…（DOCX + PDF）")
+        self.report_button.clicked.connect(self.save_report)
+        self.layout.addWidget(self.report_button)
         self.verify_button=QPushButton("核验当前运行的全部产物（SHA-256）")
         self.verify_button.clicked.connect(self.verify_selected); self.layout.addWidget(self.verify_button)
         data_button=QPushButton("打开当前历史图片的数据目录")
@@ -102,6 +105,22 @@ class ResultsPage(TaskPage):
             self._after_idle(lambda: self._apply_archive(root, days))
 
         self.launch(preview, ready)
+
+    def save_report(self):
+        """从当前已加载运行生成中文 DOCX + PDF；不重新计算。"""
+        if not self.completed:
+            self.show_error("请先加载一个成功的运行记录。")
+            return
+        sample = self.completed["record"].get("sample", "sample")
+        path, _ = QFileDialog.getSaveFileName(self, "保存分析报告", f"{sample}_report.docx",
+                                              "Word 文档 (*.docx);;PDF (*.pdf)")
+        if not path:
+            return
+        from export.report import export_report
+        directory = self.completed["directory"]
+        base = Path(path)
+        self.launch(lambda p, c: export_report(directory, base, formats=("docx", "pdf")),
+                    lambda files: self.message.emit("报告已生成：" + "；".join(str(item) for item in files)))
 
     def export_share(self):
         """导出当前选中运行的脱敏副本；不修改原运行。"""

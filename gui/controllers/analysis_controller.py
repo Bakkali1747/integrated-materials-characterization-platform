@@ -16,7 +16,7 @@ from export.origin_export import save_figure_bundle
 from export.provenance import artifact_hashes, figure_provenance, json_safe, write_record
 from plotting.em_parameters import plot_parameters
 from plotting.rl_plot import plot_rl_2d, plot_rl_curve
-from plotting.style import PlotStyle, plt
+from plotting.style import plt, style_for
 
 ROOT = user_data_root()
 SUPPORTED = {".csv", ".xlsx", ".xls", ".memp", ".sdat"}
@@ -46,6 +46,7 @@ class AnalysisRequest:
     eab_crossing: str = "linear"
     quarter_wave_orders: tuple = (1,)
     impedance_tolerance: float = .1
+    figure_preset: str = "screen"
     reuse: bool = False
     parser_options: dict = field(default_factory=lambda: {"imaginary_convention": "loss"})
 
@@ -129,6 +130,7 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
         parser_options=r.parser_options, entry_point="gui_phase1", name_for_parser=r.name,
         extra_configuration={"quarter_wave_orders": list(r.quarter_wave_orders),
                              "impedance_tolerance": r.impedance_tolerance,
+                             "figure_preset": r.figure_preset,
                              "figure_dpi": r.dpi, "full_science": r.full_science,
                              "quick_preview": r.quick_preview})
     try:
@@ -159,7 +161,7 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
         standard, minima = run.standard_eab, record["global_minima"]
         d, f = run.thickness_mm, run.frequencies
         provenance = figure_provenance(record, dpi=r.dpi)
-        style = PlotStyle(dpi=r.dpi)
+        style = style_for(r.figure_preset, r.dpi)
         factories = [("permittivity", lambda: plot_parameters(sample, "permittivity", style)),
                      ("permeability", lambda: plot_parameters(sample, "permeability", style))]
         if np.isfinite(result.rl_db).all() and np.isfinite(curve.rl_db).all():

@@ -59,6 +59,11 @@ class ParameterPanel(QWidget):
         self.impedance_tolerance.setSingleStep(.05)
         self.impedance_tolerance.setValue(.1)
         form.addRow("阻抗模长显示容差 ±", self.impedance_tolerance)
+        self.figure_preset = QComboBox()
+        self.figure_preset.addItem("屏幕 / 默认", "screen")
+        self.figure_preset.addItem("期刊单栏（3.5 in）", "single")
+        self.figure_preset.addItem("期刊双栏（7.0 in）", "double")
+        form.addRow("论文图尺寸", self.figure_preset)
         self.unit = QComboBox()
         self.unit.addItems(["GHz", "MHz", "kHz", "Hz"])
         form.addRow("文件频率单位", self.unit)
@@ -159,4 +164,5 @@ class ParameterPanel(QWidget):
                                eab_crossing=self.eab_crossing.currentData(),
                                quarter_wave_orders=orders,
                                impedance_tolerance=self.impedance_tolerance.value(),
+                               figure_preset=self.figure_preset.currentData(),
                                reuse=self.reuse.isChecked(), **values)

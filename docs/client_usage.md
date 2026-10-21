@@ -1,10 +1,10 @@
-# Windows 独立客户端
+﻿# Windows 独立客户端
 
-当前安装包为 v0.9.5，包含评审修复、共享分析管线、图片溯源、批量/单样品复用、输出维护与分享入口。操作见 `gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
+当前安装包为 v0.10.0，新增实测 S 参数屏蔽效能/Smith 图、期刊图尺寸与单样品中文 DOCX/PDF 报告；同时包含评审修复、共享分析管线、图片溯源、复用、维护与分享入口。操作见 `gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
 
 ## 安装和启动
 
-双击 `MicrowaveAbsorptionAnalyzer-Setup-0.9.5-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“微波吸收材料分析软件”。安装文件 SHA-256 见 `output/releases/SHA256SUMS-0.9.5.txt`。
+双击 `MicrowaveAbsorptionAnalyzer-Setup-0.10.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“微波吸收材料分析软件”。安装文件 SHA-256 见 `output/releases/SHA256SUMS-0.10.0.txt`。
 
 目标为 Windows 10（1809 或更高）/Windows 11 x64。界面为中文，安装向导按钮使用英文。客户端未做商业代码签名，Windows 可能显示“未知发布者”；请只使用随交付提供哈希的安装文件。
 

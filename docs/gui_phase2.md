@@ -1,4 +1,4 @@
-# GUI Phase 2 · v0.7.0
+﻿# GUI Phase 2 · v0.7.0
 
 继续使用桌面快捷方式，或在源码目录运行 `.\.venv\Scripts\python.exe run_gui.py`。安装包更新已安装的同一客户端，不删除历史数据。安装版默认输出在 `%LOCALAPPDATA%\MicrowaveAbsorptionAnalyzer\output`。
 
@@ -12,7 +12,9 @@
 
 左侧“S参数分析”选择 `.sdat`，填写样品名及输出目录。默认候选映射仍为 `candidate_high_confidence`。可选择已有 JSON schema；未验证自定义配置保持 `unverified`，不提供“已通过厂商确认”开关。
 
-点击“开始 S 参数分析”，之后选择 S11/S21/S12/S22 或全部，以及 Magnitude、dB、Real/Imag、Phase、R/T/A，再点击“更新显示”。更新只重绘已有计算结果，不重算或插值。逐频率点表与完整 CSV 保留原始频率。相位使用主值，不展开。
+点击“开始 S 参数分析”，之后选择 S11/S21/S12/S22 或全部，以及 Magnitude、dB、Real/Imag、Phase、R/T/A、SE 与 Smith，再点击“更新显示”。更新只重绘已有计算结果，不重算或插值。逐频率点表与完整 CSV 保留原始频率。相位使用主值，不展开。
+
+v0.10.0 起逐点表增加 SE_R/SE_A/SE_T，并提供 Smith 圆图与 SE 曲线；SE 定义与无定义点见 docs/sparameters.md。
 
 [COMMON] R/T/A 沿用现有核心在相容功率归一化假设下的定义。负 A 不 clip，任何负 A 都提示；界面也显示幅度、能量、互易性超容差点数与实际容差。数值筛查不等于确认厂商字段顺序或证明完整二端口无源性。
 

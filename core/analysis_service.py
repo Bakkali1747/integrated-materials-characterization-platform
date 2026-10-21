@@ -80,16 +80,29 @@ def load_completed_run(directory):
     thickness = matrix["thickness_mm"].to_numpy(dtype=float)
     frequency = matrix.columns[1:].astype(float).to_numpy()
     rl_db = matrix.iloc[:, 1:].to_numpy(dtype=float)
-    real = pd.read_csv(directory / "impedance_real_matrix.csv").iloc[:, 1:].to_numpy(dtype=float)
-    imag = pd.read_csv(directory / "impedance_imag_matrix.csv").iloc[:, 1:].to_numpy(dtype=float)
-    result = RLResult(frequency, thickness, rl_db, real + 1j * imag)
+    real_path = directory / "impedance_real_matrix.csv"
+    imag_path = directory / "impedance_imag_matrix.csv"
+    if real_path.is_file() and imag_path.is_file():
+        real = pd.read_csv(real_path).iloc[:, 1:].to_numpy(dtype=float)
+        imag = pd.read_csv(imag_path).iloc[:, 1:].to_numpy(dtype=float)
+        impedance = real + 1j * imag
+    else:
+        impedance = np.full((len(thickness), len(frequency)), np.nan + 0j)
+    result = RLResult(frequency, thickness, rl_db, impedance)
     curve_frame = pd.read_csv(directory / "RL_curve.csv")
-    impedance_curve = pd.read_csv(directory / "impedance_curve.csv")
+    impedance_path = directory / "impedance_curve.csv"
+    if impedance_path.is_file():
+        impedance_curve = pd.read_csv(impedance_path)
+        curve_thickness = float(impedance_curve["thickness_mm"].iloc[0])
+        curve_impedance = (impedance_curve["z_real"].to_numpy(dtype=float)
+                           + 1j * impedance_curve["z_imag"].to_numpy(dtype=float)).reshape(1, -1)
+    else:
+        curve_thickness = float(record.get("configuration", {}).get("curve_thickness_mm", 2.))
+        curve_impedance = np.full((1, len(curve_frame)), np.nan + 0j)
     curve = RLResult(curve_frame["frequency_ghz"].to_numpy(dtype=float),
-                     np.array([float(impedance_curve["thickness_mm"].iloc[0])]),
+                     np.array([curve_thickness]),
                      curve_frame["rl_db"].to_numpy(dtype=float).reshape(1, -1),
-                     (impedance_curve["z_real"].to_numpy(dtype=float)
-                      + 1j * impedance_curve["z_imag"].to_numpy(dtype=float)).reshape(1, -1))
+                     curve_impedance)
     return AnalysisRun(directory, record, sample, result, curve, summary,
                        summary["standard_eab"], summary["selected_threshold_bandwidth"],
                        summary.get("cumulative_frequency_coverage", {}), frequency, thickness)

@@ -84,9 +84,11 @@ def test_s_candidate_and_negative_a_preserved(sresult):
     assert sresult["table"].A.iloc[0] == pytest.approx(-.28)
     assert len(sresult["table"]) == 201
     assert sresult["record"]["clipping"] == "OFF"
+    assert {"SE_R_db", "SE_A_db", "SE_T_db"} <= set(sresult["table"].columns)
 
 
-@pytest.mark.parametrize("quantity,lines", [("magnitude",1), ("db",1), ("real_imag",2), ("phase_deg",1), ("RTA",3)])
+@pytest.mark.parametrize("quantity,lines", [("magnitude",1), ("db",1), ("real_imag",2), ("phase_deg",1),
+                                            ("RTA",3), ("SE",3), ("smith",4)])
 def test_s_quantity_selection(sresult, quantity, lines):
     fig = s_figure(sresult, quantity, "S21", dpi=25)
     assert len(fig.axes[0].lines) == lines

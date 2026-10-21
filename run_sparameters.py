@@ -22,7 +22,7 @@ from core.sparameter_mapping import SParameterMapping, load_sparameter_mapping
 from core.sparameter_parser import read_sparameters
 from core.sparameters import SParameterTolerances, analyze_sparameters
 from export.provenance import artifact_hashes, figure_provenance, git_state, json_safe
-from plotting.sparameter_plot import plot_rta, plot_sparameter_quantity
+from plotting.sparameter_plot import plot_rta, plot_shielding_effectiveness, plot_smith, plot_sparameter_quantity
 from plotting.style import PlotStyle, plt
 
 
@@ -81,8 +81,15 @@ def analyze_sparameter_file(path, *, mapping=None, tolerances=None, output="outp
             figures = directory/"figures"
             figures.mkdir()
             provenance = figure_provenance(record, dpi=style.dpi)
-            for quantity in ("magnitude", "db", "phase_deg", "RTA"):
-                fig = plot_rta(table, style) if quantity == "RTA" else plot_sparameter_quantity(table, quantity, style)
+            for quantity in ("magnitude", "db", "phase_deg", "RTA", "SE", "smith"):
+                if quantity == "RTA":
+                    fig = plot_rta(table, style)
+                elif quantity == "SE":
+                    fig = plot_shielding_effectiveness(table, style)
+                elif quantity == "smith":
+                    fig = plot_smith(table, style)
+                else:
+                    fig = plot_sparameter_quantity(table, quantity, style)
                 fig.suptitle(mapping.schema_status + " (not manufacturer-confirmed)", fontsize=9, color="0.35")
                 save_figure_bundle(fig, figures/f"{quantity}.png", dpi=style.dpi, provenance=provenance)
                 plt.close(fig)

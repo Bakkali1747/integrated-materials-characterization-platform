@@ -78,6 +78,14 @@ def analyze_sparameters(frequency_ghz, s_parameters, tolerances=None):
     limit = tolerances.reciprocity_atol + tolerances.reciprocity_rtol*np.maximum(np.abs(arrays["S21"]), np.abs(arrays["S12"]))
     table["R"], table["T"], table["A"] = r, t, absorption
     table["R_plus_T"] = total
+    with np.errstate(divide="ignore", invalid="ignore"):
+        reflection_limit = 1 - r
+        se_r = np.where(reflection_limit > 0, -10*np.log10(np.where(reflection_limit > 0, reflection_limit, 1)), np.nan)
+        se_a = np.where((reflection_limit > 0) & (t > 0),
+                        -10*np.log10(np.where((reflection_limit > 0) & (t > 0), t/reflection_limit, 1)), np.nan)
+        se_t = -10*np.log10(t)
+    table["SE_R_db"], table["SE_A_db"], table["SE_T_db"] = se_r, se_a, se_t
+    table["SE_undefined"] = ~np.isfinite(se_r) | ~np.isfinite(se_a)
     table["energy_exceeds_tolerance"] = total > 1+tolerances.energy_atol
     table["A_negative"] = absorption < 0
     table["A_negative_exceeds_tolerance"] = absorption < -tolerances.energy_atol
@@ -90,12 +98,18 @@ def analyze_sparameters(frequency_ghz, s_parameters, tolerances=None):
         warnings.append(f"[COMPUTED] R+T 有 {int(table.energy_exceeds_tolerance.sum())} 点超过 1 + energy_atol。")
     if table.reciprocity_exceeds_tolerance.any():
         warnings.append(f"[COMPUTED] S21/S12 有 {int(table.reciprocity_exceeds_tolerance.sum())} 点超出设定互易性容差。")
+    if table.SE_undefined.any():
+        warnings.append(f"[COMMON] 屏蔽效能有 {int(table.SE_undefined.sum())} 点因 R≥1 或 T=0 无定义；"
+                        "SE_R/SE_A 保留空值，SE_T 在 T=0 时为 +inf，不裁剪。")
     report = {"tolerances": asdict(tolerances), "magnitude_violation_counts": counts,
               "maximum_magnitudes": {name: float(table[f"{name}_magnitude"].max()) for name in S_NAMES},
               "energy_violation_count": int(table.energy_exceeds_tolerance.sum()),
               "negative_absorption_count": int(table.A_negative.sum()),
               "minimum_A": float(absorption.min()), "maximum_A": float(absorption.max()),
               "maximum_R_plus_T": float(total.max()),
+              "se_undefined_count": int(table.SE_undefined.sum()),
+              "maximum_SE_T_db": float(se_t[np.isfinite(se_t)].max()) if np.isfinite(se_t).any() else None,
+              "se_definition": "SE_R=-10log10(1-R); SE_A=-10log10(T/(1-R)); SE_T=SE_R+SE_A=-10log10(T)",
               "reciprocity": {"real_correlation": correlation_or_none(arrays["S21"].real, arrays["S12"].real),
                               "imag_correlation": correlation_or_none(arrays["S21"].imag, arrays["S12"].imag),
                               "mean_absolute_complex_difference": float(difference.mean()), "max_absolute_complex_difference": float(difference.max()),
