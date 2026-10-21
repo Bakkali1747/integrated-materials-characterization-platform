@@ -46,7 +46,6 @@ class SingleSamplePage(QWidget):
         self.dynamic_preview_key = None
         self.export_dpi = 600
         self.figure_format = "png"
-        self.simple_figures = False
         self._hinted_paths = set()
         layout = QVBoxLayout(self)
         self.page_title = QLabel("单样品分析")
@@ -302,8 +301,7 @@ class SingleSamplePage(QWidget):
         self._launch(lambda progress, cancelled: analyze_request(request, progress, cancelled), self._analyzed)
 
     def set_simple(self, simple):
-        """日常模式隐藏参考对照入口，并只默认展示常用图。"""
-        self.simple_figures = simple
+        """日常模式只隐藏参考对照入口；所有已生成图仍可查看。"""
         self.reference_button.setVisible(not simple)
 
     def _analyzed(self, result):
@@ -327,10 +325,6 @@ class SingleSamplePage(QWidget):
                 f"当前曲线厚度 {target:g} mm 不在扫描网格中；滑块停在最近的 {grid[nearest]:g} mm。"
                 "移动滑块可查看网格厚度，不插值。")
         figures = result["figures"]
-        if self.simple_figures:
-            common = {"permittivity", "permeability", "RL_curve", "RL_2D", "RL_3D",
-                      "RL_multi_thickness", "quarter_wave", "impedance"}
-            figures = {key: value for key, value in figures.items() if key in common}
         self.plot.set_figures(figures)
         lines = ["[COMPUTED] 已完成的分析快照", f"样品：{record['sample']}",
                  "验证状态：PENDING（真实结果待验证）", f"来源：{record['raw_file']}",

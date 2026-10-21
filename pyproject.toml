@@ -1,6 +1,6 @@
 [project]
 name = "microwave-absorption-analyzer"
-version = "0.11.1"
+version = "0.11.2"
 description = "Local, traceable microwave absorption analysis"
 requires-python = ">=3.11"
 
