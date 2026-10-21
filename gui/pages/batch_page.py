@@ -5,6 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QLabel, QPushButton, QScrollArea, QSplitter, QTextBrowser, QTreeWidget, QTreeWidgetItem
 
+from gui.controllers.analysis_controller import request_with_fixture_thickness
 from gui.controllers.batch_controller import run_batch_requests, scan_folder
 from gui.pages.task_page import TaskPage
 from gui.widgets.parameter_panel import ParameterPanel
@@ -73,7 +74,7 @@ class BatchPage(TaskPage):
         if self.busy:
             return
         try:
-            requests = [replace(self.parameters.request(i["path"]), name=i["sample"]) for i in self.items]
+            requests = [request_with_fixture_thickness(replace(self.parameters.request(i["path"]), name=i["sample"])) for i in self.items]
             output = Path(self.parameters.output.text()).expanduser().resolve()
             self.states = [dict(sample=i["sample"], status="not_started") for i in self.items]
             for row in self.rows:

@@ -24,6 +24,7 @@ class ParameterPanel(QWidget):
         super().__init__(parent)
         self.figure_dpi = 300
         form = QFormLayout(self)
+        self.form = form
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.name = QLineEdit()
         form.addRow("样品名称", self.name)
@@ -132,6 +133,17 @@ class ParameterPanel(QWidget):
                     raise ValueError("列映射必须是 JSON 对象。")
                 options["column_map"] = value
         return options
+
+    def set_simple(self, simple):
+        """日常模式隐藏高级参数行；完整模式恢复。"""
+        advanced = (self.eab_crossing, self.quarter_orders, self.impedance_tolerance,
+                    self.sheet, self.header_row, self.mapping, self.mapping_button,
+                    self.quick_preview, self.reuse, self.figure_preset)
+        for widget in advanced:
+            widget.setVisible(not simple)
+            label = self.form.labelForField(widget)
+            if label is not None:
+                label.setVisible(not simple)
 
     def request(self, path):
         """输入选中文件；读取一次 UI 值，后台不会访问控件。"""

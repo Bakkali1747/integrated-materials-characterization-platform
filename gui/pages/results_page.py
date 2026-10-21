@@ -89,6 +89,11 @@ class ResultsPage(TaskPage):
         actions.addWidget(output_button, 1, 2)
         self.layout.addLayout(actions)
 
+    def set_simple(self, simple):
+        """日常模式隐藏维护类操作，保留报告与核验。"""
+        self.archive_button.setVisible(not simple)
+        self.share_button.setVisible(not simple)
+
     def choose_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "选择 output / 样品 / 运行目录")
         if folder:

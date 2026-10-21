@@ -2,7 +2,8 @@
 
 import json
 import logging
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,7 @@ import pandas as pd
 
 from application_paths import user_data_root
 from core.analysis_service import AnalysisConfig, execute, load_completed_run
+from core.fixture import fixture_for_path
 from core.reuse import index_completed_runs, run_key, sha256_file
 from core.sparameter_parser import read_sparameters
 from export.origin_export import save_figure_bundle
@@ -21,6 +23,19 @@ from plotting.style import plt, style_for
 ROOT = user_data_root()
 SUPPORTED = {".csv", ".xlsx", ".xls", ".memp", ".sdat"}
 PENDING = "pending_imaginary_convention_and_commercial_reference"
+FILENAME_HINTS = re.compile(r"^(?P<sample>\d+(?:\.\d+)?)_(?P<fmin>\d+(?:\.\d+)?)_(?P<fmax>\d+(?:\.\d+)?)_(?P<points>\d+)_(?P<temp>\d+)")
+
+
+def filename_hints(path):
+    """解析实验室命名：编号_起始_终止_点数_温度；0.2 是样品编号，不是厚度。"""
+    match = FILENAME_HINTS.match(Path(path).stem)
+    if not match:
+        return {}
+    return {"sample_id": match["sample"],
+            "frequency_min_ghz": float(match["fmin"]),
+            "frequency_max_ghz": float(match["fmax"]),
+            "points": int(match["points"]),
+            "temperature_c": int(match["temp"])}
 
 
 class Cancelled(Exception):
@@ -49,6 +64,20 @@ class AnalysisRequest:
     figure_preset: str = "screen"
     reuse: bool = False
     parser_options: dict = field(default_factory=lambda: {"imaginary_convention": "loss"})
+    source_hints: dict = field(default_factory=dict)
+
+
+def request_with_fixture_thickness(request):
+    """批量/比较时为每个 .memp 读取同目录 .sdat 的 D；缺失则保留用户参数。"""
+    if Path(request.path).suffix.lower() != ".memp":
+        return request
+    fixture = fixture_for_path(request.path)
+    thickness = fixture.get("thickness_mm")
+    if thickness is None:
+        return request
+    hints = dict(request.source_hints)
+    hints["fixture"] = fixture
+    return replace(request, curve_thickness=float(thickness), source_hints=hints)
 
 
 def _reuse_configuration(request):
@@ -98,8 +127,10 @@ def inspect_file(path, parser_options):
             from core.parser import read_sample
             data = read_sample(path, **parser_options)
             frequency = data.data.frequency_ghz.to_numpy()
-            info.update(status="PENDING", parser=data.metadata["parser"])
+            info.update(status="PENDING", parser=data.metadata["parser"], sample=data.name)
         info.update(points=len(frequency), frequency=(float(frequency[0]), float(frequency[-1])))
+        info["filename_hints"] = filename_hints(path)
+        info["fixture"] = fixture_for_path(path)
     except Exception as error:
         import logging
         logging.getLogger("microwave.gui").exception("导入失败：%s", path)
@@ -131,6 +162,7 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
         extra_configuration={"quarter_wave_orders": list(r.quarter_wave_orders),
                              "impedance_tolerance": r.impedance_tolerance,
                              "figure_preset": r.figure_preset,
+                             "source_hints": dict(r.source_hints),
                              "figure_dpi": r.dpi, "full_science": r.full_science,
                              "quick_preview": r.quick_preview})
     try:

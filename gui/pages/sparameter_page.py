@@ -113,9 +113,16 @@ class SParameterPage(TaskPage):
     def analyzed(self, result):
         self.completed = result
         record = result["record"]; qc = record["quality_checks"]
+        fixture = record.get("fixture") or {}
+        fixture_text = "未记录"
+        if fixture:
+            fixture_text = (f"{fixture.get('fixture_type', '未记录类型')} · "
+                            f"D={fixture.get('thickness_mm', '—')} mm（厚度）"
+                            + (f" · {fixture['temperature_c']:g} °C" if fixture.get("temperature_c") is not None else ""))
         self.badge.set_status(record["schema_status"], "非 manufacturer-confirmed；S21/S12 顺序与功率归一化待确认。")
         self.summary.setPlainText("\n".join([f"样品：{record['sample']}", f"来源：{record['raw_file']}",
             f"频率：{record['frequency_range_ghz']} GHz；{record['frequency_points']} 点", "缺失数据插值 OFF / clipping OFF",
+            f"[SOURCE] 夹具：{fixture_text}",
             f"[COMPUTED] |Sij| 超限点数：{qc['magnitude_violation_counts']}",
             f"[COMPUTED] R+T 超容差点数：{qc['energy_violation_count']}",
             f"[COMPUTED] A<0 点数：{qc['negative_absorption_count']}（未 clip）",

@@ -18,6 +18,7 @@ os.environ.setdefault("MPLCONFIGDIR", str(Path(__file__).resolve().parent/".mplc
 import numpy as np
 
 from core import __version__
+from core.fixture import read_fixture
 from core.sparameter_mapping import SParameterMapping, load_sparameter_mapping
 from core.sparameter_parser import read_sparameters
 from core.sparameters import SParameterTolerances, analyze_sparameters
@@ -54,6 +55,10 @@ def analyze_sparameter_file(path, *, mapping=None, tolerances=None, output="outp
               "phase_unwrap": "OFF", "status": "started", "validation_status": "candidate_mapping_not_manufacturer_confirmed",
               "plot_style": vars(style), "make_figures": make_figures,
               "note": "S21/S12 manufacturer order remains unconfirmed; numerical screens do not confirm the schema."}
+    try:
+        record["fixture"] = read_fixture(path)
+    except (OSError, ValueError):
+        record["fixture"] = {}
     write_sparameter_record(directory, record)
     try:
         mapping.validate()

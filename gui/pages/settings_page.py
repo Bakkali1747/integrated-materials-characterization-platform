@@ -33,6 +33,10 @@ class SettingsPage(QWidget):
         body = QWidget(); body.setMaximumWidth(900); form = QFormLayout(body); form.setSpacing(16)
         self.unit = QComboBox(); self.unit.addItems(["GHz", "MHz", "kHz", "Hz"])
         form.addRow("CSV / Excel 默认频率单位", self.unit)
+        self.ui_mode = QComboBox()
+        self.ui_mode.addItem("日常模式：只显示分析 / 历史 / 设置", "simple")
+        self.ui_mode.addItem("完整功能：S 参数 / 比较 / 批量", "full")
+        form.addRow("界面模式", self.ui_mode)
         self.fields = {}
         for key, label in [("thickness_min", "厚度下限 (mm)"), ("thickness_max", "厚度上限 (mm)"), ("thickness_step", "厚度步长 (mm)"), ("curve_thickness", "指定曲线厚度 (mm)"), ("threshold", "RL 阈值 (dB)")]:
             box = QDoubleSpinBox(); box.setDecimals(2 if key == "threshold" else 4); box.setRange(-1000 if key == "threshold" else .0001, 0 if key == "threshold" else 1000)
@@ -55,6 +59,7 @@ class SettingsPage(QWidget):
         for key, field in self.fields.items():
             field.setValue(values[key])
         self.output.setText(values["output"]); self.dpi.setValue(values["dpi"]); self.format.setCurrentText(values["figure_format"])
+        self.ui_mode.setCurrentIndex(max(0, self.ui_mode.findData(values.get("ui_mode", "simple"))))
 
     def choose_output(self):
         path = QFileDialog.getExistingDirectory(self,"选择默认输出目录",self.output.text())
@@ -65,7 +70,8 @@ class SettingsPage(QWidget):
         try:
             values = defaults()
             values.update({key:field.value() for key,field in self.fields.items()})
-            values.update(frequency_unit=self.unit.currentText(), output=self.output.text(), dpi=self.dpi.value(), figure_format=self.format.currentText())
+            values.update(frequency_unit=self.unit.currentText(), output=self.output.text(), dpi=self.dpi.value(),
+                          figure_format=self.format.currentText(), ui_mode=self.ui_mode.currentData())
             self.apply_requested.emit(validate_settings(values))
         except Exception as error:
             self.message.setText(str(error))

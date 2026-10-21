@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from gui.controllers.analysis_controller import request_with_fixture_thickness
 from gui.controllers.comparison_controller import compare_requests
 from gui.pages.task_page import TaskPage
 from gui.widgets.metrics_table import MetricsTable
@@ -97,7 +98,8 @@ class ComparisonPage(TaskPage):
         for i in range(self.samples.count()):
             item = self.samples.item(i)
             if item.checkState() == Qt.CheckState.Checked:
-                requests.append(replace(self.parameters.request(item.data(Qt.ItemDataRole.UserRole)), name=item.text().strip()))
+                requests.append(request_with_fixture_thickness(
+                    replace(self.parameters.request(item.data(Qt.ItemDataRole.UserRole)), name=item.text().strip())))
         return requests
 
     def start_comparison(self):

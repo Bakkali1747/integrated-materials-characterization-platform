@@ -129,6 +129,21 @@ class MainWindow(QMainWindow):
             # 交互分析按设置 DPI；手动导出至少 600 dpi，便于投稿和印刷。
             page.export_dpi = max(600, values["dpi"])
             page.figure_format = values["figure_format"]
+        self.set_ui_mode(values.get("ui_mode", "simple"))
+
+    def set_ui_mode(self, mode):
+        """日常模式隐藏 S 参数/比较/批量与高级参数；完整模式全部恢复。"""
+        simple = mode != "full"
+        self.ui_mode = mode
+        for row in (2, 3, 4):
+            self.navigation.setRowHidden(row, simple)
+        self.home.set_simple(simple)
+        for page in (self.single, self.comparison, self.batch):
+            page.parameters.set_simple(simple)
+        self.single.set_simple(simple)
+        self.history.set_simple(simple)
+        if simple and self.navigation.currentRow() in (2, 3, 4):
+            self.navigation.setCurrentRow(0)
 
     def save_settings(self, values):
         if any(page.busy for page in self.task_pages):

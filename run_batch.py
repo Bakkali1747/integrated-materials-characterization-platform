@@ -13,6 +13,7 @@ import pandas as pd
 
 from core import __version__
 from core.batch import ANALYSIS_KEYS, discover_samples, load_manifest, validate_entries
+from core.fixture import fixture_for_path
 from core.reuse import index_completed_runs, run_key, sha256_file
 from core.sdat_inspector import inspect_sdat
 from export.csv_safety import escape_formula_cells
@@ -143,16 +144,20 @@ def analyze_batch(entries, *, output="output", analysis_options=None, compare_sa
             member_root = directory/"samples"/f"{index:04d}"
             print(f"[{index}/{len(entries)}] {name}")
             try:
+                member_options = dict(options)
+                fixture = fixture_for_path(entry["path"]) if Path(entry["path"]).suffix.lower() == ".memp" else {}
+                if fixture.get("thickness_mm") is not None:
+                    member_options["curve_thickness"] = float(fixture["thickness_mm"])
                 cached = None
                 if reuse and Path(entry["path"]).suffix.lower() != ".sdat":
                     key = run_key(name, sha256_file(entry["path"]),
-                                  _reuse_configuration(options, entry.get("parser", {})))
+                                  _reuse_configuration(member_options, entry.get("parser", {})))
                     cached = reuse_index.get(key)
                 if cached is not None:
                     run = cached
                     print(f"复用已完成运行：{run}")
                 else:
-                    run = analyze(entry["path"], output=member_root, name=name, style=style, **options, **entry.get("parser", {}))
+                    run = analyze(entry["path"], output=member_root, name=name, style=style, **member_options, **entry.get("parser", {}))
                     if reuse and Path(entry["path"]).suffix.lower() != ".sdat":
                         reuse_index[key] = run
                 summary, points, eab_bands, sample_record = summarize_sample(name, run)

@@ -46,6 +46,8 @@ class SingleSamplePage(QWidget):
         self.dynamic_preview_key = None
         self.export_dpi = 600
         self.figure_format = "png"
+        self.simple_figures = False
+        self._hinted_paths = set()
         layout = QVBoxLayout(self)
         self.page_title = QLabel("单样品分析")
         self.page_title.setObjectName("pageTitle")
@@ -55,6 +57,11 @@ class SingleSamplePage(QWidget):
         layout.addWidget(subtitle)
         self.badge = StatusBadge("PENDING", "MEMP 可计算 / 待商业软件验证；虚部定义尚未交叉确认。所有真实结果待验证。")
         layout.addWidget(self.badge)
+        self.hint = QLabel("")
+        self.hint.setObjectName("pageSubtitle")
+        self.hint.setWordWrap(True)
+        self.hint.hide()
+        layout.addWidget(self.hint)
         self.files = FileSelector()
         layout.addWidget(self.files)
         self.table = SampleTable()
@@ -236,6 +243,7 @@ class SingleSamplePage(QWidget):
         else:
             self.parameters.name.setText(info["sample"])
             self.source_label.setText(f"文件来源：{info['path']}")
+            self._apply_filename_hints(info)
             if info["format"] == ".sdat":
                 self.badge.set_status(info["status"], "Measured S Parameters；S21/S12 顺序待厂商确认。请切换左侧 S 参数分析页面。")
             else:
@@ -246,18 +254,57 @@ class SingleSamplePage(QWidget):
                 self.error.hide()
         self._set_busy(self.busy)
 
+    def _apply_filename_hints(self, info):
+        """文件名只填频率/点数/温度；厚度来自同目录 .sdat 夹具 D。"""
+        hints = info.get("filename_hints") or {}
+        fixture = info.get("fixture") or {}
+        parts = []
+        if hints:
+            parts.append(
+                f"文件名：{hints['frequency_min_ghz']:g}–{hints['frequency_max_ghz']:g} GHz · "
+                f"{hints['points']} 点 · {hints['temperature_c']} °C；"
+                f"{hints['sample_id']} 为样品编号")
+        if fixture.get("thickness_mm") is not None:
+            parts.append(
+                f"同目录 S 参数：D={fixture['thickness_mm']:g} mm（样品厚度）"
+                + (f" · {fixture['temperature_c']:g} °C" if fixture.get("temperature_c") is not None else "")
+                + (f" · {fixture['fixture_type']}" if fixture.get("fixture_type") else ""))
+        if not parts:
+            self.hint.hide()
+            return
+        self.hint.setText("；".join(parts) + "。")
+        self.hint.show()
+        if str(info["path"]) in self._hinted_paths:
+            return
+        self._hinted_paths.add(str(info["path"]))
+        if hints:
+            self.parameters.fields["frequency_min"].setValue(hints["frequency_min_ghz"])
+            self.parameters.fields["frequency_max"].setValue(hints["frequency_max_ghz"])
+            self.parameters.crop.setChecked(True)
+        thickness = fixture.get("thickness_mm")
+        if thickness is not None:
+            self.parameters.fields["curve_thickness"].setValue(float(thickness))
+
     def start_analysis(self):
         """用户显式触发一次分析，不监听参数值变化来计算。"""
         if self.busy or not self.selected or self.selected["format"] == ".sdat" or self.selected["status"] == "FAIL":
             return
         try:
             request = self.parameters.request(self.selected["path"])
+            request.source_hints = dict(self.selected.get("filename_hints") or {})
+            if self.selected.get("fixture"):
+                request.source_hints["fixture"] = self.selected["fixture"]
         except Exception as error:
             logging.getLogger("microwave.gui").exception("参数输入无效")
             self.show_error(f"参数输入无效：{error}")
             return
         self.analysis_started.emit(request)
         self._launch(lambda progress, cancelled: analyze_request(request, progress, cancelled), self._analyzed)
+
+    def set_simple(self, simple):
+        """日常模式隐藏参考对照入口，并只默认展示常用图。"""
+        self.simple_figures = simple
+        self.reference_button.setVisible(not simple)
 
     def _analyzed(self, result):
         """展示核心摘要，保留所有并列最小值和分离频带。"""
@@ -279,7 +326,12 @@ class SingleSamplePage(QWidget):
             self.thickness_summary.setText(
                 f"当前曲线厚度 {target:g} mm 不在扫描网格中；滑块停在最近的 {grid[nearest]:g} mm。"
                 "移动滑块可查看网格厚度，不插值。")
-        self.plot.set_figures(result["figures"])
+        figures = result["figures"]
+        if self.simple_figures:
+            common = {"permittivity", "permeability", "RL_curve", "RL_2D", "RL_3D",
+                      "RL_multi_thickness", "quarter_wave", "impedance"}
+            figures = {key: value for key, value in figures.items() if key in common}
+        self.plot.set_figures(figures)
         lines = ["[COMPUTED] 已完成的分析快照", f"样品：{record['sample']}",
                  "验证状态：PENDING（真实结果待验证）", f"来源：{record['raw_file']}",
                  f"Parser：{record['parser_version']}", f"频率：{record['frequency_range_ghz']} GHz",

@@ -12,7 +12,8 @@ from application_paths import user_data_root
 def defaults():
     return dict(version=1, frequency_unit="GHz", thickness_min=1., thickness_max=5.,
                 thickness_step=.01, curve_thickness=2., threshold=-10.,
-                output=str(user_data_root()/"output"), dpi=300, figure_format="png", interpolation="OFF")
+                output=str(user_data_root()/"output"), dpi=300, figure_format="png",
+                ui_mode="simple", interpolation="OFF")
 
 
 def validate_settings(values):
@@ -38,6 +39,8 @@ def validate_settings(values):
         raise ValueError("DPI 必须是 72–1200 的整数。")
     if result["figure_format"] not in {"png", "tiff", "pdf", "svg"}:
         raise ValueError("图片格式必须为 PNG / TIFF / PDF / SVG。")
+    if result["ui_mode"] not in {"simple", "full"}:
+        raise ValueError("界面模式必须为 simple 或 full。")
     if result["interpolation"] != "OFF":
         raise ValueError("当前版本缺失数据插值仅支持 OFF。")
     if not isinstance(result["output"], str) or not result["output"].strip():
