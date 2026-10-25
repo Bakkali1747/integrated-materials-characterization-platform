@@ -61,14 +61,20 @@ class MainWindow(QMainWindow):
         brand_hint = QLabel("LOCAL SCIENTIFIC ANALYSIS")
         brand_hint.setObjectName("brandSub")
         brand_hint.setContentsMargins(12, 0, 0, 8)
+        self.mode_hint = brand_hint
         side_layout.addWidget(brand_hint)
+        work = QLabel("工作区")
+        work.setObjectName("sideSection")
+        side_layout.addWidget(work)
         self.navigation = QListWidget()
         self.navigation.setObjectName("nav")
+        self.navigation.setFrameShape(QFrame.Shape.NoFrame)
         self.navigation.addItems(["首页", "单样品分析", "S参数分析", "多样品比较", "批量分析", "结果查看", "设置"])
         side_layout.addWidget(self.navigation, 1)
         footer = QLabel("本地计算 · 数据不外传\n缺失数据插值 OFF")
         footer.setObjectName("sideFooter")
         footer.setWordWrap(True)
+        self.side_footer = footer
         side_layout.addWidget(footer)
         layout.addWidget(sidebar)
         self.stack = QStackedWidget()
@@ -135,6 +141,10 @@ class MainWindow(QMainWindow):
         """日常模式隐藏 S 参数/比较/批量与高级参数；完整模式全部恢复。"""
         simple = mode != "full"
         self.ui_mode = mode
+        self.mode_hint.setText("DAILY WORKSPACE" if simple else "FULL WORKSPACE")
+        self.side_footer.setText(
+            ("日常模式 · 仅 ε/μ / 历史 / 设置" if simple else "完整功能 · 含 S 参数 / 比较 / 批量")
+            + "\n本地计算 · 数据不外传")
         for row in (2, 3, 4):
             self.navigation.setRowHidden(row, simple)
         self.home.set_simple(simple)

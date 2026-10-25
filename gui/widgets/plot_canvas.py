@@ -1,5 +1,5 @@
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QComboBox, QLabel, QVBoxLayout, QWidget
 
 from gui.controllers.science_figures import NAMES
@@ -21,7 +21,10 @@ class PlotCanvas(QWidget):
         self.selector = QComboBox()
         self.layout.addWidget(self.selector)
         self.placeholder = QLabel("导入 ε/μ 数据并点击开始分析\n图形将在此显示")
-        self.layout.addWidget(self.placeholder)
+        self.placeholder.setObjectName("plotPlaceholder")
+        self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.placeholder.setWordWrap(True)
+        self.layout.addWidget(self.placeholder, 1)
         self.figures, self.canvas, self.toolbar = {}, None, None
         self.selector.currentIndexChanged.connect(self.show_selected)
 

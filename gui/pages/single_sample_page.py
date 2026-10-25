@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from gui.controllers.analysis_controller import SUPPORTED, Cancelled, analyze_request, inspect_file
 from gui.controllers.export_controller import export_figure
 from gui.widgets.file_selector import FileSelector
+from gui.widgets.metric_strip import MetricStrip
 from gui.widgets.parameter_panel import ParameterPanel
 from gui.widgets.plot_canvas import PlotCanvas
 from gui.widgets.sample_table import SampleTable
@@ -57,7 +58,7 @@ class SingleSamplePage(QWidget):
         self.badge = StatusBadge("PENDING", "MEMP 可计算 / 待商业软件验证；虚部定义尚未交叉确认。所有真实结果待验证。")
         layout.addWidget(self.badge)
         self.hint = QLabel("")
-        self.hint.setObjectName("pageSubtitle")
+        self.hint.setObjectName("sourceHint")
         self.hint.setWordWrap(True)
         self.hint.hide()
         layout.addWidget(self.hint)
@@ -80,10 +81,18 @@ class SingleSamplePage(QWidget):
         self.summary = QTextBrowser()
         self.summary.setMinimumWidth(245)
         self.summary.setPlainText("尚无分析结果。\n\n原始点保持不变；缺失数据不插值。")
+        self.metrics = MetricStrip()
+        summary_panel = QWidget()
+        summary_layout = QVBoxLayout(summary_panel)
+        summary_layout.setContentsMargins(0, 0, 0, 0)
+        summary_layout.setSpacing(8)
+        summary_layout.addWidget(self.metrics)
+        summary_layout.addWidget(self.summary, 1)
+        summary_panel.setMinimumWidth(300)
         split.addWidget(scroll)
         split.addWidget(self.plot)
-        split.addWidget(self.summary)
-        split.setSizes([315, 590, 270])
+        split.addWidget(summary_panel)
+        split.setSizes([315, 560, 330])
         layout.addWidget(split, 1)
         self.thickness_slider = QSlider(Qt.Orientation.Horizontal)
         self.thickness_slider.setTracking(False)
@@ -298,6 +307,7 @@ class SingleSamplePage(QWidget):
             self.show_error(f"参数输入无效：{error}")
             return
         self.analysis_started.emit(request)
+        self.metrics.hide()
         self._launch(lambda progress, cancelled: analyze_request(request, progress, cancelled), self._analyzed)
 
     def set_simple(self, simple):
@@ -355,6 +365,7 @@ class SingleSamplePage(QWidget):
                       "已从计算矩阵选取代表厚度，并加入首个 RLmin / 最大 EAB 厚度；图类型列表中查看。"]
         from gui.controllers.quality_controller import quality_text
         self.summary.setPlainText(quality_text(record) + "\n\n" + "\n".join(lines))
+        self.metrics.update_from_summary(summary, record)
         self.message.emit("分析完成；结果待外部验证。")
         self.analysis_completed.emit(result)
 

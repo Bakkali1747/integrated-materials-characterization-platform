@@ -26,8 +26,10 @@ class ParameterPanel(QWidget):
         form = QFormLayout(self)
         self.form = form
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setVerticalSpacing(7)
         self.name = QLineEdit()
         form.addRow("样品名称", self.name)
+        self._add_section("厚度与判定")
         self.fields = {}
         for key, label, value, minimum, maximum, decimals in [
             ("thickness_min", "厚度下限 (mm)", 1, .0001, 1000, 4),
@@ -47,6 +49,7 @@ class ParameterPanel(QWidget):
             form.addRow(label, box)
         self.crop = QCheckBox("裁选频率范围（仅保留原始点）")
         form.addRow(self.crop)
+        self.advanced_section = self._add_section("高级选项")
         self.eab_crossing = QComboBox()
         self.eab_crossing.addItem("linear：相邻点线性交点（默认）", "linear")
         self.eab_crossing.addItem("sample：只用达标采样点首尾", "sample")
@@ -65,6 +68,7 @@ class ParameterPanel(QWidget):
         self.figure_preset.addItem("期刊单栏（3.5 in）", "single")
         self.figure_preset.addItem("期刊双栏（7.0 in）", "double")
         form.addRow("论文图尺寸", self.figure_preset)
+        self._add_section("数据解析")
         self.unit = QComboBox()
         self.unit.addItems(["GHz", "MHz", "kHz", "Hz"])
         form.addRow("文件频率单位", self.unit)
@@ -96,14 +100,23 @@ class ParameterPanel(QWidget):
         self.reuse = QCheckBox("批量复用相同源 + 配置的已完成运行")
         self.reuse.setToolTip("仅在批量页生效；匹配源 SHA-256 与数值配置，复用目录记录在 reused_from。")
         form.addRow(self.reuse)
+        self._add_section("输出")
         self.output = QLineEdit(str(ROOT / "output"))
         form.addRow("输出目录", self.output)
         choose = QPushButton("选择输出目录")
         choose.clicked.connect(self.choose_output)
         form.addRow(choose)
         hint = QLabel("缺失数据插值：OFF\n内部复数：ε′−jε″，μ′−jμ″\nEAB：−10 dB 最大连续带宽\n阈值交点：沿用核心 linear 方法\n修改参数后需点击开始分析。")
+        hint.setObjectName("formHint")
         hint.setWordWrap(True)
         form.addRow(hint)
+
+    def _add_section(self, text):
+        """在长表单中加入分组标题，便于扫读。"""
+        label = QLabel(text)
+        label.setObjectName("formSection")
+        self.form.addRow(label)
+        return label
 
     def choose_output(self):
         """选择输出根目录；每次运行仍创建独立子目录。"""
@@ -136,6 +149,7 @@ class ParameterPanel(QWidget):
 
     def set_simple(self, simple):
         """日常模式隐藏高级参数行；完整模式恢复。"""
+        self.advanced_section.setVisible(not simple)
         advanced = (self.eab_crossing, self.quarter_orders, self.impedance_tolerance,
                     self.sheet, self.header_row, self.mapping, self.mapping_button,
                     self.quick_preview, self.reuse, self.figure_preset)

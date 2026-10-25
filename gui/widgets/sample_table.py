@@ -1,5 +1,5 @@
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
+from PySide6.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem
 
 
 class SampleTable(QTreeWidget):
@@ -15,6 +15,11 @@ class SampleTable(QTreeWidget):
         self.groups, self.sources = {}, {}
         self.setSortingEnabled(True)
         self.currentItemChanged.connect(self._selected)
+        self.empty = QLabel("尚未导入数据\n拖入 .memp，或点击上方“选择文件”", self.viewport())
+        self.empty.setObjectName("tableEmpty")
+        self.empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._refresh_empty()
 
     def add_source(self, info):
         """输入解析摘要；更新唯一来源，绝不将 S 参数当作 ε/μ。"""
@@ -36,7 +41,21 @@ class SampleTable(QTreeWidget):
         item.setData(0, Qt.ItemDataRole.UserRole, info)
         self.groups[key].setExpanded(True)
         self.resizeColumnToContents(0)
+        self._refresh_empty()
         return item
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.empty.setGeometry(self.viewport().rect())
+
+    def clear(self):
+        super().clear()
+        self.groups, self.sources = {}, {}
+        self._refresh_empty()
+
+    def _refresh_empty(self):
+        self.empty.setGeometry(self.viewport().rect())
+        self.empty.setVisible(self.topLevelItemCount() == 0)
 
     def _selected(self, item, previous):
         """只选择真实文件子节点；组节点不会继承上一次文件。"""
