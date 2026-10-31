@@ -4,6 +4,17 @@ version = "0.12.0"
 description = "Local, traceable microwave absorption analysis"
 requires-python = ">=3.11"
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# 项目根目录下同时存在多个顶层包与 run_*.py 脚本，禁用自动发现，显式声明可安装内容。
+[tool.setuptools]
+py-modules = ["application_paths"]
+
+[tool.setuptools.packages.find]
+include = ["core*", "export*", "gui*", "plotting*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
