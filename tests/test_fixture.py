@@ -2,6 +2,7 @@ from pathlib import Path
 
 from core.fixture import find_fixture_for_sample, read_fixture
 from gui.controllers.analysis_controller import AnalysisRequest, filename_hints, inspect_file, request_with_fixture_thickness
+from gui.controllers.comparison_controller import compare_requests
 from gui.main_window import MainWindow
 
 SDAT_HEADER = """<Cluster>
@@ -84,6 +85,27 @@ def test_batch_request_uses_fixture_thickness(tmp_path):
     adjusted = request_with_fixture_thickness(request)
     assert adjusted.curve_thickness == 2.12
     assert adjusted.source_hints["fixture"]["thickness_mm"] == 2.12
+
+
+def test_comparison_accepts_memp_with_different_fixture_thickness(tmp_path):
+    """两个 .memp 的 sdat 夹具厚度不同（2.12 / 3.50 mm）时仍可直接比较。"""
+    first, second = tmp_path / "a", tmp_path / "b"
+    first.mkdir()
+    second.mkdir()
+    memp_a, _ = make_files(first)
+    memp_b, sdat_b = make_files(second)
+    sdat_b.write_text(SDAT_HEADER.replace("<Val>2.12</Val>", "<Val>3.50</Val>")
+                      + "2.000000\t-0.19\t-0.25\n18.000000\t-0.5\t0.1\n", encoding="gbk")
+    shared = dict(output=tmp_path / "out", thickness_max=1.1, thickness_step=.1, dpi=25)
+    request_a = request_with_fixture_thickness(AnalysisRequest(memp_a, "A", **shared))
+    request_b = request_with_fixture_thickness(AnalysisRequest(memp_b, "B", **shared))
+    assert (request_a.curve_thickness, request_b.curve_thickness) == (2.12, 3.5)
+    result = compare_requests([request_a, request_b], tmp_path / "out", lambda *args: None, lambda: False, dpi=25)
+    comparison = result["record"]["comparison"]
+    assert result["record"]["success_count"] == 2
+    assert comparison["identical_curve_thickness"] is False
+    assert comparison["curve_thickness_mm_per_sample"] == {"A": 2.12, "B": 3.5}
+    assert result["curve_thicknesses"] == {"A": 2.12, "B": 3.5}
 
 
 def test_single_page_autofills_fixture_thickness(qtbot, tmp_path):

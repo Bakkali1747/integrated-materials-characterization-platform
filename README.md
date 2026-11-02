@@ -1,4 +1,4 @@
-﻿# 本地微波吸收分析软件
+# 本地微波吸收分析软件
 
 新增 [图片配套 Origin 数据](docs/origin_data.md)：图片内容不变，每张输出图片旁额外保存独立 CSV 数据与坐标说明。
 
@@ -131,7 +131,7 @@ tm = n c / [4 f sqrt(|εr||μr|)]             m，展示/导出为 mm
 .\.venv\Scripts\python.exe run_batch.py --manifest sample_data/batch_example.json
 ```
 
-第二条使用明确标注为合成数据的两个样品。公共厚度/频率/阈值设置、逐样品列映射与命名、选择比较样品、输出说明及失败处理见 `docs/batch_usage.md`。含未映射 sdat 的批次会如实标为部分失败，不能视为所有格式都已成功解析。
+第二条使用明确标注为合成数据的两个样品。公共扫描/频率/阈值设置、逐样品列映射与命名、选择比较样品、输出说明及失败处理见 `docs/batch_usage.md`。各样品的曲线厚度可不同（`.memp` 取同目录夹具 D），比较记录保存 `curve_thickness_mm_per_sample`。含未映射 sdat 的批次会如实标为部分失败，不能视为所有格式都已成功解析。
 
 ## 候选 S 参数入口
 

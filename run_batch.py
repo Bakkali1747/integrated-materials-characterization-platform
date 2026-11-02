@@ -52,15 +52,17 @@ def summarize_sample(name, directory):
     return summary, minima, bands, record
 
 
-def compare_runs(runs, directory, style, curve_thickness, *, figure_callback=None):
+def compare_runs(runs, directory, style, curve_thickness=None, *, figure_callback=None):
     """输入选中的 name/运行目录；验证来源哈希后输出十项原生采样曲线和长表 CSV。
 
+    每个样品使用其记录中的指定曲线厚度，因此不同厚度的样品可直接比较；
+    curve_thickness 仅为兼容旧调用保留，实际厚度以运行记录为准。
     不对不同频率网格自动对齐，不混用每个样品各自最佳厚度的 RL。
     """
     if not runs:
         return {"status": "no_successful_samples", "samples": []}
     directory.mkdir()
-    loaded, grids = [], []
+    loaded, grids, thicknesses = [], [], {}
     for name, run in runs:
         record = json.loads((run/"analysis_record.json").read_text(encoding="utf-8"))
         tables = {}
@@ -69,11 +71,11 @@ def compare_runs(runs, directory, style, curve_thickness, *, figure_callback=Non
             if hashlib.sha256(raw).hexdigest() != record["artifacts_sha256"][filename]:
                 raise ValueError(f"{name} 的 {filename} 在分析后已改变，拒绝比较。")
             tables[filename] = pd.read_csv(run/filename)
-        if record["configuration"]["curve_thickness_mm"] != curve_thickness:
-            raise ValueError("RL 比较必须使用相同指定厚度。")
+        thicknesses[name] = float(record["configuration"]["curve_thickness_mm"])
         loaded.append((name, tables))
         grids.append(tables["loss_parameters.csv"].frequency_ghz.to_numpy())
     same_grid = all(np.array_equal(grids[0], grid) for grid in grids[1:])
+    same_thickness = len(set(thicknesses.values())) == 1
     for metric in PARAMETERS:
         series, long_rows = [], []
         for name, tables in loaded:
@@ -86,19 +88,26 @@ def compare_runs(runs, directory, style, curve_thickness, *, figure_callback=Non
             series.append({"name": name, "x": frame[axis].to_numpy(), "y": frame[metric].to_numpy()})
             long_rows.append(pd.DataFrame({"sample": name, axis: frame[axis], metric: frame[metric]}))
         escape_formula_cells(pd.concat(long_rows, ignore_index=True)).to_csv(directory/f"{metric}.csv", index=False)
-        fig = plot_comparison(series, metric, style, curve_thickness)
+        fig = plot_comparison(series, metric, style, thicknesses)
         fig.suptitle("PENDING VALIDATION", fontsize=10, color="0.35")
         save_figure_bundle(fig, directory/f"{metric}.png", dpi=style.dpi, bbox_inches="tight")
         if figure_callback is not None:
             figure_callback(metric, fig)
         plt.close(fig)
-    notes = ["所有曲线保留各自原始采样点；不插值、不外推。", "RL 比较使用公共指定厚度；EAB 使用 −10 dB 最大连续频段。",
+    notes = ["所有曲线保留各自原始采样点；不插值、不外推。",
+             "RL 比较使用公共指定厚度；EAB 使用 −10 dB 最大连续频段。" if same_thickness else
+             "RL 曲线使用各样品自身指定厚度；EAB 使用 −10 dB 最大连续频段。",
              "虚部定义和商业软件对照状态见每个样品记录。"]
+    if not same_thickness:
+        notes.insert(1, "[KNOWN] 所选样品厚度不同：RLmin 与 EAB 不是同一厚度下的横向排名；"
+                        "逐样品厚度见 curve_thickness_mm_per_sample。")
     if not same_grid:
         notes.append("[KNOWN] 所选样品频率网格不同；各自频率范围下的 RLmin/EAB 不能视为同条件优劣排名。")
     (directory/"comparison_notes.txt").write_text("\n".join(notes)+"\n", encoding="utf-8")
     return {"status": "success", "samples": [name for name, _ in runs], "identical_frequency_grids": same_grid,
-            "interpolation": "OFF", "curve_thickness_mm": curve_thickness, "notes": notes}
+            "interpolation": "OFF", "identical_curve_thickness": same_thickness,
+            "curve_thickness_mm": next(iter(thicknesses.values())) if same_thickness else None,
+            "curve_thickness_mm_per_sample": thicknesses, "notes": notes}
 
 
 def _reuse_configuration(options, parser):
@@ -196,7 +205,7 @@ def analyze_batch(entries, *, output="output", analysis_options=None, compare_sa
             save_batch_record(directory, record)
         run_lookup = dict(successful)
         record["comparison"] = compare_runs([(name, run_lookup[name]) for name in selected if name in run_lookup],
-                                              directory/"comparison", style, options.get("curve_thickness", 2.))
+                                              directory/"comparison", style)
         record["comparison"]["excluded_failed_samples"] = [name for name in selected if name not in {n for n, _ in successful}]
         provenance[0:0] = [["Batch", "Analysis date", record["analysis_date"]], ["Batch", "Software version", __version__],
                             ["Batch", "Git commit", record["git"]["commit"]], ["Batch", "Git dirty", record["git"]["dirty"]],

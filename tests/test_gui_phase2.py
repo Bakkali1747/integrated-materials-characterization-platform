@@ -144,10 +144,34 @@ def test_check_selection_controls(qtbot, scientific):
     page.check_all(True); assert page.selected_requests()[0].name == "one"
 
 
-def test_reject_mixed_curve_thickness(scientific, tmp_path):
-    base = AnalysisRequest(Path(scientific["record"]["raw_file"]), "one")
-    with pytest.raises(ValueError, match="共同指定厚度"):
-        compare_requests([base, replace(base, name="two", curve_thickness=3)], tmp_path, lambda *a: None, lambda: False)
+def test_mixed_curve_thickness_is_comparable(scientific, tmp_path):
+    """不同厚度的样品同样可比：各自保留自身厚度，并在记录与图标题中标注。"""
+    base = AnalysisRequest(Path(scientific["record"]["raw_file"]), "one", thickness_max=1.1, thickness_step=.1, dpi=25)
+    result = compare_requests([base, replace(base, name="two", curve_thickness=3)], tmp_path,
+                              lambda *a: None, lambda: False, dpi=25)
+    comparison = result["record"]["comparison"]
+    assert comparison["identical_curve_thickness"] is False
+    assert comparison["curve_thickness_mm"] is None
+    assert comparison["curve_thickness_mm_per_sample"] == {"one": 2.0, "two": 3.0}
+    assert any("厚度不同" in note for note in comparison["notes"])
+    assert result["curve_thicknesses"] == {"one": 2.0, "two": 3.0}
+    assert (result["directory"] / "figures" / "rl_db.png").is_file()
+    assert result["record"]["success_count"] == 2
+
+
+def test_uniform_curve_thickness_records_common_value(comparison):
+    record = comparison["record"]["comparison"]
+    assert record["identical_curve_thickness"] is True
+    assert record["curve_thickness_mm"] == 2
+    assert set(record["curve_thickness_mm_per_sample"].values()) == {2}
+
+
+def test_thickness_caption_for_common_and_per_sample():
+    from plotting.comparison_plot import thickness_caption
+    assert thickness_caption(2) == "Common thickness: 2 mm"
+    assert thickness_caption({"a": 2, "b": 2}) == "Common thickness: 2 mm"
+    caption = thickness_caption({"a": 2, "b": 3})
+    assert caption.startswith("Thickness per sample:") and "a 2 mm" in caption and "b 3 mm" in caption
 
 
 def test_different_grid_preserved(scientific, tmp_path):

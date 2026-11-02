@@ -21,11 +21,13 @@ def comparison_hashes(directory):
 
 
 def compare_requests(requests, output, progress, cancelled, dpi=600):
-    """输入明确勾选样品及共同配置；保存独立运行、十项图、汇总和全部并列明细。"""
+    """输入明确勾选样品及共同配置；保存独立运行、十项图、汇总和全部并列明细。
+
+    扫描网格、频率裁选与阈值必须一致；各样品可保留自身曲线厚度（不同厚度允许比较，
+    结果按各自记录标注），不插值、不把不同厚度当成同条件排名。
+    """
     if not requests or len({r.name for r in requests}) != len(requests):
         raise ValueError("请选择样品并为每个样品使用唯一名称。")
-    if len({r.curve_thickness for r in requests}) != 1:
-        raise ValueError("RL 比较必须使用共同指定厚度。")
     if len({(r.thickness_min, r.thickness_max, r.thickness_step, r.frequency_min, r.frequency_max, r.threshold) for r in requests}) != 1:
         raise ValueError("比较必须使用相同扫描配置；不同原始频率网格可保留并单独提示。")
     directory = output / "comparisons" / (datetime.now().strftime("%Y%m%dT%H%M%S") + "_" + uuid.uuid4().hex[:10])
@@ -64,15 +66,17 @@ def compare_requests(requests, output, progress, cancelled, dpi=600):
             if cancelled():
                 raise Cancelled("比较已取消，已输出的图保留。")
             progress(70 + len(figures) * 2, f"十项比较：{key}")
-        record["comparison"] = compare_runs(runs, directory / "figures", PlotStyle(dpi=dpi), requests[0].curve_thickness, figure_callback=collect)
+        record["comparison"] = compare_runs(runs, directory / "figures", PlotStyle(dpi=dpi), figure_callback=collect)
         escape_formula_cells(pd.DataFrame(summaries)).to_csv(directory / "summary.csv", index=False)
         export_batch_excel(directory / "summary.xlsx", summaries, minima, bands, provenance + [["Comparison", "Note", n] for n in record["comparison"].get("notes", [])])
         record.update(status="success" if len(runs) == len(requests) else "partial_failure" if runs else "failed",
                       success_count=len(runs), failure_count=len(requests)-len(runs), artifacts_sha256=comparison_hashes(directory))
         save_batch_record(directory, record)
         progress(100, "比较完成")
+        comparison = record.get("comparison") or {}
         return {"directory": directory, "record": record, "figures": figures, "summaries": summaries, "minima": minima,
-                "bands": bands, "curve_thickness": requests[0].curve_thickness}
+                "bands": bands, "curve_thickness": comparison.get("curve_thickness_mm"),
+                "curve_thicknesses": comparison.get("curve_thickness_mm_per_sample", {})}
     except Exception as error:
         from plotting.style import plt
         for fig in figures.values():
