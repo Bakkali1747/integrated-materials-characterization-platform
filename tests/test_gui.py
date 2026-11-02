@@ -13,6 +13,7 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from gui.controllers.analysis_controller import AnalysisRequest, Cancelled, analyze_request, inspect_file
 from gui.controllers.export_controller import export_figure
 from gui.main_window import MainWindow
+from gui.pages.single_sample_page import SingleSamplePage
 from gui.widgets.file_selector import FileSelector
 from gui.widgets.parameter_panel import ParameterPanel
 from gui.widgets.sample_table import SampleTable
@@ -409,3 +410,63 @@ def test_empty_dialog_keeps_state(qtbot, monkeypatch):
 def test_toolbar_save_cannot_bypass_export():
     from gui.widgets.plot_canvas import ScientificToolbar
     assert all(item[0] != "Save" for item in ScientificToolbar.toolitems)
+
+
+def test_switching_source_restores_completed_snapshot(qtbot, source, tmp_path, result):
+    """分析 A 后切到未分析的 B 再切回 A：直接还原 A 的原快照，不重新计算。"""
+    page = SingleSamplePage()
+    qtbot.addWidget(page)
+    info = inspect_file(source, {"imaginary_convention": "loss"})
+    other = dict(info, path=tmp_path / "second.csv", sample="second")
+    page.select_source(info)
+    page._analyzed(result)
+    page._set_busy(False)
+    assert page.completed is result
+    page.select_source(other)
+    assert page.completed is None
+    assert "尚未生成单样品分析结果" in page.summary.toPlainText()
+    assert page.plot.selector.count() == 0 and page.plot.current_figure() is None
+    page.select_source(info)
+    assert page.completed is result
+    assert page.completed["directory"] == result["directory"]
+    assert "Maximum EAB" in page.summary.toPlainText()
+    assert page.plot.selector.count() == len(result["figures"])
+    assert page.start_button.isEnabled()
+    assert page.open_button.isEnabled()
+
+
+def test_restoring_snapshot_does_not_recompute_or_reemit(qtbot, source, tmp_path, result):
+    """切回来只读缓存：不启动后台任务，也不再次广播完成信号。"""
+    page = SingleSamplePage()
+    qtbot.addWidget(page)
+    info = inspect_file(source, {"imaginary_convention": "loss"})
+    events = []
+    page.analysis_completed.connect(events.append)
+    page.select_source(info)
+    page._analyzed(result)
+    page._set_busy(False)
+    page.select_source(dict(info, path=tmp_path / "other.csv"))
+    page.select_source(info)
+    assert events == [result]
+    assert page.worker is None
+    assert page.snapshots[page._snapshot_key(source)]["result"] is result
+
+
+def test_snapshot_keeps_explored_thickness_when_switching(qtbot, source, tmp_path, result):
+    """滑块探索状态随快照保存；切到别的文件再切回来仍指向同一快照。"""
+    from types import SimpleNamespace
+
+    page = SingleSamplePage()
+    qtbot.addWidget(page)
+    info = inspect_file(source, {"imaginary_convention": "loss"})
+    page.select_source(info)
+    page._analyzed(result)
+    page._set_busy(False)
+    explored = {"curve": SimpleNamespace(thickness_mm=[1.0])}
+    page.explored = explored
+    page._sync_view()
+    page.select_source(dict(info, path=tmp_path / "other.csv"))
+    assert page.explored is None
+    page.select_source(info)
+    assert page.explored is explored
+

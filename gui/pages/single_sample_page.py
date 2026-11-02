@@ -42,6 +42,8 @@ class SingleSamplePage(QWidget):
         self.worker = None
         self.selected = None
         self.completed = None
+        self.snapshots = {}
+        self.snapshot_key = None
         self.explored = None
         self.saved_data_paths = {}
         self.dynamic_preview_key = None
@@ -244,7 +246,7 @@ class SingleSamplePage(QWidget):
         self.message.emit(f"导入完成：{len(infos)} 个文件")
 
     def select_source(self, info):
-        """更新来源提示；既有摘要仍明确属于上一次已完成运行。"""
+        """切换来源：已分析过的文件直接还原原快照，未分析的清空摘要。"""
         self.selected = info
         if info is None:
             self.source_label.setText("文件来源：请选择一个文件子项")
@@ -260,6 +262,38 @@ class SingleSamplePage(QWidget):
                 self.show_error(f"样品：{info['sample']}\n解析失败：{info['error']}\n请检查原始文件和列映射；调整后重新导入。")
             else:
                 self.error.hide()
+        key = self._snapshot_key(info["path"]) if info else ""
+        if key and key in self.snapshots:
+            self._show_result(key)
+        elif info is not None:
+            self._show_empty()
+        self._set_busy(self.busy)
+
+    @staticmethod
+    def _snapshot_key(path):
+        """以解析后的源文件路径为键；同一文件重新分析时覆盖为最新一次运行。"""
+        return str(Path(path).resolve()) if path else ""
+
+    def _sync_view(self):
+        """把滑块探索、按需预览与导出路径写回快照，切回来时仍可继续用。"""
+        entry = self.snapshots.get(self.snapshot_key or "")
+        if entry is not None:
+            entry.update(saved=self.saved_data_paths, explored=self.explored, preview=self.dynamic_preview_key)
+
+    def _show_empty(self):
+        """清空上一份结果，避免把别的样品摘要误当成当前文件。"""
+        self.snapshot_key = None
+        self.completed = None
+        self.explored = None
+        self.saved_data_paths = {}
+        self.dynamic_preview_key = None
+        self.plot.set_placeholder("导入 ε/μ 数据并点击开始分析\n图形将在此显示")
+        self.plot.set_figures({})
+        self.metrics.hide()
+        self.thickness_slider.setEnabled(False)
+        self.thickness_summary.setText("")
+        self.summary.setPlainText("该文件尚未生成单样品分析结果。\n\n点击“开始分析”生成 RL 曲线、二维图与 EAB 摘要；"
+                                  "已分析过的文件切回时会直接显示原快照，不重新计算。")
         self._set_busy(self.busy)
 
     def _apply_filename_hints(self, info):
@@ -315,11 +349,23 @@ class SingleSamplePage(QWidget):
         self.reference_button.setVisible(not simple)
 
     def _analyzed(self, result):
-        """展示核心摘要，保留所有并列最小值和分离频带。"""
-        self.completed = result
-        self.explored = None
-        self.saved_data_paths = {}
-        self.dynamic_preview_key = None
+        """登记该来源的快照并展示；切回同一文件时不再重新计算。"""
+        key = self._snapshot_key(result["record"].get("raw_file")) or f"result-{id(result)}"
+        self.snapshots[key] = {"result": result, "saved": {}, "explored": None, "preview": None}
+        self._show_result(key, fresh=True)
+        self.analysis_completed.emit(result)
+
+    def _show_result(self, key, fresh=False):
+        """展示一份已完成快照；只读结果对象，不重新计算。"""
+        entry = self.snapshots.get(key)
+        if entry is None:
+            return
+        self.snapshot_key = key
+        self.completed = entry["result"]
+        self.saved_data_paths = entry["saved"]
+        self.explored = entry["explored"]
+        self.dynamic_preview_key = entry["preview"]
+        result = entry["result"]
         record, summary = result["record"], result["summary"]
         grid = np.asarray(result["result"].thickness_mm, dtype=float)
         target = float(record["configuration"]["curve_thickness_mm"])
@@ -366,8 +412,11 @@ class SingleSamplePage(QWidget):
         from gui.controllers.quality_controller import quality_text
         self.summary.setPlainText(quality_text(record) + "\n\n" + "\n".join(lines))
         self.metrics.update_from_summary(summary, record)
-        self.message.emit("分析完成；结果待外部验证。")
-        self.analysis_completed.emit(result)
+        if fresh:
+            self.message.emit("分析完成；结果待外部验证。")
+        else:
+            self.message.emit("已恢复该文件上一次完成的分析；未重新计算。")
+        self._set_busy(self.busy)
 
     def preview_figure(self, key):
         if not self.completed: return
@@ -385,6 +434,7 @@ class SingleSamplePage(QWidget):
             if previous and previous!=key: self.plot.figures[previous]=None
             self.dynamic_preview_key=key
             self.plot.install_preview(key,fig)
+            self._sync_view()
         self._launch(operation,ready)
 
     def explore_thickness(self, index):
@@ -406,6 +456,7 @@ class SingleSamplePage(QWidget):
             self.plot.figures["RL_curve"]=fig
             self.plot.selector.setCurrentIndex(self.plot.selector.findData("RL_curve"))
             self.plot.show_selected()
+            self._sync_view()
         self._launch(operation,ready)
 
     def open_plot_data(self):
@@ -474,6 +525,7 @@ class SingleSamplePage(QWidget):
         def saved(path):
             index=(key,float(completed["curve"].thickness_mm[0])) if key=="RL_curve" and self.explored is not None else key
             self.saved_data_paths[index]=path.with_name(path.name+".data")
+            self._sync_view()
             self.message.emit(f"图片及独立数据已保存：{path}")
         self._launch(lambda progress, cancelled: export_figure(completed, key, path, progress, cancelled, dpi=dpi),
                      saved)
