@@ -9,12 +9,14 @@ from run_maintenance import main
 
 
 def make_run(root, sample, run="20260101T000000_abcd", status="success",
-             date="2026-01-01T00:00:00+08:00", size=1024, raw_sha256="a" * 64, configuration=None):
+             date="2026-01-01T00:00:00+08:00", size=1024, raw_sha256="a" * 64,
+             configuration=None, cache_version=1):
     directory = root / sample / run
     directory.mkdir(parents=True)
     (directory / "analysis_record.json").write_text(json.dumps(
         {"sample": sample, "run_id": run, "status": status, "analysis_date": date,
-         "raw_sha256": raw_sha256, "configuration": configuration or {"thickness_step_mm": .1}}),
+         "raw_sha256": raw_sha256, "analysis_cache_version": cache_version,
+         "configuration": configuration or {"thickness_step_mm": .1}}),
         encoding="utf-8")
     (directory / "RL_matrix.csv").write_bytes(b"x" * size)
     return directory
@@ -87,6 +89,12 @@ def test_find_duplicates_keeps_newest(tmp_path):
     assert len(groups) == 1 and groups[0]["count"] == 2
     assert groups[0]["keep"].endswith("20260201T000000_new")
     assert groups[0]["reclaimable_bytes"] >= 100
+
+
+def test_find_duplicates_keeps_engine_versions_separate(tmp_path):
+    make_run(tmp_path, "s", run="old_engine", cache_version=1)
+    make_run(tmp_path, "s", run="new_engine", cache_version=2)
+    assert find_duplicates(scan_runs(tmp_path)) == []
 
 
 def test_delete_dry_run_then_recycle(tmp_path):

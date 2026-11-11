@@ -168,6 +168,21 @@ def test_preview_reads_first_rows_only_for_display(tmp_path,extension):
     assert len(preview_table(path))==6
 
 
+def test_excel_preview_uses_selected_sheet_and_header_row(tmp_path):
+    path=tmp_path/"report.xlsx"
+    columns=["f","e1","e2","m1","m2"]
+    with pd.ExcelWriter(path) as writer:
+        pd.DataFrame([["wrong"],[1]]).to_excel(writer,index=False,header=False,sheet_name="cover")
+        pd.DataFrame([["Report title",None,None,None,None],columns,
+                      [2,4,.1,1,.2],[3,5,.2,1.1,.3]]).to_excel(
+                          writer,index=False,header=False,sheet_name="measurements")
+    table=preview_table(path,sheet="measurements",header_row=1)
+    assert list(table.columns)==columns
+    assert table.iloc[0].tolist()==[2,4,.1,1,.2]
+    with pytest.raises(ValueError,match="未找到工作表"):
+        preview_table(path,sheet="missing",header_row=1)
+
+
 def test_reference_exact_match_and_unmatched(completed):
     result=completed["result"]
     table=pd.DataFrame({"frequency_ghz":[2.,3.,3.1],"thickness_mm":[1.,1.,1.],

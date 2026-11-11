@@ -7,6 +7,7 @@ import pytest
 from openpyxl import load_workbook
 
 from core.batch import discover_samples, load_manifest, validate_entries
+from core.reuse import ANALYSIS_CACHE_VERSION
 from core.sdat_inspector import inspect_sdat
 from export.excel_export import export_batch_excel
 from plotting.style import PlotStyle
@@ -64,7 +65,19 @@ def test_batch_reuse_matches_hash_and_configuration(tmp_path, frame):
                            style=PlotStyle(dpi=35), reuse=True)
     record = json.loads((second/"batch_record.json").read_text(encoding="utf-8"))
     first_record = json.loads((first/"batch_record.json").read_text(encoding="utf-8"))
-    assert Path(record["members"][0]["reused_from"]) == Path(first_record["members"][0]["run_directory"])
+    cached = Path(first_record["members"][0]["run_directory"])
+    cached_record_path = cached / "analysis_record.json"
+    cached_record = json.loads(cached_record_path.read_text(encoding="utf-8"))
+    assert cached_record["analysis_cache_version"] == ANALYSIS_CACHE_VERSION
+    assert Path(record["members"][0]["reused_from"]) == cached
+
+    cached_record.pop("analysis_cache_version")
+    cached_record_path.write_text(json.dumps(cached_record), encoding="utf-8")
+    third = analyze_batch(entries, output=tmp_path/"output", analysis_options=options,
+                          style=PlotStyle(dpi=35), reuse=True)
+    third_record = json.loads((third/"batch_record.json").read_text(encoding="utf-8"))
+    assert "reused_from" not in third_record["members"][0]
+    assert Path(third_record["members"][0]["run_directory"]) != cached
 
 
 def test_batch_partial_failure_native_grids_and_workbook(tmp_path, frame):

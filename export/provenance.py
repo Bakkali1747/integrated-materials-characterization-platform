@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from core import __version__
+from core.reuse import ANALYSIS_CACHE_VERSION
 
 
 def json_safe(value):
@@ -76,6 +77,7 @@ def new_run(output_root, sample_name, raw_path, configuration):
     state = git_state()
     record = {"sample": sample_name, "analysis_date": now.isoformat(timespec="seconds"),
               "run_id": run_id, "software_version": __version__, "git": state,
+              "analysis_cache_version": ANALYSIS_CACHE_VERSION,
               "build_state": "modified" if state["dirty"] is True else "clean" if state["dirty"] is False else "unavailable",
               "raw_file": str(Path(raw_path).resolve()), "configuration": configuration,
               "missing_data_interpolation": "OFF", "complex_convention": "ε'-jε'', μ'-jμ''",
@@ -128,6 +130,7 @@ def write_record(directory, record):
     (Path(directory) / "analysis_record.json").write_text(text + "\n", encoding="utf-8")
     fields = {"Sample": record["sample"], "Analysis date": record["analysis_date"],
               "Software version": record["software_version"], "Build state": record["build_state"],
+              "Analysis cache version": record.get("analysis_cache_version", "unavailable"),
               "Git commit": record["git"]["commit"], "Raw file": record["raw_file"],
               "Raw SHA-256": record.get("raw_sha256", "unavailable"),
               "Frequency range (GHz)": record.get("frequency_range_ghz", "unavailable"),

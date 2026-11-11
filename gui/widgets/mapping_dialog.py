@@ -24,7 +24,7 @@ def configure_mapping(page, panel):
     if page.busy: return
     path,_=QFileDialog.getOpenFileName(page,"选择用于映射的示例文件","","表格 (*.csv *.xlsx *.xls)")
     if not path: return
-    try: initial=panel.parser_options()
+    try: initial=panel.parser_options(path)
     except ValueError: initial={}
     from gui.controllers.import_controller import preview_table
     def ready(table):
@@ -36,13 +36,14 @@ def configure_mapping(page, panel):
             panel.convention.setCurrentIndex(panel.convention.findData(value["imaginary_convention"]))
             page.message.emit("映射已应用；请重新导入文件或扫描目录以检查。")
     launch=getattr(page,"_launch",None) or page.launch
-    launch(lambda p,c:preview_table(path),ready)
+    launch(lambda p,c:preview_table(path, sheet=initial.get("sheet", 0),
+                                    header_row=initial.get("header_row", 0)),ready)
 
 
 class MappingDialog(QDialog):
     def __init__(self, table, initial, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("CSV / Excel 列映射与预览（第一工作表）")
+        self.setWindowTitle("CSV / Excel 列映射与预览（当前解析设置）")
         self.resize(800,520)
         layout=QVBoxLayout(self); form=QFormLayout(); self.fields={}
         for name in COLUMNS:

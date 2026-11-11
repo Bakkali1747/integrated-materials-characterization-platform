@@ -52,6 +52,7 @@ def scan_runs(root):
                      "sample": info.get("sample"), "run_id": info.get("run_id"),
                      "status": info.get("status", "unknown"), "analysis_date": info.get("analysis_date"),
                      "raw_sha256": info.get("raw_sha256"),
+                     "analysis_cache_version": info.get("analysis_cache_version"),
                      "configuration_key": configuration_key(info.get("configuration", {})),
                      "size_bytes": size})
     return runs
@@ -64,13 +65,15 @@ def find_duplicates(runs):
         raw = run.get("raw_sha256")
         if not raw or raw == "unavailable":
             continue
-        groups[(run.get("sample"), raw, run.get("configuration_key"))].append(run)
+        groups[(run.get("sample"), raw, run.get("analysis_cache_version"),
+                run.get("configuration_key"))].append(run)
     duplicates = []
-    for (sample, raw, config), items in groups.items():
+    for (sample, raw, cache_version, config), items in groups.items():
         if len(items) < 2:
             continue
         ordered = sorted(items, key=lambda item: str(item.get("analysis_date") or ""), reverse=True)
-        duplicates.append({"sample": sample, "raw_sha256": raw, "configuration_key": config,
+        duplicates.append({"sample": sample, "raw_sha256": raw,
+                           "analysis_cache_version": cache_version, "configuration_key": config,
                            "count": len(ordered), "keep": ordered[0]["relative"],
                            "runs": [item["relative"] for item in ordered[1:]],
                            "reclaimable_bytes": sum(int(item.get("size_bytes", 0)) for item in ordered[1:])})

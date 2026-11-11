@@ -14,6 +14,7 @@ from core.eab import absorption_bands, cumulative_frequency_coverage, summarize_
 from core.electromagnetic import make_complex
 from core.models import COLUMNS, RLResult, SampleData
 from core.parser import read_sample
+from core.reuse import ANALYSIS_CACHE_VERSION
 from core.rl_calculator import minimum_points, scan_rl
 from core.units import thickness_grid
 from export.provenance import json_safe, new_run, write_record
@@ -69,6 +70,8 @@ def load_completed_run(directory):
     record = json.loads((directory / "analysis_record.json").read_text(encoding="utf-8"))
     if record.get("status") != "success":
         raise ValueError("只能复用成功的运行。")
+    if record.get("analysis_cache_version") != ANALYSIS_CACHE_VERSION:
+        raise ValueError("运行由不同分析引擎版本生成，必须重新计算。")
     summary = json.loads((directory / "summary.json").read_text(encoding="utf-8"))
     for key in ("global_minima", "standard_eab", "selected_threshold_bandwidth", "curve_minima"):
         if key not in summary:
