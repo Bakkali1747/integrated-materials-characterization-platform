@@ -16,10 +16,10 @@
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.14.0 基线提交：发布后回填（见安装目录 `_internal/build_info.json`）
+- v0.14.0 基线提交：`e33b501`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
 - 版本标签：`v0.14.0`
 - Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.14.0-win64.exe`
-- 安装程序 SHA-256：每次正式构建后重新计算，并随 GitHub Release 一起提供
+- 安装程序 SHA-256：`cee7344ed03da0e4a4a35327559663095a2ff9fc4b6f80d6fd48959f3dd9644f`；同时见 `output/releases/SHA256SUMS-0.14.0.txt`
 - 当前已验证测试：`364 passed`
 - Ruff：通过
 - 源码版和冻结安装版自检：通过（冻结版自检包含工作区自动登记 AnalysisRun）
