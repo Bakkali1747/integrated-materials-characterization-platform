@@ -16,10 +16,10 @@
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.20.0 基线提交：构建后回填（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
+- v0.20.0 基线提交：`afd7209`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
 - 版本标签：`v0.20.0`
 - Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.20.0-win64.exe`
-- 安装程序 SHA-256：构建后回填；同时写入 `output/releases/SHA256SUMS-0.20.0.txt`
+- 安装程序 SHA-256：`8707bae64351975069e9e41086396b9d4a28ff19796380b119d42c59e0861027`；同时见 `output/releases/SHA256SUMS-0.20.0.txt`
 - 当前已验证测试：`420 passed`
 - Ruff：通过
 - 源码版和冻结安装版自检：通过（电磁、S 参数、VSM、XRD 四类工作区自动登记）
