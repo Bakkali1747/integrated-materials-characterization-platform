@@ -16,10 +16,10 @@
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.22.0 基线提交：构建后回填（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
+- v0.22.0 基线提交：`a0d9599`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
 - 版本标签：`v0.22.0`
 - Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.22.0-win64.exe`
-- 安装程序 SHA-256：构建后回填；同时写入 `output/releases/SHA256SUMS-0.22.0.txt`
+- 安装程序 SHA-256：`59efc373221af7910a26cf304dbb1c91d414c24d95f167ad325b099379df0a18`；同时见 `output/releases/SHA256SUMS-0.22.0.txt`
 - 当前已验证测试：`426 passed`
 - Ruff：通过
 - 源码版和冻结安装版自检：通过（电磁、S 参数、VSM、XRD 四类工作区自动登记）
