@@ -2,9 +2,9 @@
 
 开发者接手、架构、发布流程和后续路线见 [项目交接文档](docs/PROJECT_HANDOFF.md)。
 
-当前为 v0.13.0（PRD Phase A）。本版本在 v0.12.2 电磁分析能力上新增以样品为中心的本地工作区：Project、Sample、Measurement、AnalysisRun 四类实体，项目/样品界面，以及原始测试文件路径和 SHA-256 追溯。原始文件不会被复制、移动或修改。使用说明见 [项目与样品工作区](docs/workspace.md)。
+当前为 v0.14.0（PRD Phase B）。v0.13.0 建立了以样品为中心的本地工作区（Project、Sample、Measurement、AnalysisRun）；v0.14.0 把电磁分析接入该工作区：从 Electromagnetic 测试发起分析，成功后自动追加 AnalysisRun，并登记结果目录、图片与导出文件引用。原始文件不会被复制、移动或修改。使用说明见 [项目与样品工作区](docs/workspace.md)。
 
-产品将按 PRD 分阶段演进：Phase B 把现有电磁分析挂载到 Sample/Measurement；Phase C 增加 VSM；Phase D 增加 XRD。当前版本不会把尚未实现或尚未验证的 VSM/XRD 结果标记为可用。
+产品将按 PRD 分阶段演进：Phase C 增加 VSM；Phase D 增加 XRD。当前版本不会把尚未实现或尚未验证的 VSM/XRD 结果标记为可用。
 
 新增 [图片配套 Origin 数据](docs/origin_data.md)：图片内容不变，每张输出图片旁额外保存独立 CSV 数据与坐标说明。
 
@@ -12,7 +12,7 @@
 
 现有电磁科学核心保持不变：分析缓存加入引擎版本，算法或解析语义升级后旧结果自动重算；Excel 列映射预览与正式解析使用相同工作表和表头行。默认“日常模式”，自动从同目录 S 参数夹具读取厚度 D；见 [界面主题](docs/ui_theme.md) 与 [日常流程](docs/daily_workflow.md)。CLI 与 GUI 共用分析服务，摘要、累计覆盖、验证状态和 `thickness_summary.csv` 由同一段代码生成；真实数据虚部定义与商业软件对照仍待外部验证。
 
-无需 Python 的客户端：`output/releases/MaterialsCharacterizationPlatform-Setup-0.13.0-win64.exe`，见 [客户端使用说明](docs/client_usage.md)。发布构建来自干净提交；具体提交见安装目录 `_internal/build_info.json`。
+无需 Python 的客户端：`output/releases/MaterialsCharacterizationPlatform-Setup-0.14.0-win64.exe`，见 [客户端使用说明](docs/client_usage.md)。发布构建来自干净提交；具体提交见安装目录 `_internal/build_info.json`。
 
 启动桌面界面：`.\.venv\Scripts\python.exe run_gui.py`。新环境安装 `requirements-gui.txt`。具体步骤和阶段边界见 [GUI 使用说明](docs/gui_usage.md)。
 
@@ -126,9 +126,9 @@ tm = n c / [4 f sqrt(|εr||μr|)]             m，展示/导出为 mm
 
 ## 当前验收范围
 
-原有 75 项自动测试保持通过，S 参数新增 31 项；当前全量测试为 336 项，覆盖 Phase 1–2、共享分析管线、批次失败隔离、不同网格比较、清单覆盖、并列汇总、Excel 数值类型与表头行、候选 sdat 映射、UTF-8 编码、`-inf` 极限交点、图片溯源和 GUI 交互回归。测试通过不代表已确认厂商格式或商业软件一致性。
+原有 75 项自动测试保持通过，S 参数新增 31 项；当前全量测试为 364 项，覆盖 Phase 1–2、共享分析管线、批次失败隔离、不同网格比较、清单覆盖、并列汇总、Excel 数值类型与表头行、候选 sdat 映射、UTF-8 编码、`-inf` 极限交点、图片溯源、GUI 交互回归，以及 Phase B 的测试 → 分析 → AnalysisRun 登记闭环。测试通过不代表已确认厂商格式或商业软件一致性。
 
-本阶段没有 GUI、单样品完整 Excel 报告或自动插值。ε′/μ′ 不存在跨材料通用的“明显异常”上限；当前报告负值、近零值与非有限值，不把未经校准的数值阈值伪装成物理判据。
+桌面 GUI 自 v0.6.0 起持续提供；单样品完整 Excel 报告与自动插值仍不在当前范围。ε′/μ′ 不存在跨材料通用的“明显异常”上限；当前报告负值、近零值与非有限值，不把未经校准的数值阈值伪装成物理判据。
 
 ## Phase 3 批量入口
 

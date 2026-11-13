@@ -1,10 +1,19 @@
-"""Phase A 项目、样品、测试和分析运行工作区。"""
+"""Phase A 项目、样品、测试和分析运行工作区，以及 Phase B 电磁分析接入。"""
 
 import hashlib
+import json
+from pathlib import Path
 
 import pytest
 
-from core.common import MeasurementType, ValidationStatus, WorkspaceRepository
+from core.common import (
+    MeasurementType,
+    ValidationStatus,
+    WorkspaceRepository,
+    analysis_run_status,
+    link_electromagnetic_run,
+)
+from gui.main_window import MainWindow
 from gui.pages.workspace_page import WorkspacePage
 
 
@@ -116,3 +125,184 @@ def test_workspace_page_creates_project_sample_and_measurement(qtbot, tmp_path):
     assert page.samples.item(0, 2).text() == "! PENDING"
     assert page.measurements.rowCount() == 1
     assert measurement.measurement_type == "electromagnetic"
+
+
+def _completed_run(directory: Path, source: Path, *, warnings=(), status="success") -> dict:
+    """构造一份已完成运行的记录与最小产物，只用于登记逻辑，不代表真实数值结果。"""
+    directory.mkdir(parents=True, exist_ok=True)
+    figures = directory / "figures"
+    figures.mkdir()
+    (figures / "RL_curve.png").write_bytes(b"synthetic png")
+    (directory / "summary.json").write_text("{}", encoding="utf-8")
+    (directory / "thickness_summary.csv").write_text("thickness_mm\n1\n", encoding="utf-8")
+    return {
+        "status": status,
+        "sample": source.stem,
+        "raw_file": str(source.resolve()),
+        "raw_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "software_version": "0.14.0",
+        "analysis_cache_version": 1,
+        "git": {"commit": "abc123", "dirty": False},
+        "configuration": {"thickness_step_mm": 0.1, "rl_threshold_db": -10.0,
+                          "curve_thickness_mm": 1.0},
+        "warnings": list(warnings),
+    }
+
+
+def _electromagnetic_sample(repository, tmp_path):
+    source = tmp_path / "FCIP-03.csv"
+    source.write_text("frequency_ghz,eps_real,eps_imag,mu_real,mu_imag\n2,4,.2,1.5,.3\n4,4.2,.3,1.3,.5\n",
+                      encoding="utf-8")
+    project = repository.create_project("Phase B")
+    sample = repository.create_sample(project.project_id, "FCIP", sample_id="FCIP-03")
+    measurement = repository.add_measurement(project.project_id, sample.sample_id, "electromagnetic", [source])
+    return source, project, sample, measurement
+
+
+def test_analysis_run_status_never_becomes_validated():
+    assert analysis_run_status({"status": "success", "warnings": []}) is ValidationStatus.PENDING
+    assert analysis_run_status({"status": "success", "warnings": ["[KNOWN] 边界"]}) is ValidationStatus.WARNING
+    with pytest.raises(ValueError, match="成功完成"):
+        analysis_run_status({"status": "failed", "warnings": []})
+
+
+def test_link_electromagnetic_run_records_refs_and_measurement_status(tmp_path):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    source, project, sample, measurement = _electromagnetic_sample(repository, tmp_path)
+    directory = tmp_path / "output" / "synthetic" / "run-1"
+    record = _completed_run(directory, source, warnings=["[KNOWN] 网格最小值触及边界"])
+
+    run = link_electromagnetic_run(repository, project.project_id, sample.sample_id,
+                                   measurement.measurement_id, directory, record)
+
+    assert run.analysis_type == "electromagnetic_rl"
+    assert run.validation_status == ValidationStatus.WARNING.value
+    assert run.parameters["thickness_step_mm"] == 0.1
+    assert run.result_refs[0] == str(directory.resolve())
+    assert any(ref.endswith("summary.json") for ref in run.result_refs)
+    assert run.plot_refs == [str((directory / "figures" / "RL_curve.png").resolve())]
+    assert run.errors == [] and run.warnings == ["[KNOWN] 网格最小值触及边界"]
+    assert run.source_sha256 == measurement.source_sha256
+
+    reloaded = repository.get_measurement(project.project_id, sample.sample_id, measurement.measurement_id)
+    assert reloaded.validation_status == ValidationStatus.WARNING.value
+    assert [item.analysis_run_id for item in repository.list_analysis_runs(
+        project.project_id, sample.sample_id, measurement.measurement_id)] == [run.analysis_run_id]
+
+
+def test_link_rejects_changed_source_hash_without_writing_run(tmp_path):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    source, project, sample, measurement = _electromagnetic_sample(repository, tmp_path)
+    directory = tmp_path / "run"
+    record = _completed_run(directory, source)
+    record["raw_sha256"] = "0" * 64
+
+    with pytest.raises(ValueError, match="SHA-256"):
+        link_electromagnetic_run(repository, project.project_id, sample.sample_id,
+                                 measurement.measurement_id, directory, record)
+    assert repository.list_analysis_runs(project.project_id, sample.sample_id, measurement.measurement_id) == []
+    assert repository.get_measurement(project.project_id, sample.sample_id,
+                                      measurement.measurement_id).validation_status == "PENDING"
+
+
+def test_link_rejects_non_electromagnetic_measurement(tmp_path):
+    source = tmp_path / "pattern.txt"
+    source.write_text("10,1\n", encoding="utf-8")
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    project = repository.create_project("XRD")
+    sample = repository.create_sample(project.project_id, "A", sample_id="A")
+    measurement = repository.add_measurement(project.project_id, sample.sample_id, "xrd", [source])
+    directory = tmp_path / "run"
+    record = _completed_run(directory, source)
+
+    with pytest.raises(ValueError, match="Electromagnetic"):
+        link_electromagnetic_run(repository, project.project_id, sample.sample_id,
+                                 measurement.measurement_id, directory, record)
+
+
+def test_workspace_page_starts_and_records_electromagnetic_analysis(qtbot, tmp_path, frame):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    page = WorkspacePage(repository)
+    qtbot.addWidget(page)
+    project = page.create_project("Phase B GUI")
+    sample = page.create_sample("FCIP", sample_id="FCIP-04")
+    source = tmp_path / "FCIP-04.csv"
+    frame.to_csv(source, index=False)
+    measurement = page.add_measurement("electromagnetic", [source])
+
+    with qtbot.waitSignal(page.analysis_requested) as signal:
+        request = page.start_measurement_analysis()
+    assert request == signal.args[0]
+    assert request["measurement_id"] == measurement.measurement_id
+    assert Path(request["path"]) == source.resolve()
+
+    first = tmp_path / "run-1"
+    page.record_electromagnetic_run(project.project_id, sample.sample_id, measurement.measurement_id,
+                                    first, _completed_run(first, source))
+    assert page.runs.rowCount() == 1
+    assert page.samples.item(0, 2).text() == "! PENDING"
+    assert repository.get_measurement(project.project_id, sample.sample_id,
+                                      measurement.measurement_id).validation_status == "PENDING"
+
+    second = tmp_path / "run-2"
+    page.record_electromagnetic_run(project.project_id, sample.sample_id, measurement.measurement_id,
+                                    second, _completed_run(second, source, warnings=["[KNOWN] 边界"]))
+    assert page.runs.rowCount() == 2
+    assert page.samples.item(0, 2).text() == "⚠ Warning"
+    assert repository.get_measurement(project.project_id, sample.sample_id,
+                                      measurement.measurement_id).validation_status == "WARNING"
+
+    exported = tmp_path / "export" / "RL_curve.png"
+    exported.parent.mkdir()
+    exported.write_bytes(b"png")
+    updated = page.record_exports(second, [exported])
+    assert updated is not None and str(exported.resolve()) in updated.export_refs
+    assert str(exported.resolve()) in repository.find_analysis_run_by_result_directory(second)[2].export_refs
+
+
+def test_main_window_registers_completed_workspace_analysis(qtbot, tmp_path, frame):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    window = MainWindow(workspace_repository=repository)
+    qtbot.addWidget(window)
+    project = window.workspace.create_project("Phase B 主窗口")
+    sample = window.workspace.create_sample("FCIP", sample_id="FCIP-05")
+    source = tmp_path / "FCIP-05.csv"
+    frame.to_csv(source, index=False)
+    measurement = window.workspace.add_measurement("electromagnetic", [source])
+
+    window.workspace.start_measurement_analysis()
+    assert window.navigation.currentRow() == 2
+    assert window.pending_workspace_analysis["measurement_id"] == measurement.measurement_id
+    qtbot.waitUntil(lambda: not window.single.busy, timeout=30000)
+
+    directory = tmp_path / "run"
+    run = window.record_workspace_analysis({"directory": directory, "record": _completed_run(directory, source)})
+    assert run is not None
+    assert window.pending_workspace_analysis is None
+    assert repository.list_analysis_runs(project.project_id, sample.sample_id,
+                                         measurement.measurement_id)[0].analysis_run_id == run.analysis_run_id
+
+    window.pending_workspace_analysis = {"project_id": project.project_id, "sample_id": sample.sample_id,
+                                         "measurement_id": measurement.measurement_id,
+                                         "path": str(tmp_path / "other.csv")}
+    other = tmp_path / "other-run"
+    assert window.record_workspace_analysis(
+        {"directory": other, "record": _completed_run(other, source)}) is None
+    assert window.pending_workspace_analysis is None
+
+
+def test_workspace_analysis_run_export_refs_are_deduplicated(tmp_path):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    source, project, sample, measurement = _electromagnetic_sample(repository, tmp_path)
+    directory = tmp_path / "run"
+    run = link_electromagnetic_run(repository, project.project_id, sample.sample_id,
+                                   measurement.measurement_id, directory, _completed_run(directory, source))
+    image = tmp_path / "image.png"
+    image.write_bytes(b"png")
+    repository.add_analysis_run_export_refs(project.project_id, sample.sample_id, run.analysis_run_id, [image, image])
+    reloaded = repository.list_analysis_runs(project.project_id, sample.sample_id, measurement.measurement_id)[0]
+    assert reloaded.export_refs == [str(image.resolve())]
+    assert json.loads((tmp_path / "workspace" / "projects" / project.project_id / "samples" / sample.sample_id
+                       / "analyses" / f"{run.analysis_run_id}.json").read_text(encoding="utf-8"))["export_refs"] == [
+        str(image.resolve())]
+

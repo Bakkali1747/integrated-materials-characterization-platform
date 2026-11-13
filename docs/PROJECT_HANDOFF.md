@@ -1,28 +1,28 @@
 # 综合材料表征分析平台项目交接文档
 
 最后核对日期：2026-11-13  
-当前版本：`v0.13.0`  
-当前阶段：PRD Phase A  
+当前版本：`v0.14.0`  
+当前阶段：PRD Phase B  
 主仓库：<https://github.com/Bakkali1747/integrated-materials-characterization-platform>
 
 ## 1. 项目定位
 
 本项目是面向个人科研使用的 Windows 本地桌面应用，目标是以真实样品为中心，统一管理电磁、VSM、XRD 等材料表征数据、分析运行和科研产物。
 
-项目由原“微波吸收分析软件”演进而来。v0.13.0 在完整保留原有电磁分析能力的基础上，新增项目、样品、测试和分析运行四类平台实体，作为后续扩展 VSM、XRD 的公共基础。
+项目由原“微波吸收分析软件”演进而来。v0.13.0 在完整保留原有电磁分析能力的基础上，新增项目、样品、测试和分析运行四类平台实体。v0.14.0（Phase B）把现有电磁分析接入该工作区：从 Electromagnetic 测试发起分析，完成后追加 AnalysisRun，并登记结果、图片与导出文件引用。
 
 应用采用新的名称、安装目录、本地数据目录和安装器 AppId，可以和旧版微波吸收分析软件并存，不会覆盖旧应用。
 
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.13.0 基线提交：`08ff7d5`
-- 版本标签：`v0.13.0`
-- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.13.0-win64.exe`
+- v0.14.0 基线提交：发布后回填（见安装目录 `_internal/build_info.json`）
+- 版本标签：`v0.14.0`
+- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.14.0-win64.exe`
 - 安装程序 SHA-256：每次正式构建后重新计算，并随 GitHub Release 一起提供
-- 当前已验证测试：`357 passed`
+- 当前已验证测试：`364 passed`
 - Ruff：通过
-- 源码版和冻结安装版自检：通过
+- 源码版和冻结安装版自检：通过（冻结版自检包含工作区自动登记 AnalysisRun）
 - 已验证产物：17 类科研图、报告、S 参数、比较、批量、历史和导出
 
 原仓库保留为历史远程 `legacy-origin`：
@@ -53,6 +53,11 @@ Project
 - 重新核验来源文件并区分 `PASS`、`CHANGED`、`MISSING`。
 - 以追加方式保存 AnalysisRun，避免新分析覆盖历史运行。
 - 使用统一科研状态：`VALIDATED`、`PENDING`、`WARNING`、`NOT COMPUTABLE`、`UNSUPPORTED`、`FAILED`。
+- v0.14.0 起可从 Electromagnetic Measurement 发起分析；分析成功后自动追加 AnalysisRun。
+- AnalysisRun 保存结果目录、数值产物、图片与显式导出文件的绝对路径引用；同一测试重跑不覆盖历史。
+- 开始分析与登记运行前两次核验源文件 SHA-256；不一致时拒绝执行或拒绝登记。
+- 样品详情可查看该测试的全部历史运行、打开结果目录，或只读载入已保存结果（不重新计算）。
+- 分析结论只映射为 `PENDING` 或 `WARNING`，绝不自动生成 `VALIDATED`。
 
 工作区使用 UTF-8 JSON 文件，不依赖数据库。所有 JSON 写入使用临时文件原子替换。
 
@@ -94,19 +99,14 @@ Project
 
 ## 4. 尚未完成的需求
 
-### 4.1 Phase B：电磁分析接入工作区
+### 4.1 Phase B 已完成，后续增强
 
-这是下一阶段最高优先级。当前工作区和原有电磁分析入口已经同时存在，但尚未完全连通。
+v0.14.0 已打通 Measurement → 电磁分析 → AnalysisRun → 结果引用 → 历史查看的闭环，原 Phase B 七步全部实现。以下属于后续增强，不阻塞 Phase C：
 
-建议实现顺序：
-
-1. 从 Sample 详情选择 Electromagnetic Measurement。
-2. 由 Measurement 创建分析请求并调用现有 `analysis_service.py`。
-3. 分析成功后创建 AnalysisRun。
-4. 把结果目录、图片和导出文件写入 `result_refs`、`plot_refs`、`export_refs`。
-5. 在样品详情中显示该 Measurement 的历史运行。
-6. 支持从工作区打开已有运行结果。
-7. 根据运行结果更新样品表中的电磁状态，但不得自动把未经验证的数据标成 `VALIDATED`。
+- 实测 `.sdat` 的 S 参数运行尚未挂载到 Measurement；目前仍使用独立 S 参数页面。
+- 单样品报告和历史页导出尚未自动追加到 AnalysisRun 的 `export_refs`，只有从电磁页面保存图片会登记。
+- 工作区尚无 schema 版本、备份恢复和项目导入/导出界面。
+- 运行表暂不支持按状态筛选或删除；AnalysisRun 保持追加语义。
 
 ### 4.2 Phase C：VSM
 
@@ -115,6 +115,7 @@ Project
 ### 4.3 Phase D：XRD
 
 当前只能登记 XRD 原始文件。尚需实现格式解析、峰检测、峰标注、晶相匹配、晶粒尺寸、绘图、导出和报告。
+
 
 ## 5. 技术栈
 
@@ -141,7 +142,7 @@ Project
 
 ```text
 core/
-├── common/                 Project、Sample、Measurement、AnalysisRun
+├── common/                 Project、Sample、Measurement、AnalysisRun、分析运行登记
 ├── analysis_service.py     GUI/CLI 共用分析服务
 ├── parser.py               CSV/Excel/MEMP 解析
 ├── validation.py           数据质量检查
@@ -175,10 +176,11 @@ run_*.py                    GUI 和 CLI 入口
 2. `docs/architecture.md`
 3. `docs/workspace.md`
 4. `core/common/workspace.py`
-5. `core/analysis_service.py`
-6. `gui/pages/workspace_page.py`
-7. `gui/pages/single_sample_page.py`
-8. `VERSIONING.md`
+5. `core/common/analysis_link.py`
+6. `core/analysis_service.py`
+7. `gui/pages/workspace_page.py`
+8. `gui/pages/single_sample_page.py`
+9. `VERSIONING.md`
 
 ## 7. 开发与测试
 
@@ -254,9 +256,10 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 
 ## 10. 当前技术债和风险
 
-- 工作区尚无正式 `schema_version` 和数据迁移框架。
-- 工作区尚无多人并发写入控制。
+- 工作区尚无正式 `schema_version` 和数据迁移框架（Phase B 已把该事项列为下一步）。
+- 工作区尚无多人并发写入控制；AnalysisRun 只追加，导出引用为原地追加。
 - 尚无工作区备份、恢复和项目导入/导出界面。
+- S 参数运行、单样品报告导出尚未自动登记到 AnalysisRun。
 - README 的部分历史章节仍保留旧测试数量或旧阶段描述，需要后续统一清理。
 - Windows 安装程序没有商业代码签名，可能显示“未知发布者”。
 - 冻结版已在当前开发机验收，但仍需在另一台干净 Windows 电脑验证兼容性。
@@ -280,9 +283,8 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 
 1. 克隆新仓库并确认 `origin` 指向新项目。
 2. 安装锁定依赖，运行 Ruff 和全量测试。
-3. 启动 GUI，分别体验工作区和现有电磁分析流程。
+3. 启动 GUI，体验工作区“测试 → 电磁分析 → AnalysisRun → 载入结果”闭环。
 4. 阅读 PRD、架构文档和本交接文档。
-5. 优先完成 Phase B 的 Measurement → AnalysisRun 闭环。
-6. 增加工作区 schema 版本与迁移测试。
-7. 完成 Phase B 验收后再开发 VSM，最后开发 XRD。
+5. 增加工作区 schema 版本与迁移测试，并补上 S 参数运行挂载。
+6. 开发 Phase C（VSM），最后开发 Phase D（XRD）。
 

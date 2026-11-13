@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -26,7 +27,16 @@ from PySide6.QtWidgets import (
 )
 
 from application_paths import user_data_root
-from core.common import MeasurementType, WorkspaceRepository
+from core.common import (
+    MeasurementType,
+    ValidationStatus,
+    WorkspaceRepository,
+    analysis_type_label,
+    link_electromagnetic_run,
+)
+
+# 阶段 B 只把 ε/μ 数据接入电磁分析；.sdat 属于独立 S 参数入口。
+ELECTROMAGNETIC_SOURCES = {".csv", ".xlsx", ".xls", ".memp"}
 
 
 def _tags(text: str) -> list[str]:
@@ -145,12 +155,17 @@ class _MeasurementDialog(QDialog):
 
 class WorkspacePage(QWidget):
     message = Signal(str)
+    analysis_requested = Signal(object)
+    run_load_requested = Signal(object)
 
     def __init__(self, repository: WorkspaceRepository | None = None, parent=None):
         super().__init__(parent)
         self.repository = repository or WorkspaceRepository(user_data_root() / "workspace")
         self.current_project_id: str | None = None
         self.current_sample_id: str | None = None
+        self.current_measurement_id: str | None = None
+        self.current_run_id: str | None = None
+        self.current_runs: dict = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 14, 8, 8)
         layout.setSpacing(10)
@@ -208,8 +223,45 @@ class WorkspacePage(QWidget):
         self.measurements = QTableWidget(0, 5)
         self.measurements.setHorizontalHeaderLabels(["测试类型", "原始文件", "状态", "仪器", "测试日期"])
         self._configure_table(self.measurements)
+        self.measurements.itemSelectionChanged.connect(self._measurement_selected)
         self.measurements.horizontalHeader().setStretchLastSection(True)
         sample_layout.addWidget(self.measurements, 1)
+
+        measurement_actions = QHBoxLayout()
+        self.verify_button = QPushButton("核验来源文件")
+        self.verify_button.clicked.connect(self.verify_selected_measurement)
+        self.analyze_button = QPushButton("用此测试开始电磁分析")
+        self.analyze_button.setObjectName("primaryButton")
+        self.analyze_button.clicked.connect(self.start_measurement_analysis)
+        measurement_actions.addWidget(self.verify_button)
+        measurement_actions.addWidget(self.analyze_button)
+        measurement_actions.addStretch()
+        sample_layout.addLayout(measurement_actions)
+        self.verify_result = QLabel("")
+        self.verify_result.setObjectName("formHint")
+        self.verify_result.setWordWrap(True)
+        sample_layout.addWidget(self.verify_result)
+
+        runs_title = QLabel("分析运行（追加记录；同一测试重新分析不会覆盖历史）")
+        runs_title.setObjectName("sectionTitle")
+        sample_layout.addWidget(runs_title)
+        self.runs = QTableWidget(0, 5)
+        self.runs.setHorizontalHeaderLabels(["完成时间", "类型", "状态", "警告", "结果目录"])
+        self._configure_table(self.runs)
+        self.runs.itemSelectionChanged.connect(self._run_selected)
+        self.runs.cellDoubleClicked.connect(lambda row, column: self.open_selected_run())
+        self.runs.horizontalHeader().setStretchLastSection(True)
+        sample_layout.addWidget(self.runs, 1)
+        run_actions = QHBoxLayout()
+        self.open_run_button = QPushButton("打开运行结果目录")
+        self.open_run_button.clicked.connect(self.open_selected_run)
+        self.load_run_button = QPushButton("载入运行结果")
+        self.load_run_button.setToolTip("读取该运行已保存的数值结果与摘要，不重新计算。")
+        self.load_run_button.clicked.connect(self.load_selected_run)
+        run_actions.addWidget(self.open_run_button)
+        run_actions.addWidget(self.load_run_button)
+        run_actions.addStretch()
+        sample_layout.addLayout(run_actions)
         tabs.addTab(sample_tab, "样品详情")
         self.tabs = tabs
         split.addWidget(tabs)
@@ -253,8 +305,14 @@ class WorkspacePage(QWidget):
             self.sample_summary.setPlainText("请选择样品。")
             self.samples.setRowCount(0)
             self.measurements.setRowCount(0)
+            self.runs.setRowCount(0)
+            self.current_measurement_id = None
+            self.current_run_id = None
+            self.verify_result.setText("")
             self.new_sample_button.setEnabled(False)
             self.measurement_button.setEnabled(False)
+            self._refresh_measurement_actions()
+            self._refresh_run_actions()
 
     def _project_selected(self):
         identifier = self._selected_id(self.projects)
@@ -299,7 +357,13 @@ class WorkspacePage(QWidget):
         else:
             self.sample_summary.setPlainText("该项目尚无样品。")
             self.measurements.setRowCount(0)
+            self.runs.setRowCount(0)
+            self.current_measurement_id = None
+            self.current_run_id = None
+            self.current_runs = {}
             self.measurement_button.setEnabled(False)
+            self._refresh_measurement_actions()
+            self._refresh_run_actions()
 
     def _sample_selected(self):
         identifier = self._selected_id(self.samples)
@@ -316,14 +380,199 @@ class WorkspacePage(QWidget):
             f"处理条件：{sample.processing_conditions or '未填写'}\n备注：{sample.notes or '无'}")
         measurements = self.repository.list_measurements(project_id, sample_id)
         self.measurements.setRowCount(len(measurements))
+        selected_row = -1
         for row, measurement in enumerate(measurements):
             label = MeasurementType.coerce(measurement.measurement_type).label
-            self.measurements.setItem(row, 0, QTableWidgetItem(label))
+            item = QTableWidgetItem(label)
+            item.setData(Qt.ItemDataRole.UserRole, measurement.measurement_id)
+            self.measurements.setItem(row, 0, item)
             self.measurements.setItem(row, 1, QTableWidgetItem("\n".join(measurement.source_files)))
             self.measurements.setItem(row, 2, QTableWidgetItem(measurement.validation_status.replace("_", " ")))
             self.measurements.setItem(row, 3, QTableWidgetItem(measurement.instrument or "未填写"))
             self.measurements.setItem(row, 4, QTableWidgetItem(measurement.measurement_date or "未填写"))
+            if measurement.measurement_id == self.current_measurement_id:
+                selected_row = row
         self.measurement_button.setEnabled(True)
+        if selected_row < 0 and measurements:
+            selected_row = 0
+        if selected_row >= 0:
+            self.measurements.selectRow(selected_row)
+            self.current_measurement_id = measurements[selected_row].measurement_id
+            self._load_runs(measurements[selected_row].measurement_id)
+        else:
+            self.current_measurement_id = None
+            self.runs.setRowCount(0)
+            self.current_run_id = None
+            self.current_runs = {}
+        self._refresh_measurement_actions()
+        self._refresh_run_actions()
+
+    def _selected_measurement(self):
+        if not (self.current_project_id and self.current_sample_id and self.current_measurement_id):
+            return None
+        try:
+            return self.repository.get_measurement(self.current_project_id, self.current_sample_id,
+                                                   self.current_measurement_id)
+        except KeyError:
+            return None
+
+    def _selected_run(self):
+        return self.current_runs.get(self.current_run_id or "")
+
+    def _measurement_selected(self):
+        identifier = self._selected_id(self.measurements)
+        if identifier and self.current_project_id and self.current_sample_id:
+            self.current_measurement_id = identifier
+            self.verify_result.setText("")
+            self._load_runs(identifier)
+            self._refresh_measurement_actions()
+
+    def _run_selected(self):
+        identifier = self._selected_id(self.runs)
+        self.current_run_id = identifier
+        self._refresh_run_actions()
+
+    def _load_runs(self, measurement_id: str):
+        self.current_runs = {}
+        self.current_run_id = None
+        runs = self.repository.list_analysis_runs(self.current_project_id, self.current_sample_id, measurement_id) \
+            if self.current_project_id and self.current_sample_id else []
+        self.current_runs = {run.analysis_run_id: run for run in runs}
+        self.runs.setRowCount(len(runs))
+        for row, run in enumerate(runs):
+            created = QTableWidgetItem(run.created_at)
+            created.setData(Qt.ItemDataRole.UserRole, run.analysis_run_id)
+            created.setToolTip("\n".join(run.warnings) if run.warnings else "无警告")
+            self.runs.setItem(row, 0, created)
+            self.runs.setItem(row, 1, QTableWidgetItem(analysis_type_label(run.analysis_type)))
+            self.runs.setItem(row, 2, QTableWidgetItem(ValidationStatus.coerce(run.validation_status).label))
+            self.runs.setItem(row, 3, QTableWidgetItem(str(len(run.warnings))))
+            directory = run.result_refs[0] if run.result_refs else "未记录结果目录"
+            self.runs.setItem(row, 4, QTableWidgetItem(directory))
+        if runs:
+            self.runs.selectRow(0)
+            self.current_run_id = runs[0].analysis_run_id
+        self._refresh_run_actions()
+
+    def _refresh_measurement_actions(self):
+        measurement = self._selected_measurement()
+        electromagnetic = (measurement is not None
+                          and MeasurementType.coerce(measurement.measurement_type) is MeasurementType.ELECTROMAGNETIC)
+        self.verify_button.setEnabled(measurement is not None)
+        self.analyze_button.setEnabled(electromagnetic)
+        self.analyze_button.setToolTip(
+            "从该测试创建一次电磁分析，完成后自动登记 AnalysisRun。"
+            if electromagnetic else "阶段 B 只接入 Electromagnetic 测试；VSM 与 XRD 分析尚未实现。")
+
+    def _refresh_run_actions(self):
+        run = self._selected_run()
+        available = bool(run and run.result_refs and Path(run.result_refs[0]).is_dir())
+        self.open_run_button.setEnabled(available)
+        self.load_run_button.setEnabled(available)
+
+    def verify_selected_measurement(self):
+        measurement = self._selected_measurement()
+        if measurement is None:
+            self.message.emit("请先选择一个测试。")
+            return {}
+        states = self.repository.verify_measurement_sources(
+            self.current_project_id, self.current_sample_id, measurement.measurement_id)
+        counts = {state: list(states.values()).count(state) for state in ("PASS", "CHANGED", "MISSING")}
+        self.verify_result.setText(
+            f"来源核验：PASS {counts['PASS']} · CHANGED {counts['CHANGED']} · MISSING {counts['MISSING']}；"
+            "原始文件未被修改。")
+        self.message.emit(self.verify_result.text())
+        return states
+
+    def start_measurement_analysis(self):
+        """把选中的电磁测试交给电磁性能页面；不在此处复制任何科学计算。"""
+        measurement = self._selected_measurement()
+        if measurement is None:
+            self.message.emit("请先选择一个测试。")
+            return None
+        if MeasurementType.coerce(measurement.measurement_type) is not MeasurementType.ELECTROMAGNETIC:
+            self.message.emit("只支持从 Electromagnetic 测试开始电磁分析。")
+            return None
+        states = self.repository.verify_measurement_sources(
+            self.current_project_id, self.current_sample_id, measurement.measurement_id)
+        blocked = [(name, state) for name, state in states.items() if state != "PASS"]
+        if blocked:
+            QMessageBox.warning(
+                self, "来源文件已变化",
+                "以下原始文件与登记哈希不一致，已拒绝开始分析：\n"
+                + "\n".join(f"{state}：{name}" for name, state in blocked)
+                + "\n\n请恢复原始文件或重新添加测试后再分析。")
+            return None
+        candidates = [Path(item) for item in measurement.source_files
+                      if Path(item).suffix.lower() in ELECTROMAGNETIC_SOURCES]
+        if not candidates:
+            QMessageBox.information(
+                self, "没有可用的 ε/μ 数据",
+                "该测试没有 .memp / CSV / Excel 数据文件；实测 .sdat 请使用“S参数分析”页面。")
+            return None
+        path = candidates[0]
+        if not path.is_file():
+            QMessageBox.warning(self, "原始文件不存在", f"无法读取原始文件：{path}")
+            return None
+        request = {"project_id": self.current_project_id, "sample_id": self.current_sample_id,
+                   "measurement_id": measurement.measurement_id, "path": str(path)}
+        self.analysis_requested.emit(request)
+        self.message.emit(f"已载入测试文件：{path.name}；在电磁性能页面确认参数后开始分析。")
+        return request
+
+    def open_selected_run(self):
+        run = self._selected_run()
+        if run is None or not run.result_refs:
+            self.message.emit("该运行没有记录结果目录。")
+            return
+        directory = Path(run.result_refs[0])
+        if not directory.is_dir():
+            self.message.emit(f"结果目录不存在：{directory}")
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory.resolve()))):
+            self.message.emit(f"无法打开结果目录：{directory}")
+
+    def load_selected_run(self):
+        run = self._selected_run()
+        if run is None or not run.result_refs:
+            self.message.emit("该运行没有记录结果目录。")
+            return
+        directory = Path(run.result_refs[0])
+        if not directory.is_dir():
+            self.message.emit(f"结果目录不存在：{directory}")
+            return
+        self.run_load_requested.emit(str(directory))
+
+    def record_electromagnetic_run(self, project_id: str, sample_id: str, measurement_id: str,
+                                   directory, record):
+        """由主窗口在分析成功后调用；失败时不写入运行。"""
+        run = link_electromagnetic_run(self.repository, project_id, sample_id, measurement_id, directory, record)
+        self.current_project_id = project_id
+        self.current_sample_id = sample_id
+        self.current_measurement_id = measurement_id
+        self.current_run_id = run.analysis_run_id
+        self.refresh(select_project=project_id, select_sample=sample_id)
+        self.tabs.setCurrentIndex(1)
+        self.message.emit(
+            f"已登记分析运行 {run.analysis_run_id}；状态 {ValidationStatus.coerce(run.validation_status).label}。")
+        return run
+
+    def record_exports(self, result_directory, paths):
+        """把显式导出的图片追加到对应运行记录；没有登记运行时不创建新记录。"""
+        found = self.repository.find_analysis_run_by_result_directory(result_directory)
+        if found is None:
+            return None
+        project_id, sample_id, run = found
+        values = [str(item) for item in paths if str(item).strip()]
+        if not values:
+            return None
+        updated = self.repository.add_analysis_run_export_refs(
+            project_id, sample_id, run.analysis_run_id, values)
+        if (project_id == self.current_project_id and sample_id == self.current_sample_id
+                and run.measurement_id == self.current_measurement_id):
+            self._load_runs(run.measurement_id)
+        self.message.emit(f"已把 {len(values)} 个导出文件登记到分析运行 {run.analysis_run_id}。")
+        return updated
 
     def create_project(self, name: str, **values):
         project = self.repository.create_project(name, **values)

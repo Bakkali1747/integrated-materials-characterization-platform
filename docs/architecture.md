@@ -29,4 +29,6 @@ GUI Phase 4：SettingsPage → SettingsStore 严格校验 / 原子保存 → Mai
 
 Phase 2 已实现阻抗图/衰减/损耗角/Cole-Cole/C0/四分之一波长。Phase 3 已实现批量/比较，v0.5 新增用户提供的候选 sdat 语义映射；厂商列顺序仍待外部确认。后续规划（当前不实现）：Phase 4 GUI/完整 Excel 报告/完整图片导出；Phase 5 CST 对照。VSM、XRD、Raman、多层结构分别增加独立模块，不修改单层公式含义。
 
+Phase B（v0.14.0）：WorkspacePage → Measurement → MainWindow → SingleSamplePage → `gui.controllers.analysis_controller` / `core.analysis_service` 执行原分析；成功后 `core.common.analysis_link` 校验测试类型、源文件归属与 SHA-256，再追加 AnalysisRun 并更新测试状态。工作区不复制科学公式，运行状态只映射为 `PENDING` / `WARNING`，不自动产生 `VALIDATED`。
+
 本阶段提前支持这份 memp 是用户确认的范围调整。正式发布依据 VERSIONING.md，阶段结束后等待用户验收。

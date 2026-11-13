@@ -35,12 +35,11 @@ def run_smoke(app, output):
             project.project_id, sample.sample_id, measurement.measurement_id
         ),
     }
-    window.navigation.setCurrentRow(2)
     page = window.single
     page.parameters.output.setText(str(output / "analysis"))
     page.parameters.fields["thickness_max"].setValue(1.1)
     page.parameters.fields["thickness_step"].setValue(.1)
-    page.import_paths([source])
+    window.workspace.start_measurement_analysis()
     phase = "import"
 
     def save_report():
@@ -69,6 +68,15 @@ def run_smoke(app, output):
                 report.update(run_directory=str(result["directory"]), git=result["record"]["git"],
                               software_version=result["record"]["software_version"],
                               rl_minima=result["summary"]["global_minima"], figure_count=len(result["figures"]))
+                runs = workspace_repository.list_analysis_runs(project.project_id, sample.sample_id,
+                                                               measurement.measurement_id)
+                if len(runs) != 1 or runs[0].validation_status not in {"PENDING", "WARNING"}:
+                    raise RuntimeError("工作区分析运行未自动登记")
+                if runs[0].result_refs[0] != str(Path(result["directory"]).resolve()):
+                    raise RuntimeError("工作区分析运行缺少结果目录")
+                report["workspace_analysis_run"] = {"id": runs[0].analysis_run_id,
+                                                    "status": runs[0].validation_status,
+                                                    "plot_refs": len(runs[0].plot_refs)}
 
                 def verify(progress, cancelled):
                     for extension in ("png", "tiff", "pdf", "svg"):

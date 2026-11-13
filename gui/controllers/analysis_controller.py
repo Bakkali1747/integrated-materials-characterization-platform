@@ -90,7 +90,7 @@ def _reuse_configuration(request):
             "impedance_tolerance": request.impedance_tolerance}
 
 
-def _reused_result(run):
+def reused_result(run):
     """把已完成运行的数值对象包装成 GUI 结果；图按需重新生成。"""
     directory, record, d = run.directory, run.record, run.thickness_mm
     keys = ["permittivity", "permeability", "RL_curve", "RL_2D"]
@@ -184,7 +184,7 @@ def analyze_request(request, progress=lambda percent, text: None, cancelled=lamb
                     progress(10, "复用已完成运行")
                     reused = load_completed_run(cached)
                     progress(100, "复用完成，未重新计算")
-                    return _reused_result(reused)
+                    return reused_result(reused)
             except (OSError, ValueError, KeyError):
                 logging.getLogger("microwave.gui").exception("复用运行不可用，改为重新计算")
         run = execute(config, progress=checkpoint, cancelled=cancelled, cancel_exception=Cancelled)

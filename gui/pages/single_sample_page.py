@@ -20,7 +20,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from gui.controllers.analysis_controller import SUPPORTED, Cancelled, analyze_request, inspect_file
+from core.analysis_service import load_completed_run
+from gui.controllers.analysis_controller import SUPPORTED, Cancelled, analyze_request, inspect_file, reused_result
 from gui.controllers.export_controller import export_figure
 from gui.widgets.file_selector import FileSelector
 from gui.widgets.metric_strip import MetricStrip
@@ -35,6 +36,7 @@ class SingleSamplePage(QWidget):
     message = Signal(str)
     analysis_started = Signal(object)
     analysis_completed = Signal(object)
+    exports_saved = Signal(object)
     busy_changed = Signal(bool)
 
     def __init__(self, parent=None):
@@ -418,6 +420,29 @@ class SingleSamplePage(QWidget):
             self.message.emit("已恢复该文件上一次完成的分析；未重新计算。")
         self._set_busy(self.busy)
 
+    def open_completed_run(self, directory):
+        """载入工作区已登记运行：只读取已保存数值和记录，不重新计算。"""
+        if self.busy:
+            self.message.emit("当前任务运行中，请稍后再载入工作区运行。")
+            return False
+        try:
+            result = reused_result(load_completed_run(Path(directory)))
+        except Exception as error:
+            logging.getLogger("microwave.gui").exception("载入工作区运行失败")
+            self.show_error(f"无法载入该运行：{error}")
+            return False
+        key = self._snapshot_key(result["record"].get("raw_file")) or f"workspace-{Path(directory).name}"
+        self.snapshots[key] = {"result": result, "saved": {}, "explored": None, "preview": None}
+        self.table.blockSignals(True)
+        self.table.setCurrentItem(None)
+        self.table.clearSelection()
+        self.table.blockSignals(False)
+        self.selected = None
+        self._show_result(key)
+        self.source_label.setText(f"文件来源（工作区载入）：{result['record'].get('raw_file')}")
+        self.message.emit("已载入工作区登记的分析运行；未重新计算。")
+        return True
+
     def preview_figure(self, key):
         if not self.completed: return
         if self.busy:
@@ -526,6 +551,7 @@ class SingleSamplePage(QWidget):
             index=(key,float(completed["curve"].thickness_mm[0])) if key=="RL_curve" and self.explored is not None else key
             self.saved_data_paths[index]=path.with_name(path.name+".data")
             self._sync_view()
+            self.exports_saved.emit({"directory": str(completed["directory"]), "paths": [str(path)]})
             self.message.emit(f"图片及独立数据已保存：{path}")
         self._launch(lambda progress, cancelled: export_figure(completed, key, path, progress, cancelled, dpi=dpi),
                      saved)
@@ -544,5 +570,13 @@ class SingleSamplePage(QWidget):
             figure = make_figure(result,key,PlotStyle(dpi=dpi))
             return figure
         builders = {key:lambda k=key:builder(k) for key in result["figures"]}
+
+        def exported(directory):
+            path = Path(directory)
+            images = sorted(str(item) for item in path.rglob("*")
+                            if item.is_file() and item.suffix.lower() in {".png", ".tiff", ".tif", ".pdf", ".svg"})
+            self.exports_saved.emit({"directory": str(result["directory"]), "paths": images})
+            self.message.emit(f"全部图片已保存：{directory}")
+
         self._launch(lambda p,c:export_all_builders(builders,result["directory"],output,extension,dpi,p,c),
-                     lambda path:self.message.emit(f"全部图片已保存：{path}"))
+                     exported)

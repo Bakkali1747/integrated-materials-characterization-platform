@@ -1,5 +1,8 @@
 """综合材料表征分析平台主窗口。"""
 
+import logging
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication,
@@ -30,7 +33,7 @@ class MainWindow(QMainWindow):
     def __init__(self, settings_store=None, workspace_repository=None):
         super().__init__()
         apply_theme(QApplication.instance())
-        self.setWindowTitle(f"综合材料表征分析平台 · v{__version__} · Phase A")
+        self.setWindowTitle(f"综合材料表征分析平台 · v{__version__} · Phase B")
         self.resize(1400, 900)
         self.setMinimumSize(1200, 750)
         self.setAcceptDrops(True)
@@ -125,6 +128,11 @@ class MainWindow(QMainWindow):
         self.home.navigate.connect(self.navigation.setCurrentRow)
         self.workspace.message.connect(self.statusBar().showMessage)
         self.single.message.connect(self.statusBar().showMessage)
+        self.pending_workspace_analysis = None
+        self.workspace.analysis_requested.connect(self.start_workspace_analysis)
+        self.workspace.run_load_requested.connect(self.open_workspace_run)
+        self.single.analysis_completed.connect(self.record_workspace_analysis)
+        self.single.exports_saved.connect(self.record_workspace_exports)
         self.navigation.setCurrentRow(0)
         self.statusBar().showMessage("就绪 · 缺失数据插值 OFF · 真实数据验证 PENDING")
         if settings_warning:
@@ -171,6 +179,60 @@ class MainWindow(QMainWindow):
             import logging
             logging.getLogger("microwave.gui").exception("设置保存失败")
             self.settings.message.setText(f"保存失败，参数未应用：{error}")
+
+    def start_workspace_analysis(self, request):
+        """工作区测试 → 电磁页面；只准备文件和上下文，分析仍由用户显式触发。"""
+        if any(page.busy for page in self.task_pages):
+            self.statusBar().showMessage("当前任务运行中，请完成或取消后再开始工作区分析。")
+            return
+        self.pending_workspace_analysis = dict(request)
+        self.navigation.setCurrentRow(2)
+        self.single.import_paths([request["path"]])
+        self.statusBar().showMessage(
+            f"已载入工作区测试文件：{Path(request['path']).name}；确认参数后点击“开始分析”，完成后自动登记运行。")
+
+    def record_workspace_analysis(self, result):
+        """分析成功后登记 AnalysisRun；来源哈希、类型与状态由核心模块校验。"""
+        context = self.pending_workspace_analysis
+        if not context:
+            return None
+        raw_file = str(result["record"].get("raw_file") or "")
+        same = (bool(raw_file)
+                and Path(raw_file).expanduser().resolve() == Path(context["path"]).expanduser().resolve())
+        if not same:
+            self.pending_workspace_analysis = None
+            self.statusBar().showMessage("本次分析文件与工作区测试不一致；未登记 AnalysisRun。")
+            return None
+        run = None
+        try:
+            run = self.workspace.record_electromagnetic_run(
+                context["project_id"], context["sample_id"], context["measurement_id"],
+                result["directory"], result["record"])
+        except Exception as error:
+            logging.getLogger("microwave.gui").exception("登记工作区分析运行失败")
+            self.statusBar().showMessage(f"分析已完成，但登记工作区运行失败：{error}")
+        else:
+            self.statusBar().showMessage(
+                f"分析运行已登记到工作区：{run.analysis_run_id}（{run.validation_status}）。")
+        finally:
+            self.pending_workspace_analysis = None
+        return run
+
+    def open_workspace_run(self, directory):
+        """从工作区载入已登记运行；只读取保存的数值产物，不重新计算。"""
+        if any(page.busy for page in self.task_pages):
+            self.statusBar().showMessage("当前任务运行中，请稍后再载入工作区运行。")
+            return
+        self.navigation.setCurrentRow(2)
+        self.single.open_completed_run(directory)
+
+    def record_workspace_exports(self, payload):
+        """把显式导出的图片追加到对应 AnalysisRun；没有登记运行时不新建记录。"""
+        if not isinstance(payload, dict):
+            return
+        paths = [str(item) for item in payload.get("paths") or [] if str(item).strip()]
+        if payload.get("directory") and paths:
+            self.workspace.record_exports(payload["directory"], paths)
 
     def dragEnterEvent(self, event):
         """只接收本地文件 URL；分析运行中不接受新的拖入。"""

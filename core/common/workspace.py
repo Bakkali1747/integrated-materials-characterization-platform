@@ -175,6 +175,18 @@ class WorkspaceRepository:
             raise KeyError(f"Measurement 不存在：{measurement_id}")
         return Measurement.from_dict(self._read_json(path))
 
+    def set_measurement_validation(self, project_id: str, sample_id: str, measurement_id: str,
+                                   validation_status: ValidationStatus | str) -> Measurement:
+        """记录测试层面的最新科研状态；调用方负责不把未验证结果升级为 VALIDATED。"""
+        path = self._sample_dir(project_id, sample_id) / "measurements" / f"{_checked_id(measurement_id, 'measurement_id')}.json"
+        if not path.is_file():
+            raise KeyError(f"Measurement 不存在：{measurement_id}")
+        measurement = Measurement.from_dict(self._read_json(path))
+        measurement.validation_status = ValidationStatus.coerce(validation_status).value
+        self._write_json(path, measurement.to_dict())
+        self._touch_sample(project_id, sample_id)
+        return measurement
+
     def verify_measurement_sources(self, project_id: str, sample_id: str, measurement_id: str) -> dict[str, str]:
         measurement = self.get_measurement(project_id, sample_id, measurement_id)
         states: dict[str, str] = {}
@@ -211,3 +223,30 @@ class WorkspaceRepository:
         if measurement_id:
             values = [item for item in values if item.measurement_id == measurement_id]
         return sorted(values, key=lambda item: item.created_at, reverse=True)
+
+    def add_analysis_run_export_refs(self, project_id: str, sample_id: str, analysis_run_id: str,
+                                     paths: Iterable[str | Path]) -> AnalysisRun:
+        """把显式导出文件追加到运行记录；去重且不删除已有引用。"""
+        path = self._sample_dir(project_id, sample_id) / "analyses" / f"{_checked_id(analysis_run_id, 'analysis_run_id')}.json"
+        if not path.is_file():
+            raise KeyError(f"AnalysisRun 不存在：{analysis_run_id}")
+        run = AnalysisRun.from_dict(self._read_json(path))
+        known = set(run.export_refs)
+        for item in paths:
+            value = str(Path(item).expanduser().resolve())
+            if value not in known:
+                run.export_refs.append(value)
+                known.add(value)
+        self._write_json(path, run.to_dict())
+        self._touch_sample(project_id, sample_id)
+        return run
+
+    def find_analysis_run_by_result_directory(self, directory: str | Path) -> tuple[str, str, AnalysisRun] | None:
+        """按结果目录反查运行，用于把显式导出追加到对应记录。"""
+        needle = str(Path(directory).expanduser().resolve())
+        for path in self.projects_root.glob("*/samples/*/analyses/*.json"):
+            run = AnalysisRun.from_dict(self._read_json(path))
+            if run.result_refs and str(Path(run.result_refs[0]).expanduser().resolve()) == needle:
+                relative = path.relative_to(self.projects_root)
+                return relative.parts[0], relative.parts[2], run
+        return None

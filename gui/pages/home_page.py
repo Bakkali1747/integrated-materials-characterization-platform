@@ -25,7 +25,7 @@ class HomePage(QWidget):
         title.setObjectName("heroTitle")
         layout.addWidget(title)
         self.subtitle = QLabel("本地科研工作区 · 项目 / 样品 / 测试 / 分析运行 / 电磁分析 / 历史\n"
-                               "Phase A 已建立样品中心数据模型；VSM 与 XRD 将按 PRD 分阶段接入")
+                               "Phase B 已把电磁分析接入测试记录；VSM 与 XRD 将按 PRD 分阶段接入")
         self.subtitle.setObjectName("heroSubtitle")
         self.subtitle.setWordWrap(True)
         layout.addWidget(self.subtitle)
@@ -87,10 +87,10 @@ class HomePage(QWidget):
             button.setVisible(not simple or index not in {3, 4, 5})
         self._relayout(simple)
         self.subtitle.setText(
-            "本地科研工作区 · 项目 / 样品 / 电磁分析 / 历史\nPhase A 已建立样品中心数据模型；缺失数据插值固定 OFF"
+            "本地科研工作区 · 项目 / 样品 / 电磁分析 / 历史\nPhase B 已把电磁分析接入测试记录；缺失数据插值固定 OFF"
             if simple else
             "本地科研工作区 · 项目 / 样品 / 测试 / 分析运行 / 电磁分析 / 历史\n"
-            "Phase A 已建立样品中心数据模型；VSM 与 XRD 将按 PRD 分阶段接入")
+            "Phase B 已把电磁分析接入测试记录；VSM 与 XRD 将按 PRD 分阶段接入")
 
     def _relayout(self, simple):
         """只把当前可见入口排成两列；奇数个时最后一张横跨两列。"""
