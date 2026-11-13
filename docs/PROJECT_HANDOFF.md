@@ -263,7 +263,8 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - README 的部分历史章节仍保留旧测试数量或旧阶段描述，需要后续统一清理。
 - Windows 安装程序没有商业代码签名，可能显示“未知发布者”。
 - 冻结版已在当前开发机验收，但仍需在另一台干净 Windows 电脑验证兼容性。
-- GitHub 当前保存源码和标签；安装包尚未作为 GitHub Release 附件发布。
+- v0.14.0 起安装包与 SHA-256 作为 GitHub Release 附件发布；更早版本仍只有源码和标签。
+- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.14.0>
 
 ## 11. 版本与发布工作流
 
