@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from gui.controllers.analysis_controller import ROOT
-from gui.controllers.sparameter_controller import analyze_s_request, s_figure, theory_comparison
+from gui.controllers.sparameter_controller import analyze_s_request, load_s_request, s_figure, theory_comparison
 from gui.pages.task_page import TaskPage
 from gui.widgets.plot_canvas import PlotCanvas
 from gui.widgets.status_badge import StatusBadge
@@ -115,6 +115,10 @@ class SParameterPage(TaskPage):
 
     def analyzed(self, result):
         self.completed = result
+        self._render(result)
+        self.analysis_completed.emit(result)
+
+    def _render(self, result):
         record = result["record"]; qc = record["quality_checks"]
         fixture = record.get("fixture") or {}
         fixture_text = "未记录"
@@ -150,9 +154,30 @@ class SParameterPage(TaskPage):
         if len(table) > limit:
             self.summary.append(f"仅预览前 {limit} 行；完整 {len(table)} 行见 sparameters_by_frequency.csv。")
         self.quantity.setCurrentIndex(0); self.channel.setCurrentIndex(0)
-        self.plot.set_figures({"Magnitude": result["figures"]["magnitude"]})
+        figures = result.get("figures") or {}
+        if figures.get("magnitude") is not None:
+            self.plot.set_figures({"Magnitude": figures["magnitude"]})
+        else:
+            self.plot.set_figures(figures)
+            self.plot.set_placeholder("已载入保存的 S 参数运行\n选择显示形式后点击“更新显示”")
         self.display_builder = lambda r=result: s_figure(r, "magnitude")
-        self.analysis_completed.emit(result)
+
+    def open_completed_run(self, directory):
+        """载入工作区登记的 S 参数运行；只读取保存产物，不重新计算。"""
+        if self.busy:
+            self.message.emit("当前任务运行中，请稍后再载入 S 参数运行。")
+            return False
+        try:
+            result = load_s_request(directory)
+        except Exception as error:
+            self.show_error(f"无法载入 S 参数运行：{error}")
+            return False
+        self.completed = result
+        self.file.setText(result["record"].get("raw_file", ""))
+        self.name.setText(result["record"].get("sample", ""))
+        self._render(result)
+        self.message.emit("已载入工作区登记的 S 参数运行；未重新计算。")
+        return True
 
     def render_selected(self):
         if not self.completed:

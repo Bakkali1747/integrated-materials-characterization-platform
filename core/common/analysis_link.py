@@ -12,14 +12,17 @@ from core.common.validation_status import ValidationStatus
 
 ELECTROMAGNETIC_ANALYSIS_TYPE = "electromagnetic_rl"
 S_PARAMETER_ANALYSIS_TYPE = "s_parameters"
+VSM_ANALYSIS_TYPE = "vsm_hysteresis"
 ANALYSIS_TYPE_LABELS = {ELECTROMAGNETIC_ANALYSIS_TYPE: "电磁 RL 分析",
-                        S_PARAMETER_ANALYSIS_TYPE: "S 参数分析"}
+                        S_PARAMETER_ANALYSIS_TYPE: "S 参数分析",
+                        VSM_ANALYSIS_TYPE: "VSM 磁滞回线"}
 RESULT_ARTIFACTS = {
     ELECTROMAGNETIC_ANALYSIS_TYPE: ("summary.json", "analysis_record.json", "thickness_summary.csv",
                                     "RL_matrix.csv", "RL_curve.csv", "electromagnetic_parameters.csv",
                                     "parsed_data.csv"),
     S_PARAMETER_ANALYSIS_TYPE: ("analysis_record.json", "sparameters_by_frequency.csv", "quality_checks.json",
                                 "metadata.xml", "sparameters_complex.npz", "raw_numeric_columns.csv"),
+    VSM_ANALYSIS_TYPE: ("analysis_record.json", "vsm_metrics.json", "vsm_metrics.csv", "parsed_data.csv"),
 }
 PLOT_SUFFIXES = {".png", ".tif", ".tiff", ".pdf", ".svg", ".eps"}
 
@@ -30,14 +33,16 @@ def analysis_type_label(value: str) -> str:
 
 
 def analysis_run_status(record: dict[str, Any], warnings: list[str] | None = None) -> ValidationStatus:
-    """成功且无警告记 PENDING，有警告记 WARNING；绝不产生 VALIDATED。
+    """成功且无警告记 PENDING，有警告记 WARNING；不可计算记 NOT_COMPUTABLE。
 
-    非成功记录直接拒绝：失败或取消的运行没有可复核的完整数值产物，不应作为
-    该测试的有效分析历史。
+    非成功/不可计算记录直接拒绝：失败或取消的运行没有可复核的完整数值产物，
+    不应作为该测试的有效分析历史。绝不产生 VALIDATED。
     """
     status = str(record.get("status", "")).strip().lower()
+    if status == "not_computable":
+        return ValidationStatus.NOT_COMPUTABLE
     if status != "success":
-        raise ValueError("只有成功完成的分析运行才能登记到样品工作区。")
+        raise ValueError("只有成功完成或明确不可计算的分析运行才能登记到样品工作区。")
     values = record_warnings(record) if warnings is None else warnings
     return ValidationStatus.WARNING if values else ValidationStatus.PENDING
 
@@ -151,3 +156,11 @@ def link_sparameter_run(repository, project_id: str, sample_id: str, measurement
     """登记实测 S 参数分析运行；候选映射状态不会因此升级。"""
     return link_measurement_run(repository, project_id, sample_id, measurement_id, directory, record,
                                 analysis_type=S_PARAMETER_ANALYSIS_TYPE)
+
+
+def link_vsm_run(repository, project_id: str, sample_id: str, measurement_id: str,
+                 directory: str | Path, record: dict[str, Any]):
+    """登记 VSM 磁滞回线分析运行；指标不可计算时状态为 NOT_COMPUTABLE。"""
+    return link_measurement_run(repository, project_id, sample_id, measurement_id, directory, record,
+                                analysis_type=VSM_ANALYSIS_TYPE,
+                                measurement_type=MeasurementType.VSM)

@@ -3,12 +3,14 @@
 from core.common.analysis_link import (
     ELECTROMAGNETIC_ANALYSIS_TYPE,
     S_PARAMETER_ANALYSIS_TYPE,
+    VSM_ANALYSIS_TYPE,
     analysis_run_fields,
     analysis_run_status,
     analysis_type_label,
     link_electromagnetic_run,
     link_measurement_run,
     link_sparameter_run,
+    link_vsm_run,
 )
 from core.common.analysis_run import AnalysisRun
 from core.common.measurement import Measurement, MeasurementType
@@ -28,6 +30,7 @@ __all__ = [
     "S_PARAMETER_ANALYSIS_TYPE",
     "Sample",
     "ValidationStatus",
+    "VSM_ANALYSIS_TYPE",
     "WorkspaceRepository",
     "WorkspaceSchemaError",
     "analysis_run_fields",
@@ -36,4 +39,5 @@ __all__ = [
     "link_electromagnetic_run",
     "link_measurement_run",
     "link_sparameter_run",
+    "link_vsm_run",
 ]

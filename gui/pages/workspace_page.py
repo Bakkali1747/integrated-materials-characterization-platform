@@ -34,11 +34,13 @@ from core.common import (
     analysis_type_label,
     link_electromagnetic_run,
     link_sparameter_run,
+    link_vsm_run,
 )
 
-# 阶段 B 只把 ε/μ 数据与实测 S 参数接入工作区。
+# 阶段 B 只把 ε/μ 数据与实测 S 参数接入工作区；VSM 使用独立文件与页面。
 ELECTROMAGNETIC_SOURCES = {".csv", ".xlsx", ".xls", ".memp"}
 SPARAMETER_SOURCE = ".sdat"
+VSM_SOURCES = {".csv", ".xlsx", ".xls", ".txt"}
 
 
 def _tags(text: str) -> list[str]:
@@ -159,6 +161,7 @@ class WorkspacePage(QWidget):
     message = Signal(str)
     analysis_requested = Signal(object)
     sparameter_analysis_requested = Signal(object)
+    vsm_analysis_requested = Signal(object)
     run_load_requested = Signal(object)
 
     def __init__(self, repository: WorkspaceRepository | None = None, parent=None):
@@ -252,9 +255,12 @@ class WorkspacePage(QWidget):
         self.analyze_button.clicked.connect(self.start_measurement_analysis)
         self.sparameter_button = QPushButton("用此测试开始S参数分析")
         self.sparameter_button.clicked.connect(self.start_measurement_sparameter_analysis)
+        self.vsm_button = QPushButton("用此测试开始VSM分析")
+        self.vsm_button.clicked.connect(self.start_measurement_vsm_analysis)
         measurement_actions.addWidget(self.verify_button)
         measurement_actions.addWidget(self.analyze_button)
         measurement_actions.addWidget(self.sparameter_button)
+        measurement_actions.addWidget(self.vsm_button)
         measurement_actions.addStretch()
         sample_layout.addLayout(measurement_actions)
         self.verify_result = QLabel("")
@@ -513,26 +519,33 @@ class WorkspacePage(QWidget):
 
     def _refresh_measurement_actions(self):
         measurement = self._selected_measurement()
-        electromagnetic = (measurement is not None
-                          and MeasurementType.coerce(measurement.measurement_type) is MeasurementType.ELECTROMAGNETIC)
+        kind = MeasurementType.coerce(measurement.measurement_type) if measurement is not None else None
         sources = self._source_paths(measurement)
         has_electromagnetic_source = any(path.suffix.lower() in ELECTROMAGNETIC_SOURCES for path in sources)
         has_sparameter_source = any(path.suffix.lower() == SPARAMETER_SOURCE for path in sources)
+        has_vsm_source = any(path.suffix.lower() in VSM_SOURCES for path in sources)
         self.verify_button.setEnabled(measurement is not None)
-        self.analyze_button.setEnabled(electromagnetic and has_electromagnetic_source)
-        if electromagnetic and has_electromagnetic_source:
+        self.analyze_button.setEnabled(kind is MeasurementType.ELECTROMAGNETIC and has_electromagnetic_source)
+        if kind is MeasurementType.ELECTROMAGNETIC and has_electromagnetic_source:
             self.analyze_button.setToolTip("从该测试创建一次电磁分析，完成后自动登记 AnalysisRun。")
-        elif electromagnetic:
+        elif kind is MeasurementType.ELECTROMAGNETIC:
             self.analyze_button.setToolTip("该测试没有 .memp / CSV / Excel 的 ε/μ 数据文件。")
         else:
-            self.analyze_button.setToolTip("目前只接入 Electromagnetic 测试；VSM 与 XRD 分析尚未实现。")
-        self.sparameter_button.setEnabled(electromagnetic and has_sparameter_source)
-        if electromagnetic and has_sparameter_source:
+            self.analyze_button.setToolTip("该按钮只用于 Electromagnetic 测试。")
+        self.sparameter_button.setEnabled(kind is MeasurementType.ELECTROMAGNETIC and has_sparameter_source)
+        if kind is MeasurementType.ELECTROMAGNETIC and has_sparameter_source:
             self.sparameter_button.setToolTip("用该测试的 .sdat 创建 S 参数分析，完成后自动登记 AnalysisRun。")
-        elif electromagnetic:
+        elif kind is MeasurementType.ELECTROMAGNETIC:
             self.sparameter_button.setToolTip("该测试没有 .sdat 实测文件。")
         else:
             self.sparameter_button.setToolTip("S 参数分析只接受 Electromagnetic 测试的 .sdat 文件。")
+        self.vsm_button.setEnabled(kind is MeasurementType.VSM and has_vsm_source)
+        if kind is MeasurementType.VSM and has_vsm_source:
+            self.vsm_button.setToolTip("用该 VSM 测试的原始文件创建磁滞回线分析。")
+        elif kind is MeasurementType.VSM:
+            self.vsm_button.setToolTip("该测试没有 .csv / .xlsx / .xls / .txt 数据文件。")
+        else:
+            self.vsm_button.setToolTip("VSM 分析只接受 VSM 测试的原始文件。")
 
     def _refresh_run_actions(self):
         run = self._selected_run()
@@ -625,6 +638,41 @@ class WorkspacePage(QWidget):
         self.message.emit(f"已载入 S 参数文件：{path.name}；在 S 参数页面确认设置后开始分析。")
         return request
 
+    def start_measurement_vsm_analysis(self):
+        """把选中的 VSM 测试交给 VSM 页面；单位和质量仍需用户显式确认。"""
+        measurement = self._selected_measurement()
+        if measurement is None:
+            self.message.emit("请先选择一个测试。")
+            return None
+        if MeasurementType.coerce(measurement.measurement_type) is not MeasurementType.VSM:
+            self.message.emit("VSM 分析只接受 VSM 测试。")
+            return None
+        states = self.repository.verify_measurement_sources(
+            self.current_project_id, self.current_sample_id, measurement.measurement_id)
+        blocked = [(name, state) for name, state in states.items() if state != "PASS"]
+        if blocked:
+            QMessageBox.warning(
+                self, "来源文件已变化",
+                "以下原始文件与登记哈希不一致，已拒绝开始分析：\n"
+                + "\n".join(f"{state}：{name}" for name, state in blocked)
+                + "\n\n请恢复原始文件或重新添加测试后再分析。")
+            return None
+        candidates = [path for path in self._source_paths(measurement) if path.suffix.lower() in VSM_SOURCES]
+        if not candidates:
+            QMessageBox.information(self, "没有 VSM 数据文件",
+                                    "该测试没有 .csv / .xlsx / .xls / .txt 数据文件。")
+            return None
+        path = candidates[0]
+        if not path.is_file():
+            QMessageBox.warning(self, "原始文件不存在", f"无法读取原始文件：{path}")
+            return None
+        request = {"kind": "vsm_hysteresis", "project_id": self.current_project_id,
+                   "sample_id": self.current_sample_id, "measurement_id": measurement.measurement_id,
+                   "path": str(path)}
+        self.vsm_analysis_requested.emit(request)
+        self.message.emit(f"已载入 VSM 文件：{path.name}；在 VSM 页面确认单位与质量后开始分析。")
+        return request
+
     def open_selected_run(self):
         run = self._selected_run()
         if run is None or not run.result_refs:
@@ -646,7 +694,7 @@ class WorkspacePage(QWidget):
         if not directory.is_dir():
             self.message.emit(f"结果目录不存在：{directory}")
             return
-        self.run_load_requested.emit(str(directory))
+        self.run_load_requested.emit({"directory": str(directory), "analysis_type": run.analysis_type})
 
     def _record_run(self, linker, project_id: str, sample_id: str, measurement_id: str,
                     directory, record):
@@ -672,6 +720,12 @@ class WorkspacePage(QWidget):
                               directory, record):
         """由主窗口在 S 参数分析成功后调用；候选映射状态不会升级。"""
         return self._record_run(link_sparameter_run, project_id, sample_id, measurement_id,
+                                directory, record)
+
+    def record_vsm_run(self, project_id: str, sample_id: str, measurement_id: str,
+                       directory, record):
+        """由主窗口在 VSM 分析完成后调用；不可计算状态也会如实登记。"""
+        return self._record_run(link_vsm_run, project_id, sample_id, measurement_id,
                                 directory, record)
 
     def record_exports(self, result_directory, paths):

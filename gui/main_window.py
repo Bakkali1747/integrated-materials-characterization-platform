@@ -25,6 +25,7 @@ from gui.pages.results_page import ResultsPage
 from gui.pages.settings_page import SettingsPage
 from gui.pages.single_sample_page import SingleSamplePage
 from gui.pages.sparameter_page import SParameterPage
+from gui.pages.vsm_page import VsmPage
 from gui.pages.workspace_page import WorkspacePage
 from gui.theme import apply_theme
 
@@ -73,7 +74,7 @@ class MainWindow(QMainWindow):
         self.navigation = QListWidget()
         self.navigation.setObjectName("nav")
         self.navigation.setFrameShape(QFrame.Shape.NoFrame)
-        self.navigation.addItems(["首页", "工作区", "电磁性能", "S参数分析", "多样品比较", "批量分析", "历史结果", "设置"])
+        self.navigation.addItems(["首页", "工作区", "电磁性能", "VSM 分析", "S参数分析", "多样品比较", "批量分析", "历史结果", "设置"])
         side_layout.addWidget(self.navigation, 1)
         footer = QLabel("本地计算 · 数据不外传\n缺失数据插值 OFF")
         footer.setObjectName("sideFooter")
@@ -88,6 +89,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.home)
         self.stack.addWidget(self.workspace)
         self.stack.addWidget(self.single)
+        self.vsm = VsmPage()
+        self.stack.addWidget(self.vsm)
         self.sparameters = SParameterPage()
         self.comparison = ComparisonPage()
         self.stack.addWidget(self.sparameters)
@@ -96,7 +99,7 @@ class MainWindow(QMainWindow):
         self.history = ResultsPage()
         self.stack.addWidget(self.batch)
         self.stack.addWidget(self.history)
-        self.task_pages = [self.single, self.sparameters, self.comparison, self.batch, self.history]
+        self.task_pages = [self.single, self.vsm, self.sparameters, self.comparison, self.batch, self.history]
         from gui.widgets.mapping_dialog import configure_mapping
         for page in (self.single,self.comparison,self.batch):
             page.parameters.mapping_button.clicked.connect(lambda checked=False,p=page:configure_mapping(p,p.parameters))
@@ -131,11 +134,14 @@ class MainWindow(QMainWindow):
         self.pending_workspace_analysis = None
         self.workspace.analysis_requested.connect(self.start_workspace_analysis)
         self.workspace.sparameter_analysis_requested.connect(self.start_workspace_sparameter_analysis)
+        self.workspace.vsm_analysis_requested.connect(self.start_workspace_vsm_analysis)
         self.workspace.run_load_requested.connect(self.open_workspace_run)
         self.single.analysis_completed.connect(self.record_workspace_analysis)
         self.single.exports_saved.connect(self.record_workspace_exports)
         self.sparameters.analysis_completed.connect(self.record_workspace_sparameter_run)
         self.sparameters.exports_saved.connect(self.record_workspace_exports)
+        self.vsm.analysis_completed.connect(self.record_workspace_vsm_run)
+        self.vsm.exports_saved.connect(self.record_workspace_exports)
         self.navigation.setCurrentRow(0)
         self.statusBar().showMessage("就绪 · 缺失数据插值 OFF · 真实数据验证 PENDING")
         if settings_warning:
@@ -146,6 +152,7 @@ class MainWindow(QMainWindow):
         for page in (self.single, self.comparison, self.batch):
             page.parameters.apply_defaults(values)
         self.sparameters.output.setText(values["output"])
+        self.vsm.output.setText(values["output"])
         for page in self.task_pages:
             # 交互分析按设置 DPI；手动导出至少 600 dpi，便于投稿和印刷。
             page.export_dpi = max(600, values["dpi"])
@@ -153,21 +160,21 @@ class MainWindow(QMainWindow):
         self.set_ui_mode(values.get("ui_mode", "simple"))
 
     def set_ui_mode(self, mode):
-        """日常模式隐藏 S 参数/比较/批量与高级参数；项目和电磁分析始终可用。"""
+        """日常模式隐藏 S 参数/比较/批量；VSM 作为主流程始终可用。"""
         simple = mode != "full"
         self.ui_mode = mode
         self.mode_hint.setText("DAILY WORKSPACE" if simple else "FULL WORKSPACE")
         self.side_footer.setText(
-            ("日常模式 · 工作区 / 电磁 / 历史" if simple else "完整功能 · 含 S 参数 / 比较 / 批量")
+            ("日常模式 · 工作区 / 电磁 / VSM / 历史" if simple else "完整功能 · 含 S 参数 / 比较 / 批量")
             + "\n本地计算 · 数据不外传")
-        for row in (3, 4, 5):
+        for row in (4, 5, 6):
             self.navigation.setRowHidden(row, simple)
         self.home.set_simple(simple)
         for page in (self.single, self.comparison, self.batch):
             page.parameters.set_simple(simple)
         self.single.set_simple(simple)
         self.history.set_simple(simple)
-        if simple and self.navigation.currentRow() in (3, 4, 5):
+        if simple and self.navigation.currentRow() in (4, 5, 6):
             self.navigation.setCurrentRow(0)
 
     def save_settings(self, values):
@@ -210,7 +217,7 @@ class MainWindow(QMainWindow):
         if self.ui_mode != "full":
             self.set_ui_mode("full")
         self.pending_workspace_analysis = dict(request)
-        self.navigation.setCurrentRow(3)
+        self.navigation.setCurrentRow(4)
         self.sparameters.file.setText(request["path"])
         self.sparameters.name.setText(Path(request["path"]).stem)
         self.sparameters.error.clear()
@@ -222,6 +229,28 @@ class MainWindow(QMainWindow):
         return self._record_workspace_result(
             result, "s_parameters",
             lambda context, payload: self.workspace.record_sparameter_run(
+                context["project_id"], context["sample_id"], context["measurement_id"],
+                payload["directory"], payload["record"]))
+
+    def start_workspace_vsm_analysis(self, request):
+        """工作区 VSM 测试 → VSM 页面；单位与质量仍由用户确认。"""
+        if any(page.busy for page in self.task_pages):
+            self.statusBar().showMessage("当前任务运行中，请完成或取消后再开始 VSM 分析。")
+            return
+        self.pending_workspace_analysis = dict(request)
+        self.navigation.setCurrentRow(3)
+        self.vsm.file.setText(request["path"])
+        self.vsm.name.setText(Path(request["path"]).stem)
+        self.vsm.error.clear()
+        self.vsm.load_columns()
+        self.statusBar().showMessage(
+            f"已载入工作区 VSM 文件：{Path(request['path']).name}；确认单位与质量后点击“开始 VSM 分析”。")
+
+    def record_workspace_vsm_run(self, result):
+        """VSM 分析完成后登记 AnalysisRun；不可计算状态也会如实登记。"""
+        return self._record_workspace_result(
+            result, "vsm_hysteresis",
+            lambda context, payload: self.workspace.record_vsm_run(
                 context["project_id"], context["sample_id"], context["measurement_id"],
                 payload["directory"], payload["record"]))
 
@@ -250,13 +279,28 @@ class MainWindow(QMainWindow):
             self.pending_workspace_analysis = None
         return run
 
-    def open_workspace_run(self, directory):
-        """从工作区载入已登记运行；只读取保存的数值产物，不重新计算。"""
+    def open_workspace_run(self, payload):
+        """按运行类型载入已登记结果；只读取保存产物，不重新计算。"""
         if any(page.busy for page in self.task_pages):
             self.statusBar().showMessage("当前任务运行中，请稍后再载入工作区运行。")
             return
-        self.navigation.setCurrentRow(2)
-        self.single.open_completed_run(directory)
+        if isinstance(payload, str):
+            payload = {"directory": payload}
+        directory = payload.get("directory")
+        analysis_type = payload.get("analysis_type")
+        if not directory:
+            return
+        if analysis_type == "s_parameters":
+            if self.ui_mode != "full":
+                self.set_ui_mode("full")
+            self.navigation.setCurrentRow(4)
+            self.sparameters.open_completed_run(directory)
+        elif analysis_type == "vsm_hysteresis":
+            self.navigation.setCurrentRow(3)
+            self.vsm.open_completed_run(directory)
+        else:
+            self.navigation.setCurrentRow(2)
+            self.single.open_completed_run(directory)
 
     def record_workspace_exports(self, payload):
         """把显式导出的图片追加到对应 AnalysisRun；没有登记运行时不新建记录。"""

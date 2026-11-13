@@ -33,4 +33,6 @@ Phase B（v0.14.0）：WorkspacePage → Measurement → MainWindow → SingleSa
 
 v0.15.0：`core.common.workspace_schema` 在打开工作区前建立/迁移 `workspace.json`，只读校验旧实体并拒绝未来版本或损坏文件；`analysis_link` 增加通用登记入口，S 参数页面通过 `TaskPage.exports_saved` / `SParameterPage.analysis_completed` 挂载 `s_parameters` AnalysisRun。
 
+Phase C（v0.16.0）：`core/vsm.py` 负责显式列/单位/质量解析与磁滞指标、背景扣除；`core/vsm_service.py` 保存运行产物与记录；`plotting/vsm_plot.py` 与 `export/vsm_report.py` 复用同一数据表绘图和报告；VSM 页面与 `run_vsm.py` 只做适配。工作区“载入运行结果”按 `analysis_type` 分发到电磁、S 参数或 VSM 页面，不跨类型复用加载器。
+
 本阶段提前支持这份 memp 是用户确认的范围调整。正式发布依据 VERSIONING.md，阶段结束后等待用户验收。

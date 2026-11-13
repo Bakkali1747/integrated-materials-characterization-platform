@@ -433,7 +433,7 @@ def test_main_window_registers_workspace_sparameter_run_and_exports(qtbot, tmp_p
     measurement = window.workspace.add_measurement("electromagnetic", [source])
 
     window.workspace.start_measurement_sparameter_analysis()
-    assert window.navigation.currentRow() == 3
+    assert window.navigation.currentRow() == 4
     assert window.pending_workspace_analysis["kind"] == "s_parameters"
     assert window.pending_workspace_analysis["measurement_id"] == measurement.measurement_id
     assert window.sparameters.file.text() == str(source)

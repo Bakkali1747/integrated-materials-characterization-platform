@@ -1,5 +1,6 @@
 """S 参数 GUI 适配；复用已验证的软件计算路径，候选状态不升级。"""
 import json
+from pathlib import Path
 
 import pandas as pd
 
@@ -10,6 +11,8 @@ from gui.controllers.analysis_controller import Cancelled
 from plotting.sparameter_plot import plot_rta, plot_shielding_effectiveness, plot_smith, plot_sparameter_quantity
 from plotting.style import PlotStyle, plt
 from run_sparameters import analyze_sparameter_file, write_sparameter_record
+
+S_FIGURE_KEYS = ("magnitude", "db", "real_imag", "phase_deg", "RTA", "SE", "smith")
 
 
 def s_figure(result, quantity, channel="全部", dpi=600):
@@ -62,6 +65,17 @@ def analyze_s_request(path, name, output, schema, progress, cancelled, dpi=600):
                       artifacts_sha256=artifact_hashes(directory))
         write_sparameter_record(directory, record)
         raise
+
+
+def load_s_request(directory):
+    """读取已完成的 S 参数运行；只加载保存产物，图按需重绘。"""
+    directory = Path(directory).resolve()
+    record = json.loads((directory / "analysis_record.json").read_text(encoding="utf-8"))
+    if record.get("status") != "success":
+        raise ValueError("只能载入成功完成的 S 参数运行。")
+    table = pd.read_csv(directory / "sparameters_by_frequency.csv")
+    return {"directory": directory, "record": record, "table": table,
+            "figures": {key: None for key in S_FIGURE_KEYS}}
 
 
 def theory_comparison(theory, measured, progress, cancelled, dpi=600):

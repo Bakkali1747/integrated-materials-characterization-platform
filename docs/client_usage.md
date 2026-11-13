@@ -1,10 +1,10 @@
 # Windows 独立客户端
 
-当前安装包为 v0.15.0，在 v0.14.0 工作区基础上新增 schema v1 迁移与实测 S 参数运行挂载。默认“日常模式”；操作见 `workspace.md`、`gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
+当前安装包为 v0.16.0，在 v0.15.0 工作区基础上新增 VSM 磁滞回线分析、背景扣除、质量归一化、DOCX/PDF 报告与工作区自动登记。默认“日常模式”；操作见 `vsm.md`、`workspace.md`、`gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
 
 ## 安装和启动
 
-双击 `MaterialsCharacterizationPlatform-Setup-0.15.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“综合材料表征分析平台”。
+双击 `MaterialsCharacterizationPlatform-Setup-0.16.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“综合材料表征分析平台”。
 
 目标为 Windows 10（1809 或更高）/Windows 11 x64。界面为中文，安装向导按钮使用英文。客户端未做商业代码签名，Windows 可能显示“未知发布者”；请只使用随交付提供哈希的安装文件。
 

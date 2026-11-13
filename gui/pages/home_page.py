@@ -24,8 +24,8 @@ class HomePage(QWidget):
         title = QLabel("综合材料表征分析平台")
         title.setObjectName("heroTitle")
         layout.addWidget(title)
-        self.subtitle = QLabel("本地科研工作区 · 项目 / 样品 / 测试 / 分析运行 / 电磁分析 / 历史\n"
-                               "Phase B 已把电磁分析接入测试记录；VSM 与 XRD 将按 PRD 分阶段接入")
+        self.subtitle = QLabel("本地科研工作区 · 项目 / 样品 / 测试 / 分析运行 / 电磁 / VSM / 历史\n"
+                               "Phase C 已接入 VSM 磁滞回线；XRD 将按 PRD 分阶段接入")
         self.subtitle.setObjectName("heroSubtitle")
         self.subtitle.setWordWrap(True)
         layout.addWidget(self.subtitle)
@@ -39,11 +39,12 @@ class HomePage(QWidget):
         for number, (text, detail, index) in enumerate([
             ("项目与样品", "创建项目、样品并关联不同类型的测试", 1),
             ("电磁性能", "ε/μ → RL 曲线、二维图、EAB 与科研图", 2),
-            ("S 参数分析", "幅度 / dB / 相位 / RTA / SE / Smith", 3),
-            ("多样品比较", "十项指标与原始网格比较", 4),
-            ("批量分析", "同目录来源分组与失败隔离", 5),
-            ("打开历史结果", "只读摘要、QC、产物核验与报告", 6),
-            ("设置", "界面模式、默认厚度、DPI 与输出目录", 7),
+            ("VSM 分析", "磁滞回线、Hc / Mr / Ms 与背景扣除", 3),
+            ("S 参数分析", "幅度 / dB / 相位 / RTA / SE / Smith", 4),
+            ("多样品比较", "十项指标与原始网格比较", 5),
+            ("批量分析", "同目录来源分组与失败隔离", 6),
+            ("打开历史结果", "只读摘要、QC、产物核验与报告", 7),
+            ("设置", "界面模式、默认厚度、DPI 与输出目录", 8),
         ], 1):
             button = QPushButton(f"{number:02d}  {text}\n{detail}")
             button.setObjectName("quickAction")
@@ -84,20 +85,20 @@ class HomePage(QWidget):
     def set_simple(self, simple):
         """日常模式隐藏 S 参数 / 比较 / 批量入口。"""
         for button, index, _, _ in self.actions:
-            button.setVisible(not simple or index not in {3, 4, 5})
+            button.setVisible(not simple or index not in {4, 5, 6})
         self._relayout(simple)
         self.subtitle.setText(
-            "本地科研工作区 · 项目 / 样品 / 电磁分析 / 历史\nPhase B 已把电磁分析接入测试记录；缺失数据插值固定 OFF"
+            "本地科研工作区 · 项目 / 样品 / 电磁 / VSM / 历史\nPhase C 已接入 VSM 磁滞回线；缺失数据插值固定 OFF"
             if simple else
-            "本地科研工作区 · 项目 / 样品 / 测试 / 分析运行 / 电磁分析 / 历史\n"
-            "Phase B 已把电磁分析接入测试记录；VSM 与 XRD 将按 PRD 分阶段接入")
+            "本地科研工作区 · 项目 / 样品 / 测试 / 分析运行 / 电磁 / VSM / 历史\n"
+            "Phase C 已接入 VSM 磁滞回线；XRD 将按 PRD 分阶段接入")
 
     def _relayout(self, simple):
         """只把当前可见入口排成两列；奇数个时最后一张横跨两列。"""
         for button, _, _, _ in self.actions:
             self.actions_grid.removeWidget(button)
         visible = [(button, index, text, detail) for button, index, text, detail in self.actions
-                   if not simple or index not in {3, 4, 5}]
+                   if not simple or index not in {4, 5, 6}]
         for position, (button, _, text, detail) in enumerate(visible):
             button.setText(f"{position + 1:02d}  {text}\n{detail}")
             if position == len(visible) - 1 and len(visible) % 2:

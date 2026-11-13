@@ -1,29 +1,29 @@
 # 综合材料表征分析平台项目交接文档
 
 最后核对日期：2026-11-13  
-当前版本：`v0.15.0`  
-当前阶段：Phase B 完成 / Phase C 前平台硬化  
+当前版本：`v0.16.0`  
+当前阶段：Phase C 完成 / Phase D（XRD）待开发  
 主仓库：<https://github.com/Bakkali1747/integrated-materials-characterization-platform>
 
 ## 1. 项目定位
 
 本项目是面向个人科研使用的 Windows 本地桌面应用，目标是以真实样品为中心，统一管理电磁、VSM、XRD 等材料表征数据、分析运行和科研产物。
 
-项目由原“微波吸收分析软件”演进而来。v0.13.0 在完整保留原有电磁分析能力的基础上，新增项目、样品、测试和分析运行四类平台实体。v0.14.0（Phase B）把电磁分析接入该工作区。v0.15.0 补齐工作区 schema 版本与迁移，并把实测 S 参数分析挂载到 Measurement。
+项目由原“微波吸收分析软件”演进而来。v0.13.0 在完整保留原有电磁分析能力的基础上，新增项目、样品、测试和分析运行四类平台实体。v0.14.0（Phase B）把电磁分析接入该工作区。v0.15.0 补齐工作区 schema 版本与迁移，并把实测 S 参数分析挂载到 Measurement。v0.16.0（Phase C）新增 VSM 磁滞回线分析、背景扣除、质量归一化、报告与工作区闭环。
 
 应用采用新的名称、安装目录、本地数据目录和安装器 AppId，可以和旧版微波吸收分析软件并存，不会覆盖旧应用。
 
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.15.0 基线提交：`e77cd8c`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
-- 版本标签：`v0.15.0`
-- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.15.0-win64.exe`
-- 安装程序 SHA-256：`7cab6ea8bee779df477c225ce9b0b03700d95a81d65ecd76aa9d7a06d78aa15b`；同时见 `output/releases/SHA256SUMS-0.15.0.txt`
-- 当前已验证测试：`377 passed`
+- v0.16.0 基线提交：构建后回填（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
+- 版本标签：`v0.16.0`
+- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.16.0-win64.exe`
+- 安装程序 SHA-256：构建后回填；同时写入 `output/releases/SHA256SUMS-0.16.0.txt`
+- 当前已验证测试：`394 passed`
 - Ruff：通过
-- 源码版和冻结安装版自检：通过（包含电磁与 S 参数两种工作区自动登记）
-- 已验证产物：17 类科研图、报告、S 参数、比较、批量、历史和导出
+- 源码版和冻结安装版自检：通过（包含电磁、S 参数与 VSM 三类工作区自动登记）
+- 已验证产物：17 类电磁科研图、报告、S 参数、VSM 回线与报告、比较、批量、历史和导出
 
 原仓库保留为历史远程 `legacy-origin`：
 
@@ -75,7 +75,17 @@ Project
 - 每张图片同时生成可供 Origin 使用的独立数据目录。
 - GUI 与 CLI 共用 `core/analysis_service.py`，界面层不复制科学公式。
 
-### 3.3 S 参数
+### 3.3 VSM
+
+- 读取 `.csv`、`.xlsx`、`.xls`、`.txt`，要求显式磁场列/磁矩列、磁场单位与磁矩单位。
+- 支持 Oe、A/m、kA/m、T、mT 与 emu、A·m²；质量归一化仅在提供样品质量（mg）时执行。
+- 计算 Hc（含 Hc+/Hc−、Oe 与 A/m）、Mr、Ms、方形比、回线闭合差；Hc/Mr 用相邻点线性插值，Ms 明确不是真实饱和。
+- 可选高场线性背景扣除：正负高场分别拟合后取平均斜率/截距，记录 R²、系数与点数；默认关闭。
+- 缺失/非数值/非有限值直接报错；保留扫描顺序，不排序、不去重、不插值、不裁剪。
+- 输出 `parsed_data.csv`、`vsm_metrics.json/csv`、`analysis_record.json/txt`、磁滞回线与原点放大图、可选背景图，以及 DOCX/PDF 报告。
+- 可从 VSM Measurement 发起分析并自动登记 `vsm_hysteresis` AnalysisRun；不可计算时登记为 `NOT_COMPUTABLE`。
+
+### 3.4 S 参数
 
 - 解析 S11、S21、S12、S22 的复数、幅度、dB 和相位。
 - 计算 R、T、A 和 SE_R、SE_A、SE_T。
@@ -86,7 +96,7 @@ Project
 
 当前 S 参数字段映射仍是 `candidate_high_confidence`，不是厂商正式确认格式；尚未实现 NRW 反演。
 
-### 3.4 批量、比较、历史与导出
+### 3.5 批量、比较、历史与导出
 
 - 单样品、多样品比较和混合批量处理。
 - 逐来源故障隔离和协作取消。
@@ -109,9 +119,14 @@ v0.14.0 打通了 Measurement → 电磁分析 → AnalysisRun → 结果引用 
 - 工作区备份/恢复、项目导入/导出和多用户并发写入尚未实现。
 - 运行表暂不支持按状态筛选或删除；AnalysisRun 保持追加语义。
 
-### 4.2 Phase C：VSM
+### 4.2 Phase C 已完成，后续 VSM 增强
 
-当前只能登记 VSM 原始文件。尚需实现格式解析、磁滞回线、Ms/Mr/Hc、背景扣除、质量归一化、绘图、导出和报告。
+v0.16.0 已实现 VSM 基础闭环：解析、单位、质量归一化、磁滞指标、可选线性背景、绘图、导出、报告与工作区登记。以下属于后续增强，不阻塞 Phase D：
+
+- 暂不支持 Minor loop、FORC、温度/角度序列和多段扫描的自动分离。
+- 背景模型只有关闭与高场线性两种；不提供用户背景文件或多项式模型。
+- 尚未自动判定“真实饱和”，Ms 只是当前最大场端值。
+- 尚未实现逐点 QC 表格或 VSM 运行历史筛选。
 
 ### 4.3 Phase D：XRD
 
@@ -143,8 +158,10 @@ v0.14.0 打通了 Measurement → 电磁分析 → AnalysisRun → 结果引用 
 
 ```text
 core/
-├── common/                 Project、Sample、Measurement、AnalysisRun、分析运行登记
-├── analysis_service.py     GUI/CLI 共用分析服务
+├── common/                 Project、Sample、Measurement、AnalysisRun、schema 与分析运行登记
+├── analysis_service.py     GUI/CLI 共用电磁分析服务
+├── vsm.py                  VSM 解析、单位、磁滞指标与背景扣除
+├── vsm_service.py          VSM 运行、记录与产物
 ├── parser.py               CSV/Excel/MEMP 解析
 ├── validation.py           数据质量检查
 ├── electromagnetic.py      复电磁参数构造
@@ -157,18 +174,18 @@ core/
 
 gui/
 ├── main_window.py          主窗口、导航和任务互斥
-├── pages/                  工作区、单样品、S参数、比较、批量、历史、设置
+├── pages/                  工作区、单样品、VSM、S参数、比较、批量、历史、设置
 ├── controllers/            GUI 与核心服务的控制层
 ├── workers/                QThread 后台任务
 └── widgets/                公共控件
 
-plotting/                   科学绘图
-export/                     数据、报告、追溯和分享导出
+plotting/                   科学绘图（含 vsm_plot.py）
+export/                     数据、报告、追溯和分享导出（含 vsm_report.py）
 packaging/                  PyInstaller 和 Inno Setup 配置
 tests/                      自动测试
 docs/                       架构、使用和科学约定文档
 sample_data/                合成验收数据
-run_*.py                    GUI 和 CLI 入口
+run_*.py                    GUI 和 CLI 入口（含 run_vsm.py）
 ```
 
 推荐阅读顺序：
@@ -176,13 +193,15 @@ run_*.py                    GUI 和 CLI 入口
 1. `README.md`
 2. `docs/architecture.md`
 3. `docs/workspace.md`
-4. `core/common/workspace.py`
-5. `core/common/workspace_schema.py`
-6. `core/common/analysis_link.py`
-7. `core/analysis_service.py`
-8. `gui/pages/workspace_page.py`
-9. `gui/pages/single_sample_page.py`
-10. `VERSIONING.md`
+4. `docs/vsm.md`
+5. `core/common/workspace.py`
+6. `core/common/workspace_schema.py`
+7. `core/common/analysis_link.py`
+8. `core/analysis_service.py`
+9. `core/vsm.py` / `core/vsm_service.py`
+10. `gui/pages/workspace_page.py`
+11. `gui/pages/vsm_page.py`
+12. `VERSIONING.md`
 
 ## 7. 开发与测试
 
@@ -254,6 +273,9 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - 固定厚度 EAB 与跨厚度累计覆盖不得混为一谈。
 - 测试通过不代表完成真实仪器格式或物理结果的外部验证。
 - 不得因为文件成功导入就自动提升科研验证状态。
+- VSM 的 Ms 只是当前最大场端值，不宣称真实饱和；Hc/Mr 为离散点线性插值。
+- VSM 背景扣除默认关闭；启用时必须记录拟合窗口、系数与 R²，不得隐式扣除。
+- VSM 质量归一化只在显式提供质量时执行，不得使用默认质量。
 - 原始科研文件不提交 Git。
 
 ## 10. 当前技术债和风险
@@ -262,11 +284,12 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - 工作区尚无多人并发写入控制；AnalysisRun 只追加，导出引用为原地追加。
 - 尚无工作区备份、恢复和项目导入/导出界面。
 - 单样品报告和历史页导出尚未自动登记到 AnalysisRun。
+- VSM 仅支持显式列映射的 CSV/Excel/TXT；Minor loop、FORC、温度/角度序列和用户背景文件尚未实现。
 - README 的部分历史章节仍保留旧测试数量或旧阶段描述，需要后续统一清理。
 - Windows 安装程序没有商业代码签名，可能显示“未知发布者”。
 - 冻结版已在当前开发机验收，但仍需在另一台干净 Windows 电脑验证兼容性。
 - v0.14.0 起安装包与 SHA-256 作为 GitHub Release 附件发布；更早版本仍只有源码和标签。
-- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.15.0>
+- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.16.0>
 
 ## 11. 版本与发布工作流
 
@@ -286,7 +309,7 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 
 1. 克隆新仓库并确认 `origin` 指向新项目。
 2. 安装锁定依赖，运行 Ruff 和全量测试。
-3. 启动 GUI，体验工作区“测试 → 电磁/S 参数分析 → AnalysisRun → 载入结果”闭环。
-4. 阅读 PRD、架构文档和本交接文档。
-5. 开发 Phase C（VSM），最后开发 Phase D（XRD）。
+3. 启动 GUI，体验工作区“测试 → 电磁 / S 参数 / VSM 分析 → AnalysisRun → 载入结果”闭环。
+4. 阅读 PRD、架构文档、`docs/vsm.md` 和本交接文档。
+5. 开发 Phase D（XRD）：格式解析、峰检测与标注、晶相匹配、晶粒尺寸、绘图、导出与报告。
 
