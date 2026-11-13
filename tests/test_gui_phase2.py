@@ -240,7 +240,7 @@ def test_s_custom_schema_status_preserved(sresult, tmp_path):
 def test_comparison_plot_retains_viewing_space(qtbot):
     from gui.main_window import MainWindow
     window = MainWindow(); qtbot.addWidget(window)
-    window.show(); window.navigation.setCurrentRow(5)
+    window.show(); window.navigation.setCurrentRow(6)
     qtbot.wait(30)
     assert window.comparison.plot.height() > 300
     assert window.comparison.tabs.count() == 3

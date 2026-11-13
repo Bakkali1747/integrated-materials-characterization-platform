@@ -55,6 +55,8 @@ def test_main_window_start_and_navigation(window, qtbot):
     window.navigation.setCurrentRow(3)
     assert window.stack.currentWidget() is window.vsm
     window.navigation.setCurrentRow(4)
+    assert window.stack.currentWidget() is window.xrd
+    window.navigation.setCurrentRow(5)
     assert "S 参数" in window.stack.currentWidget().text()
 
 

@@ -13,9 +13,11 @@ from core.common.validation_status import ValidationStatus
 ELECTROMAGNETIC_ANALYSIS_TYPE = "electromagnetic_rl"
 S_PARAMETER_ANALYSIS_TYPE = "s_parameters"
 VSM_ANALYSIS_TYPE = "vsm_hysteresis"
+XRD_ANALYSIS_TYPE = "xrd_peaks"
 ANALYSIS_TYPE_LABELS = {ELECTROMAGNETIC_ANALYSIS_TYPE: "电磁 RL 分析",
                         S_PARAMETER_ANALYSIS_TYPE: "S 参数分析",
-                        VSM_ANALYSIS_TYPE: "VSM 磁滞回线"}
+                        VSM_ANALYSIS_TYPE: "VSM 磁滞回线",
+                        XRD_ANALYSIS_TYPE: "XRD 峰分析"}
 RESULT_ARTIFACTS = {
     ELECTROMAGNETIC_ANALYSIS_TYPE: ("summary.json", "analysis_record.json", "thickness_summary.csv",
                                     "RL_matrix.csv", "RL_curve.csv", "electromagnetic_parameters.csv",
@@ -23,6 +25,8 @@ RESULT_ARTIFACTS = {
     S_PARAMETER_ANALYSIS_TYPE: ("analysis_record.json", "sparameters_by_frequency.csv", "quality_checks.json",
                                 "metadata.xml", "sparameters_complex.npz", "raw_numeric_columns.csv"),
     VSM_ANALYSIS_TYPE: ("analysis_record.json", "vsm_metrics.json", "vsm_metrics.csv", "parsed_data.csv"),
+    XRD_ANALYSIS_TYPE: ("analysis_record.json", "xrd_peaks.json", "xrd_peaks.csv", "parsed_data.csv",
+                        "phase_matching.json"),
 }
 PLOT_SUFFIXES = {".png", ".tif", ".tiff", ".pdf", ".svg", ".eps"}
 
@@ -164,3 +168,11 @@ def link_vsm_run(repository, project_id: str, sample_id: str, measurement_id: st
     return link_measurement_run(repository, project_id, sample_id, measurement_id, directory, record,
                                 analysis_type=VSM_ANALYSIS_TYPE,
                                 measurement_type=MeasurementType.VSM)
+
+
+def link_xrd_run(repository, project_id: str, sample_id: str, measurement_id: str,
+                 directory: str | Path, record: dict[str, Any]):
+    """登记 XRD 峰分析运行；未检测到峰时状态为 NOT_COMPUTABLE。"""
+    return link_measurement_run(repository, project_id, sample_id, measurement_id, directory, record,
+                                analysis_type=XRD_ANALYSIS_TYPE,
+                                measurement_type=MeasurementType.XRD)

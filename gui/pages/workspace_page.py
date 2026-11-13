@@ -35,12 +35,14 @@ from core.common import (
     link_electromagnetic_run,
     link_sparameter_run,
     link_vsm_run,
+    link_xrd_run,
 )
 
 # 阶段 B 只把 ε/μ 数据与实测 S 参数接入工作区；VSM 使用独立文件与页面。
 ELECTROMAGNETIC_SOURCES = {".csv", ".xlsx", ".xls", ".memp"}
 SPARAMETER_SOURCE = ".sdat"
 VSM_SOURCES = {".csv", ".xlsx", ".xls", ".txt", ".dat"}
+XRD_SOURCES = {".csv", ".txt", ".xy", ".dat"}
 
 
 def _tags(text: str) -> list[str]:
@@ -162,6 +164,7 @@ class WorkspacePage(QWidget):
     analysis_requested = Signal(object)
     sparameter_analysis_requested = Signal(object)
     vsm_analysis_requested = Signal(object)
+    xrd_analysis_requested = Signal(object)
     run_load_requested = Signal(object)
 
     def __init__(self, repository: WorkspaceRepository | None = None, parent=None):
@@ -257,10 +260,13 @@ class WorkspacePage(QWidget):
         self.sparameter_button.clicked.connect(self.start_measurement_sparameter_analysis)
         self.vsm_button = QPushButton("用此测试开始VSM分析")
         self.vsm_button.clicked.connect(self.start_measurement_vsm_analysis)
+        self.xrd_button = QPushButton("用此测试开始XRD分析")
+        self.xrd_button.clicked.connect(self.start_measurement_xrd_analysis)
         measurement_actions.addWidget(self.verify_button)
         measurement_actions.addWidget(self.analyze_button)
         measurement_actions.addWidget(self.sparameter_button)
         measurement_actions.addWidget(self.vsm_button)
+        measurement_actions.addWidget(self.xrd_button)
         measurement_actions.addStretch()
         sample_layout.addLayout(measurement_actions)
         self.verify_result = QLabel("")
@@ -524,6 +530,7 @@ class WorkspacePage(QWidget):
         has_electromagnetic_source = any(path.suffix.lower() in ELECTROMAGNETIC_SOURCES for path in sources)
         has_sparameter_source = any(path.suffix.lower() == SPARAMETER_SOURCE for path in sources)
         has_vsm_source = any(path.suffix.lower() in VSM_SOURCES for path in sources)
+        has_xrd_source = any(path.suffix.lower() in XRD_SOURCES for path in sources)
         self.verify_button.setEnabled(measurement is not None)
         self.analyze_button.setEnabled(kind is MeasurementType.ELECTROMAGNETIC and has_electromagnetic_source)
         if kind is MeasurementType.ELECTROMAGNETIC and has_electromagnetic_source:
@@ -546,6 +553,13 @@ class WorkspacePage(QWidget):
             self.vsm_button.setToolTip("该测试没有 .csv / .xlsx / .xls / .txt / .dat 数据文件。")
         else:
             self.vsm_button.setToolTip("VSM 分析只接受 VSM 测试的原始文件。")
+        self.xrd_button.setEnabled(kind is MeasurementType.XRD and has_xrd_source)
+        if kind is MeasurementType.XRD and has_xrd_source:
+            self.xrd_button.setToolTip("用该 XRD 测试的原始文件创建峰分析。")
+        elif kind is MeasurementType.XRD:
+            self.xrd_button.setToolTip("该测试没有 .csv / .txt / .xy / .dat 数据文件。")
+        else:
+            self.xrd_button.setToolTip("XRD 分析只接受 XRD 测试的原始文件。")
 
     def _refresh_run_actions(self):
         run = self._selected_run()
@@ -673,6 +687,41 @@ class WorkspacePage(QWidget):
         self.message.emit(f"已载入 VSM 文件：{path.name}；在 VSM 页面确认单位与质量后开始分析。")
         return request
 
+    def start_measurement_xrd_analysis(self):
+        """把选中的 XRD 测试交给 XRD 页面；波长与峰参数仍需用户显式确认。"""
+        measurement = self._selected_measurement()
+        if measurement is None:
+            self.message.emit("请先选择一个测试。")
+            return None
+        if MeasurementType.coerce(measurement.measurement_type) is not MeasurementType.XRD:
+            self.message.emit("XRD 分析只接受 XRD 测试。")
+            return None
+        states = self.repository.verify_measurement_sources(
+            self.current_project_id, self.current_sample_id, measurement.measurement_id)
+        blocked = [(name, state) for name, state in states.items() if state != "PASS"]
+        if blocked:
+            QMessageBox.warning(
+                self, "来源文件已变化",
+                "以下原始文件与登记哈希不一致，已拒绝开始分析：\n"
+                + "\n".join(f"{state}：{name}" for name, state in blocked)
+                + "\n\n请恢复原始文件或重新添加测试后再分析。")
+            return None
+        candidates = [path for path in self._source_paths(measurement) if path.suffix.lower() in XRD_SOURCES]
+        if not candidates:
+            QMessageBox.information(self, "没有 XRD 数据文件",
+                                    "该测试没有 .csv / .txt / .xy / .dat 数据文件。")
+            return None
+        path = candidates[0]
+        if not path.is_file():
+            QMessageBox.warning(self, "原始文件不存在", f"无法读取原始文件：{path}")
+            return None
+        request = {"kind": "xrd_peaks", "project_id": self.current_project_id,
+                   "sample_id": self.current_sample_id, "measurement_id": measurement.measurement_id,
+                   "path": str(path)}
+        self.xrd_analysis_requested.emit(request)
+        self.message.emit(f"已载入 XRD 文件：{path.name}；在 XRD 页面确认波长与峰参数后开始分析。")
+        return request
+
     def open_selected_run(self):
         run = self._selected_run()
         if run is None or not run.result_refs:
@@ -726,6 +775,12 @@ class WorkspacePage(QWidget):
                        directory, record):
         """由主窗口在 VSM 分析完成后调用；不可计算状态也会如实登记。"""
         return self._record_run(link_vsm_run, project_id, sample_id, measurement_id,
+                                directory, record)
+
+    def record_xrd_run(self, project_id: str, sample_id: str, measurement_id: str,
+                       directory, record):
+        """由主窗口在 XRD 分析完成后调用；未检测到峰时登记 NOT_COMPUTABLE。"""
+        return self._record_run(link_xrd_run, project_id, sample_id, measurement_id,
                                 directory, record)
 
     def record_exports(self, result_directory, paths):

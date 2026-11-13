@@ -188,6 +188,6 @@ def test_history_bad_json(qtbot,tmp_path):
 def test_phase3_navigation(qtbot):
     from gui.main_window import MainWindow
     window=MainWindow(); qtbot.addWidget(window)
-    window.navigation.setCurrentRow(6); assert window.stack.currentWidget() is window.batch
-    window.navigation.setCurrentRow(7); assert window.stack.currentWidget() is window.history
-    assert len(window.task_pages)==6
+    window.navigation.setCurrentRow(7); assert window.stack.currentWidget() is window.batch
+    window.navigation.setCurrentRow(8); assert window.stack.currentWidget() is window.history
+    assert len(window.task_pages)==7

@@ -44,12 +44,13 @@ def run_smoke(app, output):
     phase = "import"
     s_measurement = None
     v_measurement = None
+    x_measurement = None
 
     def save_report():
         (output / "smoke_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def tick():
-        nonlocal phase, s_measurement, v_measurement
+        nonlocal phase, s_measurement, v_measurement, x_measurement
         if any(p.busy for p in window.task_pages):
             return
         try:
@@ -175,12 +176,47 @@ def run_smoke(app, output):
                 report["vsm_reports"] = [str(item) for item in export_vsm_report(
                     window.vsm.completed["directory"], output / "vsm_report", dpi=120)]
                 window.grab().save(str(output / "client-vsm.png"))
+                xrd_path = output / "synthetic_xrd.csv"
+                xrd_lines = ["two_theta_deg,intensity"]
+                for i in range(4001):
+                    angle = 10.0 + i * 0.02
+                    intensity = (100.0 + 0.5 * angle
+                                 + 500.0 * math.exp(-((angle - 20.0) / 0.08) ** 2)
+                                 + 300.0 * math.exp(-((angle - 30.0) / 0.10) ** 2)
+                                 + 200.0 * math.exp(-((angle - 40.0) / 0.12) ** 2))
+                    xrd_lines.append(f"{angle:.4f},{intensity:.6f}")
+                xrd_path.write_text("\n".join(xrd_lines), encoding="utf-8")
+                x_measurement = window.workspace.add_measurement("xrd", [xrd_path], instrument="XRD")
+                window.workspace.start_measurement_xrd_analysis()
+                window.xrd.output.setText(str(output / "xrd-analysis"))
+                window.xrd.start_analysis()
+                phase = "xrd"
+            elif phase == "xrd":
+                if not window.xrd.completed:
+                    raise RuntimeError(window.xrd.error.text() or "XRD 分析失败")
+                peaks = window.xrd.completed["metrics"]["peaks"]
+                if not peaks:
+                    raise RuntimeError("XRD 未检测到峰")
+                x_runs = workspace_repository.list_analysis_runs(
+                    project.project_id, sample.sample_id, x_measurement.measurement_id)
+                if len(x_runs) != 1 or x_runs[0].analysis_type != "xrd_peaks":
+                    raise RuntimeError("XRD 运行未自动登记到工作区")
+                if x_runs[0].validation_status not in {"PENDING", "WARNING", "NOT_COMPUTABLE"}:
+                    raise RuntimeError("XRD 运行状态不符合待验证规则")
+                report["workspace_xrd_run"] = {"id": x_runs[0].analysis_run_id,
+                                               "status": x_runs[0].validation_status,
+                                               "plot_refs": len(x_runs[0].plot_refs),
+                                               "peak_count": len(peaks)}
+                from export.xrd_report import export_xrd_report
+                report["xrd_reports"] = [str(item) for item in export_xrd_report(
+                    window.xrd.completed["directory"], output / "xrd_report", dpi=120)]
+                window.grab().save(str(output / "client-xrd.png"))
                 compare = window.comparison
                 compare.add_source(output / "synthetic.xlsx", "synthetic_copy")
                 compare.parameters.output.setText(str(output))
                 compare.parameters.fields["thickness_max"].setValue(1.1)
                 compare.parameters.fields["thickness_step"].setValue(.1)
-                window.navigation.setCurrentRow(5)
+                window.navigation.setCurrentRow(6)
                 compare.start_comparison()
                 phase = "comparison"
             elif phase == "comparison":
@@ -198,7 +234,7 @@ def run_smoke(app, output):
                 bpage.parameters.output.setText(str(output / "batch-output"))
                 bpage.parameters.fields["thickness_max"].setValue(1.1)
                 bpage.parameters.fields["thickness_step"].setValue(.1)
-                window.navigation.setCurrentRow(6)
+                window.navigation.setCurrentRow(7)
                 bpage.scan(batch_source)
                 phase = "batch-scan"
             elif phase == "batch-scan":
@@ -212,7 +248,7 @@ def run_smoke(app, output):
                     raise RuntimeError(window.batch.error.text() or "批量失败隔离验收失败")
                 report["batch"] = {k:result["record"][k] for k in ("status", "success_count", "failed_count")}
                 window.grab().save(str(output / "client-batch.png"))
-                window.navigation.setCurrentRow(7)
+                window.navigation.setCurrentRow(8)
                 window.history.discovered([result["directory"] / "batch_record.json"])
                 window.history.load_selected()
                 phase = "history"
@@ -233,7 +269,7 @@ def run_smoke(app, output):
                 if report["quality_control"] != "PASS":
                     raise RuntimeError("Quality Control 未展示")
                 window.grab().save(str(output / "client-history.png"))
-                window.navigation.setCurrentRow(8)
+                window.navigation.setCurrentRow(9)
                 analysis_dpi = page.completed["record"]["configuration"]["figure_dpi"]
                 window.settings.dpi.setValue(120)
                 window.settings.format.setCurrentText("svg")
@@ -268,7 +304,7 @@ def run_smoke(app, output):
                 images = [p for p in output.rglob("*")
                           if p.suffix.lower() in {".png", ".tiff", ".pdf", ".svg"}
                           and not p.name.startswith("client")
-                          and p.stem not in {"analysis_report", "vsm_report"}]
+                          and p.stem not in {"analysis_report", "vsm_report", "xrd_report"}]
                 for image_path in images:
                     data_folder = image_path.with_name(image_path.name + ".data")
                     manifest = json.loads((data_folder / "metadata.json").read_text(encoding="utf-8"))

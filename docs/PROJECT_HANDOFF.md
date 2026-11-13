@@ -1,30 +1,30 @@
 # 综合材料表征分析平台项目交接文档
 
 最后核对日期：2026-11-13  
-当前版本：`v0.17.0`  
-当前阶段：Phase C 完成 / Phase D（XRD）待开发  
+当前版本：`v0.18.0`  
+当前阶段：PRD Phase D 完成  
 主仓库：<https://github.com/Bakkali1747/integrated-materials-characterization-platform>
 
 ## 1. 项目定位
 
 本项目是面向个人科研使用的 Windows 本地桌面应用，目标是以真实样品为中心，统一管理电磁、VSM、XRD 等材料表征数据、分析运行和科研产物。
 
-项目由原“微波吸收分析软件”演进而来。v0.13.0 在保留原有电磁分析能力的基础上新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加工作区 schema v1 与 S 参数运行；v0.16.0 新增 VSM 磁滞回线分析；v0.17.0 支持 Lake Shore 风格 `.dat` 并自动读取文件头质量与单位。
+项目由原“微波吸收分析软件”演进而来。v0.13.0 在保留原有电磁分析能力的基础上新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加工作区 schema v1 与 S 参数运行；v0.16.0 新增 VSM 磁滞回线分析；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 完成 XRD 峰分析并接入工作区。
 
 应用采用新的名称、安装目录、本地数据目录和安装器 AppId，可以和旧版微波吸收分析软件并存，不会覆盖旧应用。
 
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.17.0 基线提交：`f23c131`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
-- 版本标签：`v0.17.0`
-- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.17.0-win64.exe`
-- 安装程序 SHA-256：`1e9191f4c57d482c1be8fbc29c048889e8dd8e875625cab7e538f023a27141a8`；同时见 `output/releases/SHA256SUMS-0.17.0.txt`
-- 当前已验证测试：`401 passed`
+- v0.18.0 基线提交：构建后回填（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
+- 版本标签：`v0.18.0`
+- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.18.0-win64.exe`
+- 安装程序 SHA-256：构建后回填；同时写入 `output/releases/SHA256SUMS-0.18.0.txt`
+- 当前已验证测试：`415 passed`
 - Ruff：通过
-- 源码版和冻结安装版自检：通过（包含电磁、S 参数与 VSM 三类工作区自动登记）
-- 已验证产物：17 类电磁科研图、报告、S 参数、VSM 回线与报告、比较、批量、历史和导出
-- 真实 VSM 数据：9 个 Lake Shore DAT 文件解析与指标计算通过
+- 源码版和冻结安装版自检：通过（包含电磁、S 参数、VSM 与 XRD 四类工作区自动登记）
+- 已验证产物：17 类电磁科研图、报告、S 参数、VSM 回线与报告、XRD 图谱与报告、比较、批量、历史和导出
+- 真实数据：9 个 Lake Shore VSM DAT 解析与指标计算通过；XRD 使用合成峰与参考峰列表验收
 
 原仓库保留为历史远程 `legacy-origin`：
 
@@ -87,7 +87,18 @@ Project
 - 输出 `parsed_data.csv`、`vsm_metrics.json/csv`、`analysis_record.json/txt`、磁滞回线与原点放大图、可选背景图，以及 DOCX/PDF 报告。
 - 可从 VSM Measurement 发起分析并自动登记 `vsm_hysteresis` AnalysisRun；不可计算时登记为 `NOT_COMPUTABLE`。
 
-### 3.4 S 参数
+### 3.4 XRD
+
+- 读取 `.csv`、`.txt`、`.xy`、`.dat` 文本；有表头按列名，无表头只接受两列（2θ，强度）。
+- 2θ 严格递增；缺失/非数值/非有限值报错；不排序、不插值、不平滑、不裁剪。
+- 峰检测：局部极大 + 地形突出度 + 最小峰间距；峰位取扫描网格点。
+- 计算 FWHM（半高线性插值）、d 间距、Scherrer 表观尺寸（显式波长与 K，未做仪器展宽校正）与相对强度。
+- 可选左右高角度窗口线性背景扣除，默认关闭。
+- 可选参考峰列表匹配：按 phase 分组、相对强度加权、容差内最近邻匹配；明确不是物相鉴定。
+- 输出 `parsed_data.csv`、`xrd_peaks.csv/json`、`phase_matching.json`、图谱/参考相棒图与 DOCX/PDF 报告。
+- 可从 XRD Measurement 发起分析并自动登记 `xrd_peaks` AnalysisRun；未检测到峰时登记为 `NOT_COMPUTABLE`。
+
+### 3.5 S 参数
 
 - 解析 S11、S21、S12、S22 的复数、幅度、dB 和相位。
 - 计算 R、T、A 和 SE_R、SE_A、SE_T。
@@ -98,7 +109,7 @@ Project
 
 当前 S 参数字段映射仍是 `candidate_high_confidence`，不是厂商正式确认格式；尚未实现 NRW 反演。
 
-### 3.5 批量、比较、历史与导出
+### 3.6 批量、比较、历史与导出
 
 - 单样品、多样品比较和混合批量处理。
 - 逐来源故障隔离和协作取消。
@@ -130,9 +141,14 @@ v0.16.0 已实现 VSM 基础闭环：解析、单位、质量归一化、磁滞�
 - 尚未自动判定“真实饱和”，Ms 只是当前最大场端值。
 - 尚未实现逐点 QC 表格或 VSM 运行历史筛选。
 
-### 4.3 Phase D：XRD
+### 4.3 Phase D 已完成，后续 XRD 增强
 
-当前只能登记 XRD 原始文件。尚需实现格式解析、峰检测、峰标注、晶相匹配、晶粒尺寸、绘图、导出和报告。
+v0.18.0 已实现 XRD 基础闭环：文本解析、峰检测、FWHM、d 间距、Scherrer 表观尺寸、可选线性背景、参考峰匹配、绘图、导出、报告与工作区登记。以下属于后续增强：
+
+- 不支持厂商专有二进制格式（未公开 `.raw`/`.brml` 等）。
+- 不支持 Rietveld/全谱拟合、Kα2 剥离、仪器展宽校正、织构或应力分析。
+- 参考相匹配只使用用户提供的峰列表；未内置 PDF 数据库。
+- 尚未实现峰形拟合（Gaussian/Lorentzian/Pseudo-Voigt）与自动背景模型选择。
 
 
 ## 5. 技术栈
@@ -164,6 +180,8 @@ core/
 ├── analysis_service.py     GUI/CLI 共用电磁分析服务
 ├── vsm.py                  VSM 解析、单位、磁滞指标与背景扣除
 ├── vsm_service.py          VSM 运行、记录与产物
+├── xrd.py                  XRD 解析、峰检测、Scherrer 与参考匹配
+├── xrd_service.py          XRD 运行、记录与产物
 ├── parser.py               CSV/Excel/MEMP 解析
 ├── validation.py           数据质量检查
 ├── electromagnetic.py      复电磁参数构造
@@ -187,7 +205,7 @@ packaging/                  PyInstaller 和 Inno Setup 配置
 tests/                      自动测试
 docs/                       架构、使用和科学约定文档
 sample_data/                合成验收数据
-run_*.py                    GUI 和 CLI 入口（含 run_vsm.py）
+run_*.py                    GUI 和 CLI 入口（含 run_vsm.py、run_xrd.py）
 ```
 
 推荐阅读顺序：
@@ -196,14 +214,17 @@ run_*.py                    GUI 和 CLI 入口（含 run_vsm.py）
 2. `docs/architecture.md`
 3. `docs/workspace.md`
 4. `docs/vsm.md`
-5. `core/common/workspace.py`
-6. `core/common/workspace_schema.py`
-7. `core/common/analysis_link.py`
-8. `core/analysis_service.py`
-9. `core/vsm.py` / `core/vsm_service.py`
-10. `gui/pages/workspace_page.py`
-11. `gui/pages/vsm_page.py`
-12. `VERSIONING.md`
+5. `docs/xrd.md`
+6. `core/common/workspace.py`
+7. `core/common/workspace_schema.py`
+8. `core/common/analysis_link.py`
+9. `core/analysis_service.py`
+10. `core/vsm.py` / `core/vsm_service.py`
+11. `core/xrd.py` / `core/xrd_service.py`
+12. `gui/pages/workspace_page.py`
+13. `gui/pages/vsm_page.py`
+14. `gui/pages/xrd_page.py`
+15. `VERSIONING.md`
 
 ## 7. 开发与测试
 
@@ -277,7 +298,10 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - 不得因为文件成功导入就自动提升科研验证状态。
 - VSM 的 Ms 只是当前最大场端值，不宣称真实饱和；Hc/Mr 为离散点线性插值。
 - VSM 背景扣除默认关闭；启用时必须记录拟合窗口、系数与 R²，不得隐式扣除。
-- VSM 质量归一化只在显式提供质量时执行，不得使用默认质量。
+- VSM 的质量归一化只在显式提供质量时执行，不得使用默认质量。
+- XRD 的峰位取扫描网格点，FWHM 为半高线性插值；不得声称完成峰形拟合。
+- XRD 的 Scherrer 尺寸未做仪器展宽校正，只能报告为表观尺寸。
+- XRD 参考峰匹配只是筛查，不是物相鉴定，不得据此宣称样品为单一物相。
 - 原始科研文件不提交 Git。
 
 ## 10. 当前技术债和风险
@@ -287,11 +311,12 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - 尚无工作区备份、恢复和项目导入/导出界面。
 - 单样品报告和历史页导出尚未自动登记到 AnalysisRun。
 - VSM 的 Lake Shore DAT 支持基于本项目真实文件观察结构；其他厂商/二进制 `.dat` 不解析。Minor loop、FORC、温度/角度序列和用户背景文件尚未实现。
+- XRD 仅支持显式文本格式（CSV/TXT/XY/DAT）；不支持专有二进制、Rietveld、Kα2 剥离、仪器展宽校正与内置 PDF 数据库。
 - README 的部分历史章节仍保留旧测试数量或旧阶段描述，需要后续统一清理。
 - Windows 安装程序没有商业代码签名，可能显示“未知发布者”。
 - 冻结版已在当前开发机验收，但仍需在另一台干净 Windows 电脑验证兼容性。
 - v0.14.0 起安装包与 SHA-256 作为 GitHub Release 附件发布；更早版本仍只有源码和标签。
-- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.17.0>
+- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.18.0>
 
 ## 11. 版本与发布工作流
 
@@ -311,7 +336,7 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 
 1. 克隆新仓库并确认 `origin` 指向新项目。
 2. 安装锁定依赖，运行 Ruff 和全量测试。
-3. 启动 GUI，体验工作区“测试 → 电磁 / S 参数 / VSM 分析 → AnalysisRun → 载入结果”闭环。
-4. 阅读 PRD、架构文档、`docs/vsm.md`（含 Lake Shore DAT 格式）和本交接文档。
-5. 开发 Phase D（XRD）：格式解析、峰检测与标注、晶相匹配、晶粒尺寸、绘图、导出与报告。
+3. 启动 GUI，体验工作区“测试 → 电磁 / S 参数 / VSM / XRD 分析 → AnalysisRun → 载入结果”闭环。
+4. 阅读 PRD、架构文档、`docs/vsm.md`、`docs/xrd.md` 和本交接文档。
+5. 如需继续 XRD：峰形拟合、仪器展宽校正、Kα2 剥离、PDF 数据库匹配与 Rietveld 精修。
 

@@ -120,7 +120,7 @@ def test_main_window_registers_vsm_run_and_dispatches_loading(qtbot, tmp_path, m
     window.open_workspace_run({"directory": "v-dir", "analysis_type": "vsm_hysteresis"})
     assert window.navigation.currentRow() == 3
     window.open_workspace_run({"directory": "s-dir", "analysis_type": "s_parameters"})
-    assert window.navigation.currentRow() == 4 and window.ui_mode == "full"
+    assert window.navigation.currentRow() == 5 and window.ui_mode == "full"
     window.open_workspace_run({"directory": "e-dir"})
     assert window.navigation.currentRow() == 2
     assert calls == [("vsm", "v-dir"), ("s", "s-dir"), ("em", "e-dir")]
