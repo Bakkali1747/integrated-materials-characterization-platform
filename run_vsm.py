@@ -53,15 +53,18 @@ def analyze(path, *, output="output", name=None, field_column=None, moment_colum
 
 
 def main():
-    parser = argparse.ArgumentParser(description="VSM 磁滞回线分析（显式单位与质量）")
+    parser = argparse.ArgumentParser(description="VSM 磁滞回线分析（显式单位与质量；支持 Lake Shore .dat）")
     parser.add_argument("file")
     parser.add_argument("--name")
     parser.add_argument("--output", default="output")
     parser.add_argument("--field-column")
     parser.add_argument("--moment-column")
-    parser.add_argument("--field-unit", required=True, choices=["Oe", "A/m", "kA/m", "T", "mT"])
-    parser.add_argument("--moment-unit", required=True, choices=["emu", "A m^2"])
-    parser.add_argument("--mass-mg", type=float)
+    parser.add_argument("--field-unit", choices=["Oe", "A/m", "kA/m", "T", "mT"],
+                        help="非 .dat 文件必填；.dat 从表头读取 Oe")
+    parser.add_argument("--moment-unit", choices=["emu", "A m^2"],
+                        help="非 .dat 文件必填；.dat 从表头读取 emu")
+    parser.add_argument("--mass-mg", type=float,
+                        help="样品质量 mg；.dat 留空时使用文件头 Mass(g)")
     parser.add_argument("--background", default="none", choices=["none", "linear_high_field"])
     parser.add_argument("--background-min-field-oe", type=float, default=10000.0)
     parser.add_argument("--sheet", default=0)
@@ -70,6 +73,9 @@ def main():
     parser.add_argument("--delimiter")
     parser.add_argument("--dpi", type=int, default=600)
     args = parser.parse_args()
+    is_dat = Path(args.file).suffix.lower() == ".dat"
+    if not is_dat and (args.field_unit is None or args.moment_unit is None):
+        parser.error("非 .dat 文件必须显式提供 --field-unit 与 --moment-unit。")
     sheet = args.sheet
     try:
         sheet = int(sheet)
@@ -77,8 +83,8 @@ def main():
         pass
     try:
         analyze(args.file, output=args.output, name=args.name, field_column=args.field_column,
-                moment_column=args.moment_column, field_unit=args.field_unit,
-                moment_unit=args.moment_unit, mass_mg=args.mass_mg, sheet=sheet,
+                moment_column=args.moment_column, field_unit=args.field_unit or "Oe",
+                moment_unit=args.moment_unit or "emu", mass_mg=args.mass_mg, sheet=sheet,
                 header_row=args.header_row, encoding=args.encoding, delimiter=args.delimiter,
                 background_mode=args.background,
                 background_min_field_oe=args.background_min_field_oe,

@@ -1,10 +1,10 @@
 # VSM 磁滞回线分析
 
-v0.16.0 实现 PRD Phase C 的 VSM 基础分析：读取 VSM 原始文件，计算 Hc、Mr、Ms、方形比与回线闭合差，可选高场线性背景扣除与质量归一化，输出图、指标表、JSON 记录、DOCX/PDF 报告，并接入样品工作区的 Measurement → AnalysisRun 闭环。
+v0.17.0 实现 PRD Phase C 的 VSM 基础分析：读取 VSM 原始文件（含 Lake Shore 风格 `.dat`），计算 Hc、Mr、Ms、方形比与回线闭合差，可选高场线性背景扣除与质量归一化，输出图、指标表、JSON 记录、DOCX/PDF 报告，并接入样品工作区的 Measurement → AnalysisRun 闭环。
 
 ## 支持格式与显式配置
 
-支持 `.csv`、`.xlsx`、`.xls`、`.txt`。字段列必须显式指定，或使用唯一别名（例如 `field_oe`、`Field (Oe)`、`H`、`磁场`）。以下配置均需显式给出，程序不猜测：
+支持 `.csv`、`.xlsx`、`.xls`、`.txt`、`.dat`。字段列必须显式指定，或使用唯一别名（例如 `field_oe`、`Field (Oe)`、`H`、`磁场`）。以下配置均需显式给出，程序不猜测：
 
 - 磁场列与磁矩列。
 - 磁场单位：`Oe`、`A/m`、`kA/m`、`T`、`mT`。
@@ -14,6 +14,25 @@ v0.16.0 实现 PRD Phase C 的 VSM 基础分析：读取 VSM 原始文件，计�
 - 背景扣除模式：`none`（默认）或 `linear_high_field`；后者需要高场窗口 |H| ≥ 阈值。
 
 缺失值、非数值、非有限值直接报错并列出源行；不排序、不去重、不插值、不裁剪。原始文件只读，运行记录保存 SHA-256。
+
+## Lake Shore 风格 DAT
+
+已按本项目的真实测量文件验证以下结构（GBK 文本）：
+
+```text
+ID=样品  Mass(g)=0.0298  Volume(cm^3)=0  ...  Unit=CGS  Room_T(℃)=22.3 ...
+Hci(Oe)=9.64  Hci1(Oe)=...  Mr(emu)=...  Ms(emu)=...
+Time(s)  Field(Oe)  Temperature(K)  Angle(deg)  Moment(emu)  Magnetization(Mass)(emu/g)  LockX(V)  LcokY(V)  Induction(Gs)
+```
+
+- 自动识别数据表头（含 `Field(...)` 与 `Moment(...)`），默认选择 `Field(Oe)` 和 `Moment(emu)`。
+- 从文件头读取 `Mass(g)`，换算为 mg 并默认用于质量归一化；界面会填入质量并标注“DAT 文件头”。用户手动修改质量时覆盖文件头，若与文件头相差超过 1% 会警告。
+- 从文件头读取 `Unit`；当前只接受 `Unit=CGS`（Oe/emu）。`Unit=SI` 明确拒绝，不猜测。
+- 记录文件头元数据与仪器内置的 `Hci/Mr/Ms`，仅供核对；本程序仍独立计算指标，不直接复制仪器结果。
+- 温度、角度等附加列可含 `NaN`；只要求所选磁场列和磁矩列有限。
+- 编码优先 UTF-8，失败后回退 GBK；两侧都失败则报错。
+
+未知厂商二进制 `.dat` 或结构不同的文本仍会拒绝，不会按列位置猜测。
 
 ## 单位换算
 

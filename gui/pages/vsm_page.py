@@ -88,6 +88,8 @@ class VsmPage(TaskPage):
             self.moment_unit.addItem(unit, unit)
         self.mass = QLineEdit()
         self.mass.setPlaceholderText("样品质量 mg；留空则仅报告磁矩")
+        self.mass_from_header = False
+        self.mass.textEdited.connect(self._mass_edited)
         self.sheet = QLineEdit("0")
         self.sheet.setMaximumWidth(56)
         self.header_row = QLineEdit("0")
@@ -169,11 +171,16 @@ class VsmPage(TaskPage):
 
     def choose_file(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择 VSM 原始文件", "", "VSM 数据 (*.csv *.xlsx *.xls *.txt);;所有文件 (*)")
+            self, "选择 VSM 原始文件", "",
+            "VSM 数据 (*.csv *.xlsx *.xls *.txt *.dat);;Lake Shore DAT (*.dat);;所有文件 (*)")
         if path:
             self.file.setText(path)
             self.name.setText(Path(path).stem)
             self.load_columns()
+
+    def _mass_edited(self, _text):
+        """用户手动改质量后不再标记为 DAT 文件头来源。"""
+        self.mass_from_header = False
 
     def choose_output(self):
         path = QFileDialog.getExistingDirectory(self, "选择输出目录", self.output.text())
@@ -191,8 +198,16 @@ class VsmPage(TaskPage):
             self.show_error(f"读取列名失败：{error}")
             return
         field, moment = suggest_vsm_columns(preview["columns"])
-        for combo, suggested, label in ((self.field_column, field, "磁场"),
-                                        (self.moment_column, moment, "磁矩")):
+        metadata = preview["metadata"]
+        if metadata.get("field_unit"):
+            self.field_unit.setCurrentText(metadata["field_unit"])
+        if metadata.get("moment_unit"):
+            self.moment_unit.setCurrentText(metadata["moment_unit"])
+        auto_mass = metadata.get("mass_mg")
+        if auto_mass is not None and (not self.mass.text().strip() or self.mass_from_header):
+            self.mass.setText(f"{float(auto_mass):.6g}")
+            self.mass_from_header = True
+        for combo, suggested in ((self.field_column, field), (self.moment_column, moment)):
             current = combo.currentText().strip()
             combo.blockSignals(True)
             combo.clear()
@@ -202,7 +217,12 @@ class VsmPage(TaskPage):
             elif current in preview["columns"]:
                 combo.setCurrentText(current)
             combo.blockSignals(False)
-        self.message.emit(f"读取到 {len(preview['columns'])} 列、{preview['rows']} 行；请确认磁场列与磁矩列。")
+        hint = f"读取到 {len(preview['columns'])} 列、{preview['rows']} 行；请确认磁场列与磁矩列。"
+        if metadata.get("dat_metadata"):
+            hint = (f"Lake Shore DAT：{len(preview['columns'])} 列、{preview['rows']} 行；"
+                    f"文件头 Mass(g)={metadata.get('dat_metadata', {}).get('mass_g', '未记录')}，"
+                    f"单位={metadata.get('dat_metadata', {}).get('unit', 'CGS')}。请确认质量。")
+        self.message.emit(hint)
 
     def _sheet(self):
         text = self.sheet.text().strip()
@@ -244,6 +264,7 @@ class VsmPage(TaskPage):
                          field_unit=self.field_unit.currentData(),
                          moment_unit=self.moment_unit.currentData(),
                          mass_mg=self._mass(), sheet=self._sheet(), header_row=self._header_row(),
+                         mass_from_header=self.mass_from_header,
                          background_mode=self.background.currentData(),
                          background_min_field_oe=float(self.threshold.value()),
                          dpi=self.export_dpi, entry_point="gui_vsm")

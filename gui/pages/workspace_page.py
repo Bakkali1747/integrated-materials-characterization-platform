@@ -40,7 +40,7 @@ from core.common import (
 # 阶段 B 只把 ε/μ 数据与实测 S 参数接入工作区；VSM 使用独立文件与页面。
 ELECTROMAGNETIC_SOURCES = {".csv", ".xlsx", ".xls", ".memp"}
 SPARAMETER_SOURCE = ".sdat"
-VSM_SOURCES = {".csv", ".xlsx", ".xls", ".txt"}
+VSM_SOURCES = {".csv", ".xlsx", ".xls", ".txt", ".dat"}
 
 
 def _tags(text: str) -> list[str]:
@@ -543,7 +543,7 @@ class WorkspacePage(QWidget):
         if kind is MeasurementType.VSM and has_vsm_source:
             self.vsm_button.setToolTip("用该 VSM 测试的原始文件创建磁滞回线分析。")
         elif kind is MeasurementType.VSM:
-            self.vsm_button.setToolTip("该测试没有 .csv / .xlsx / .xls / .txt 数据文件。")
+            self.vsm_button.setToolTip("该测试没有 .csv / .xlsx / .xls / .txt / .dat 数据文件。")
         else:
             self.vsm_button.setToolTip("VSM 分析只接受 VSM 测试的原始文件。")
 
@@ -660,7 +660,7 @@ class WorkspacePage(QWidget):
         candidates = [path for path in self._source_paths(measurement) if path.suffix.lower() in VSM_SOURCES]
         if not candidates:
             QMessageBox.information(self, "没有 VSM 数据文件",
-                                    "该测试没有 .csv / .xlsx / .xls / .txt 数据文件。")
+                                    "该测试没有 .csv / .xlsx / .xls / .txt / .dat 数据文件。")
             return None
         path = candidates[0]
         if not path.is_file():

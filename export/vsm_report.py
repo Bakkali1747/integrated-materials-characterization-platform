@@ -59,6 +59,11 @@ def _report_data(directory):
     record, metrics = saved["record"], saved["metrics"]
     background = metrics.get("background") or {}
     unit = metrics.get("metrics_unit") or "emu"
+    source = record.get("source") or {}
+    mass_source = {"dat_header": "DAT 文件头", "user": "用户输入"}.get(source.get("mass_source"), "未提供")
+    instrument = source.get("instrument_metrics") or {}
+    instrument_text = "；".join(f"{key}={value}" for key, value in instrument.items()
+                                if key in ("Hci(Oe)", "Mr(emu)", "Ms(emu)")) or "未记录"
     metadata = [
         ("样品", record.get("sample", "未记录")),
         ("运行状态", record.get("status", "unknown")),
@@ -68,10 +73,13 @@ def _report_data(directory):
         ("运行 ID", record.get("run_id", "未记录")),
         ("源文件", Path(record.get("raw_file", "")).name or "未记录"),
         ("源 SHA-256", record.get("raw_sha256", "unavailable")),
+        ("解析器", record.get("parser_version", "未记录")),
         ("磁场范围 (Oe)", str(record.get("field_range_oe", "未记录"))),
         ("数据点数", record.get("field_points", "未记录")),
         ("样品质量 (mg)", _value(record.get("mass_mg"))),
+        ("质量来源", mass_source),
         ("质量归一化", "是" if record.get("mass_normalization") else "否（仅磁矩）"),
+        ("仪器内置指标", instrument_text),
         ("背景扣除", background.get("mode", "none")),
         ("背景拟合窗口 (Oe)", _value(background.get("minimum_abs_field_oe"))),
         ("图 DPI", record.get("configuration", {}).get("figure_dpi", "未记录")),

@@ -1,5 +1,16 @@
 # 变更记录
 
+## v0.17.0 — VSM 支持 Lake Shore DAT
+
+- VSM 新增 Lake Shore 风格 `.dat` 文本解析：自动识别 `Field(...)` / `Moment(...)` 表头，默认选择 `Field(Oe)` 与 `Moment(emu)`。
+- 从文件头读取 `Mass(g)` 并换算为 mg，默认用于质量归一化；界面预填质量并标注来源，用户修改时覆盖文件头，差异超过 1% 时警告。
+- 从文件头读取 `Unit`，当前只接受 `Unit=CGS`（Oe/emu）；`Unit=SI` 明确拒绝，不按列位置猜测。
+- 记录文件头元数据与仪器内置 `Hci/Mr/Ms` 供核对；本程序仍独立计算指标。
+- 支持 GBK/UTF-8 编码、温度/角度列含 `NaN`；只要求所选磁场/磁矩列有限。
+- VSM 文件选择、工作区 VSM 源文件与 CLI `run_vsm.py` 均支持 `.dat`；`--field-unit/--moment-unit` 对 DAT 可省略。
+- 用 9 个真实 Lake Shore DAT 文件验证：全部解析成功、2 个扫描分支、无额外警告，Hc 与仪器 `Hci` 接近。
+- 401 项测试通过；新增 DAT 解析、质量来源、单位拒绝和界面预填测试。
+
 ## v0.16.0 — VSM 磁滞回线分析（Phase C）
 
 - 新增 VSM 解析：CSV/Excel/TXT，显式磁场列、磁矩列、磁场单位（Oe/A·m⁻¹/kA·m⁻¹/T/mT）与磁矩单位（emu/A·m²）。

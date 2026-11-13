@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from core.vsm import analyze_vsm, read_vsm, suggest_vsm_columns
+from core.vsm import analyze_vsm, inspect_vsm_table, read_vsm, suggest_vsm_columns
 from core.vsm_service import VSMConfig, execute, load_completed_vsm_run
 from export.vsm_report import export_vsm_report
 
@@ -26,6 +26,117 @@ def write_loop(path, **values):
     path.write_text("field_oe,moment_emu\n" + "\n".join(f"{h},{m}" for h, m in zip(field, moment)),
                     encoding="utf-8")
     return path
+
+
+def write_dat(path, *, mass_g=0.01, hc=100.0, ms=20.0, width=120.0, hmax=3000.0,
+              step=60.0, unit="CGS"):
+    """构造 Lake Shore 风格 DAT（GBK），结构与本项目已观察的真实文件一致。"""
+    up = np.arange(-hmax, hmax + step / 2, step)
+    down = np.arange(hmax, -hmax - step / 2, -step)
+    field = np.concatenate([down, up[1:]])
+    values = np.concatenate([ms * np.tanh((down + hc) / width), ms * np.tanh((up[1:] - hc) / width)])
+    moment = values * mass_g
+    header = (f"ID=测试样品  Mass(g)={mass_g}  Volume(cm^3)=0  Area(mm^2)=0  slope=0  constant=0  "
+              f"Unit={unit}  Rate(A/s)=0.500  Room_T(℃)=22.0  PoleGap=Gap2  emuFactor(emu/V)=2.0")
+    metrics = f"Hci(Oe)={hc}  Hci1(Oe)=-{hc}  Hci2(Oe)={hc}  Mr(emu)=0.1  Mr1(emu)=0.1  Mr2(emu)=-0.1  Ms(emu)={ms * mass_g}"
+    columns = ("Time(s)\tField(Oe)\tTemperature(K)\tAngle(deg)\tMoment(emu)\t"
+               "Magnetization(Mass)(emu/g)\tLockX(V)\tLcokY(V)\tInduction(Gs)")
+    rows = ["\t".join(["12:00:00.000", f"{h:.6E}", "NaN", "NaN", f"{m:.6E}",
+                       f"{m / mass_g:.6E}", "0", "0", "Inf"]) for h, m in zip(field, moment)]
+    path.write_bytes("\n".join([header, metrics, columns, *rows]).encode("gbk"))
+    return path
+
+
+def test_read_lakeshore_dat_auto_units_mass_and_metrics(tmp_path):
+    source = write_dat(tmp_path / "sample.dat")
+
+    data = read_vsm(source)
+
+    assert data.name == "测试样品"
+    assert data.metadata["parser"] == "lakeshore-dat-v1"
+    assert data.metadata["mass_mg"] == pytest.approx(10.0)
+    assert data.metadata["mass_source"] == "dat_header"
+    assert data.metadata["field_unit"] == "Oe" and data.metadata["moment_unit"] == "emu"
+    assert data.metadata["column_map"] == {"field": "Field(Oe)", "moment": "Moment(emu)"}
+    assert data.metadata["instrument_metrics"]["Hci(Oe)"] == "100.0"
+    assert data.frame["magnetization"].iloc[0] == pytest.approx(
+        20 * math.tanh((3000 + 100) / 120), abs=.1)
+
+    result = analyze_vsm(data)
+    assert result["status"] == "success"
+    assert result["metrics"]["Hc_oe"] == pytest.approx(100.0, abs=1.0)
+    assert result["metrics"]["Mr"] == pytest.approx(20 * math.tanh(100 / 120), abs=.2)
+    assert result["metrics"]["Ms"] == pytest.approx(20.0, abs=.2)
+
+
+def test_read_lakeshore_dat_user_mass_overrides_header(tmp_path):
+    source = write_dat(tmp_path / "sample.dat", mass_g=0.01)
+
+    data = read_vsm(source, mass_mg=20.0)
+
+    assert data.metadata["mass_mg"] == pytest.approx(20.0)
+    assert data.metadata["mass_source"] == "user"
+    assert any("相差超过" in warning for warning in data.warnings)
+
+
+def test_read_lakeshore_dat_auto_filled_mass_keeps_header_source(tmp_path):
+    source = write_dat(tmp_path / "sample.dat", mass_g=0.01)
+
+    data = read_vsm(source, mass_mg=10.0, mass_from_header=True)
+
+    assert data.metadata["mass_mg"] == pytest.approx(10.0)
+    assert data.metadata["mass_source"] == "dat_header"
+    assert data.warnings == []
+
+
+def test_read_lakeshore_dat_rejects_non_cgs_unit(tmp_path):
+    source = write_dat(tmp_path / "sample.dat", unit="SI")
+    with pytest.raises(ValueError, match="CGS"):
+        read_vsm(source)
+
+
+def test_inspect_lakeshore_dat_exposes_columns_and_mass(tmp_path):
+    source = write_dat(tmp_path / "sample.dat")
+    preview = inspect_vsm_table(source)
+    assert "Field(Oe)" in preview["columns"] and "Moment(emu)" in preview["columns"]
+    assert preview["metadata"]["mass_mg"] == pytest.approx(10.0)
+    assert preview["metadata"]["parser"] == "lakeshore-dat-v1"
+
+
+def test_vsm_page_prefills_dat_units_and_mass(qtbot, tmp_path):
+    from gui.pages.vsm_page import VsmPage
+
+    source = write_dat(tmp_path / "sample.dat")
+    page = VsmPage()
+    qtbot.addWidget(page)
+    page.file.setText(str(source))
+    page.name.setText("DAT")
+    page.load_columns()
+
+    assert page.field_column.currentText() == "Field(Oe)"
+    assert page.moment_column.currentText() == "Moment(emu)"
+    assert page.field_unit.currentText() == "Oe"
+    assert page.moment_unit.currentText() == "emu"
+    assert float(page.mass.text()) == pytest.approx(10.0)
+
+
+def test_vsm_page_dat_analysis_records_header_mass_source(qtbot, tmp_path):
+    from gui.pages.vsm_page import VsmPage
+
+    source = write_dat(tmp_path / "sample.dat")
+    page = VsmPage()
+    qtbot.addWidget(page)
+    page.export_dpi = 60
+    page.file.setText(str(source))
+    page.name.setText("DAT")
+    page.output.setText(str(tmp_path / "out"))
+    page.load_columns()
+    assert page.mass_from_header is True
+    page.start_analysis()
+    qtbot.waitUntil(lambda: not page.busy, timeout=60000)
+    assert page.completed is not None, page.error.text()
+    assert page.completed["record"]["source"]["mass_source"] == "dat_header"
+    assert page.completed["record"]["mass_normalization"] is True
 
 
 def test_read_vsm_units_mass_and_order_preserved(tmp_path):

@@ -1,7 +1,7 @@
 # 综合材料表征分析平台项目交接文档
 
 最后核对日期：2026-11-13  
-当前版本：`v0.16.0`  
+当前版本：`v0.17.0`  
 当前阶段：Phase C 完成 / Phase D（XRD）待开发  
 主仓库：<https://github.com/Bakkali1747/integrated-materials-characterization-platform>
 
@@ -9,21 +9,22 @@
 
 本项目是面向个人科研使用的 Windows 本地桌面应用，目标是以真实样品为中心，统一管理电磁、VSM、XRD 等材料表征数据、分析运行和科研产物。
 
-项目由原“微波吸收分析软件”演进而来。v0.13.0 在完整保留原有电磁分析能力的基础上，新增项目、样品、测试和分析运行四类平台实体。v0.14.0（Phase B）把电磁分析接入该工作区。v0.15.0 补齐工作区 schema 版本与迁移，并把实测 S 参数分析挂载到 Measurement。v0.16.0（Phase C）新增 VSM 磁滞回线分析、背景扣除、质量归一化、报告与工作区闭环。
+项目由原“微波吸收分析软件”演进而来。v0.13.0 在保留原有电磁分析能力的基础上新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加工作区 schema v1 与 S 参数运行；v0.16.0 新增 VSM 磁滞回线分析；v0.17.0 支持 Lake Shore 风格 `.dat` 并自动读取文件头质量与单位。
 
 应用采用新的名称、安装目录、本地数据目录和安装器 AppId，可以和旧版微波吸收分析软件并存，不会覆盖旧应用。
 
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.16.0 基线提交：`3e1770e`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
-- 版本标签：`v0.16.0`
-- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.16.0-win64.exe`
-- 安装程序 SHA-256：`2ea65f89503526a93890733e371e3fdb20b32d50b869218fe2ed1384337871d7`；同时见 `output/releases/SHA256SUMS-0.16.0.txt`
-- 当前已验证测试：`394 passed`
+- v0.17.0 基线提交：构建后回填（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
+- 版本标签：`v0.17.0`
+- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.17.0-win64.exe`
+- 安装程序 SHA-256：构建后回填；同时写入 `output/releases/SHA256SUMS-0.17.0.txt`
+- 当前已验证测试：`401 passed`
 - Ruff：通过
 - 源码版和冻结安装版自检：通过（包含电磁、S 参数与 VSM 三类工作区自动登记）
 - 已验证产物：17 类电磁科研图、报告、S 参数、VSM 回线与报告、比较、批量、历史和导出
+- 真实 VSM 数据：9 个 Lake Shore DAT 文件解析与指标计算通过
 
 原仓库保留为历史远程 `legacy-origin`：
 
@@ -77,8 +78,9 @@ Project
 
 ### 3.3 VSM
 
-- 读取 `.csv`、`.xlsx`、`.xls`、`.txt`，要求显式磁场列/磁矩列、磁场单位与磁矩单位。
-- 支持 Oe、A/m、kA/m、T、mT 与 emu、A·m²；质量归一化仅在提供样品质量（mg）时执行。
+- 读取 `.csv`、`.xlsx`、`.xls`、`.txt`，以及 Lake Shore 风格 `.dat`。
+- DAT 自动识别 `Field(...)` / `Moment(...)` 表头，读取文件头 `Mass(g)`（默认用于质量归一化）与 `Unit=CGS`；`Unit=SI` 明确拒绝。
+- 支持 Oe、A/m、kA/m、T、mT 与 emu、A·m²；质量归一化仅在提供质量（用户或 DAT 文件头）时执行。
 - 计算 Hc（含 Hc+/Hc−、Oe 与 A/m）、Mr、Ms、方形比、回线闭合差；Hc/Mr 用相邻点线性插值，Ms 明确不是真实饱和。
 - 可选高场线性背景扣除：正负高场分别拟合后取平均斜率/截距，记录 R²、系数与点数；默认关闭。
 - 缺失/非数值/非有限值直接报错；保留扫描顺序，不排序、不去重、不插值、不裁剪。
@@ -284,12 +286,12 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - 工作区尚无多人并发写入控制；AnalysisRun 只追加，导出引用为原地追加。
 - 尚无工作区备份、恢复和项目导入/导出界面。
 - 单样品报告和历史页导出尚未自动登记到 AnalysisRun。
-- VSM 仅支持显式列映射的 CSV/Excel/TXT；Minor loop、FORC、温度/角度序列和用户背景文件尚未实现。
+- VSM 的 Lake Shore DAT 支持基于本项目真实文件观察结构；其他厂商/二进制 `.dat` 不解析。Minor loop、FORC、温度/角度序列和用户背景文件尚未实现。
 - README 的部分历史章节仍保留旧测试数量或旧阶段描述，需要后续统一清理。
 - Windows 安装程序没有商业代码签名，可能显示“未知发布者”。
 - 冻结版已在当前开发机验收，但仍需在另一台干净 Windows 电脑验证兼容性。
 - v0.14.0 起安装包与 SHA-256 作为 GitHub Release 附件发布；更早版本仍只有源码和标签。
-- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.16.0>
+- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.17.0>
 
 ## 11. 版本与发布工作流
 
@@ -310,6 +312,6 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 1. 克隆新仓库并确认 `origin` 指向新项目。
 2. 安装锁定依赖，运行 Ruff 和全量测试。
 3. 启动 GUI，体验工作区“测试 → 电磁 / S 参数 / VSM 分析 → AnalysisRun → 载入结果”闭环。
-4. 阅读 PRD、架构文档、`docs/vsm.md` 和本交接文档。
+4. 阅读 PRD、架构文档、`docs/vsm.md`（含 Lake Shore DAT 格式）和本交接文档。
 5. 开发 Phase D（XRD）：格式解析、峰检测与标注、晶相匹配、晶粒尺寸、绘图、导出与报告。
 

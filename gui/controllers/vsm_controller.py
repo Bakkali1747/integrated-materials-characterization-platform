@@ -76,11 +76,18 @@ def vsm_summary_text(record, metrics):
     """生成界面摘要文本；缺失值明确写不可计算。"""
     unit = metrics.get("metrics_unit") or "emu"
     background = metrics.get("background") or {}
+    source = record.get("source") or {}
+    mass_source = {"dat_header": "DAT 文件头", "user": "用户输入"}.get(source.get("mass_source"), "未提供")
+    instrument = source.get("instrument_metrics") or {}
+    instrument_text = ""
+    if instrument:
+        instrument_text = ("；仪器内置（仅供核对）：" + "，".join(
+            f"{key}={value}" for key, value in instrument.items() if key in ("Hci(Oe)", "Mr(emu)", "Ms(emu)")))
     lines = [
         f"样品：{record.get('sample')}",
         f"来源：{record.get('raw_file')}",
         f"磁场范围：{record.get('field_range_oe')} Oe；{record.get('field_points')} 点",
-        f"质量归一化：{'是' if record.get('mass_normalization') else '否（仅磁矩）'}",
+        f"质量归一化：{'是' if record.get('mass_normalization') else '否（仅磁矩）'}；来源：{mass_source}",
         f"背景扣除：{background.get('mode', 'none')}"
         + (f"（|H| ≥ {background.get('minimum_abs_field_oe'):g} Oe，R²={background.get('r_squared')}）"
            if background.get("mode") == "linear_high_field" else ""),
@@ -88,7 +95,7 @@ def vsm_summary_text(record, metrics):
         f"Mr：{_fmt(metrics.get('Mr'))} {unit}",
         f"Ms：{_fmt(metrics.get('Ms'))} {unit}",
         f"Mr/Ms：{_fmt(metrics.get('squareness'))}",
-        f"状态：{record.get('status')}；验证：{record.get('validation_status')}",
+        f"状态：{record.get('status')}；验证：{record.get('validation_status')}" + instrument_text,
     ]
     warnings = list(record.get("warnings") or [])
     if warnings:

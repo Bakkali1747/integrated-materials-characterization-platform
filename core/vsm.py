@@ -5,6 +5,7 @@
 """
 
 import hashlib
+import re
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -22,9 +23,10 @@ FIELD_UNITS = {
     "mT": 1.0 / (4.0e-7 * np.pi) / 1000.0,
 }
 MOMENT_UNITS = {"emu": 1e-3, "A m^2": 1.0}    # A·m²
-SUPPORTED_SUFFIXES = {".csv", ".xlsx", ".xls", ".txt"}
+SUPPORTED_SUFFIXES = {".csv", ".xlsx", ".xls", ".txt", ".dat"}
 BACKGROUND_MODES = {"none", "linear_high_field"}
 PARSER_VERSION = "vsm-explicit-columns-v1"
+DAT_PARSER_VERSION = "lakeshore-dat-v1"
 
 _FIELD_ALIASES = {"field", "fieldoe", "h", "hoe", "magneticfield", "magneticfieldoe", "磁场", "磁场oe"}
 _MOMENT_ALIASES = {"moment", "momentemu", "m", "magnetization", "magnetizationemug",
@@ -87,6 +89,76 @@ def _excel_frame(raw, suffix, sheet, header_row):
     return frame, source_rows, {"sheet": sheet_name, "header_row": header_row + 1}
 
 
+def _dat_value(pattern, text):
+    match = re.search(pattern, text)
+    return match.group(1).strip() if match else None
+
+
+def _lakeshore_dat_metadata(lines):
+    """解析 Lake Shore 风格 DAT 的前两行；只读取已观察到的显式键值。"""
+    first = lines[0] if lines else ""
+    second = lines[1] if len(lines) > 1 else ""
+    values = {
+        "id": _dat_value(r"^ID=(.*?)\s{2,}Mass\(g\)=", first),
+        "mass_g": _dat_value(r"Mass\(g\)=([^\s]+)", first),
+        "unit": _dat_value(r"(?:^|\s)Unit=([A-Za-z]+)", first),
+        "slope": _dat_value(r"(?:^|\s)slope=([^\s]+)", first),
+        "constant": _dat_value(r"(?:^|\s)constant=([^\s]+)", first),
+        "volume_cm3": _dat_value(r"Volume\(cm\^3\)=([^\s]+)", first),
+        "area_mm2": _dat_value(r"Area\(mm\^2\)=([^\s]+)", first),
+        "rate_a_s": _dat_value(r"Rate\(A/s\)=([^\s]+)", first),
+        "room_t": _dat_value(r"Room_T\([^)]*\)=([^\s]+)", first),
+        "pole_gap": _dat_value(r"PoleGap=([^\s]+)", first),
+        "emu_factor": _dat_value(r"emuFactor\(emu/V\)=([^\s]+)", first),
+    }
+    instrument = {}
+    if "=" in second and re.search(r"(Hci|Mr|Ms)\(", second):
+        for key, value in re.findall(r"([A-Za-z][A-Za-z0-9_/()^]*)=([^\s]+)", second):
+            instrument[key] = value
+    mass_g = values.get("mass_g")
+    mass_value = None
+    if mass_g is not None:
+        try:
+            mass_value = float(mass_g)
+        except ValueError:
+            raise ValueError(f"DAT 文件头 Mass(g) 不是数值：{mass_g!r}") from None
+        if mass_value <= 0:
+            mass_value = None
+    unit = (values.get("unit") or "").strip().upper()
+    if unit and unit != "CGS":
+        raise ValueError(f"DAT 文件头 Unit={values.get('unit')}；当前只支持 CGS（Oe/emu）格式。")
+    return {"dat_header": first.strip(), "dat_metadata": {key: value for key, value in values.items() if value},
+            "instrument_metrics": instrument, "dat_mass_g": mass_value,
+            "dat_unit": unit or "CGS"}
+
+
+def _lakeshore_dat_table(text):
+    """解析 Lake Shore 风格 DAT：前两行元数据 + 表头 + 制表符数据。"""
+    lines = text.splitlines()
+    header_index = None
+    for index, line in enumerate(lines[:50]):
+        columns = [column.strip() for column in line.split("\t")]
+        has_field = any(column.casefold().startswith("field(") for column in columns)
+        has_moment = any(column.casefold().startswith(("moment(", "magnetization(")) for column in columns)
+        if has_field and has_moment:
+            header_index = index
+            break
+    if header_index is None:
+        raise ValueError("DAT 文件未找到包含 Field(...) 与 Moment(...) 的数据表头。")
+    data_lines = [line.rstrip("\t") for line in lines[header_index:]]
+    frame, relative_rows = read_csv_table("\n".join(data_lines), "\t")
+    source_rows = [row + header_index for row in relative_rows]
+    metadata = _lakeshore_dat_metadata(lines[:header_index])
+    metadata.update({
+        "parser": DAT_PARSER_VERSION, "dat_header_line": header_index + 1,
+        "field_unit": "Oe", "moment_unit": "emu",
+    })
+    if metadata.get("dat_mass_g"):
+        metadata["mass_mg"] = float(metadata["dat_mass_g"]) * 1000.0
+        metadata["mass_source"] = "dat_header"
+    return frame, source_rows, metadata
+
+
 def _source_table(path: Path, *, sheet, header_row, encoding, delimiter):
     """读取文件为字符串表；返回 frame、源行号和解析元数据。"""
     suffix = path.suffix.lower()
@@ -98,11 +170,16 @@ def _source_table(path: Path, *, sheet, header_row, encoding, delimiter):
         actual_delimiter = delimiter if delimiter is not None else ("\t" if suffix == ".txt" else ",")
         frame, source_rows = read_csv_table(text, actual_delimiter)
         metadata.update({"encoding": actual_encoding, "delimiter": actual_delimiter})
+    elif suffix == ".dat":
+        text, actual_encoding = decode_text(raw, encoding)
+        frame, source_rows, dat = _lakeshore_dat_table(text)
+        metadata.update(dat)
+        metadata["encoding"] = actual_encoding
     elif suffix in (".xlsx", ".xls"):
         frame, source_rows, excel = _excel_frame(raw, suffix, sheet, header_row)
         metadata.update(excel)
     else:
-        raise ValueError(f"VSM 仅支持 .csv / .xlsx / .xls / .txt；不解析 {suffix or '无扩展名'} 文件。")
+        raise ValueError(f"VSM 仅支持 .csv / .txt / .xlsx / .xls / .dat；不解析 {suffix or '无扩展名'} 文件。")
     return frame, source_rows, metadata
 
 
@@ -144,28 +221,57 @@ def suggest_vsm_columns(columns):
 
 
 def read_vsm(path, *, name=None, field_column=None, moment_column=None, field_unit=None,
-             moment_unit=None, mass_mg=None, sheet=0, header_row=0, encoding=None,
-             delimiter=None) -> VSMData:
+             moment_unit=None, mass_mg=None, mass_from_header=False, sheet=0, header_row=0,
+             encoding=None, delimiter=None) -> VSMData:
     """读取 VSM 原始文件；返回标准表、元数据和警告。
 
-    必须显式给出 field_unit 和 moment_unit。mass_mg 为空时不进行质量归一化，
-    只报告磁矩。字段列若未显式指定，只接受唯一的别名匹配。
+    非 DAT 文件必须显式给出 field_unit 和 moment_unit。Lake Shore 风格 .dat
+    从表头和文件头读取 Oe/emu 与 Mass(g)；用户提供 mass_mg 时覆盖文件头并记录。
+    mass_mg 为空时不进行质量归一化。字段列若未显式指定，只接受唯一别名匹配。
     """
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"原始文件不存在：{path}")
-    if field_unit not in FIELD_UNITS:
-        raise ValueError("磁场单位必须显式选择 Oe / A/m / kA/m / T / mT。")
-    if moment_unit not in MOMENT_UNITS:
-        raise ValueError("磁矩单位必须显式选择 emu / A m^2。")
+    is_dat = path.suffix.lower() == ".dat"
+    if not is_dat:
+        if field_unit not in FIELD_UNITS:
+            raise ValueError("磁场单位必须显式选择 Oe / A/m / kA/m / T / mT。")
+        if moment_unit not in MOMENT_UNITS:
+            raise ValueError("磁矩单位必须显式选择 emu / A m^2。")
     if mass_mg is not None:
         if isinstance(mass_mg, bool) or not isinstance(mass_mg, (int, float, np.integer, np.floating)):
             raise ValueError("样品质量必须是数值，单位为 mg。")
         if not np.isfinite(float(mass_mg)) or float(mass_mg) <= 0:
             raise ValueError("样品质量必须为有限正数（mg）。")
         mass_mg = float(mass_mg)
+    user_mass_mg = mass_mg
     frame, source_rows, metadata = _source_table(
         path, sheet=sheet, header_row=header_row, encoding=encoding, delimiter=delimiter)
+    header_mass_g = metadata.get("dat_mass_g")
+    header_mass_mg = float(header_mass_g) * 1000.0 if header_mass_g else None
+    if is_dat:
+        if field_unit is None:
+            field_unit = metadata.get("field_unit")
+        if moment_unit is None:
+            moment_unit = metadata.get("moment_unit")
+        if user_mass_mg is None and header_mass_mg is not None:
+            mass_mg = header_mass_mg
+            metadata["mass_source"] = "dat_header"
+        elif user_mass_mg is not None:
+            mass_mg = user_mass_mg
+            if (mass_from_header and header_mass_mg is not None
+                    and np.isclose(mass_mg, header_mass_mg, rtol=1e-6, atol=0)):
+                metadata["mass_source"] = "dat_header"
+            else:
+                metadata["mass_source"] = "user"
+        else:
+            mass_mg = None
+    elif user_mass_mg is not None:
+        metadata["mass_source"] = "user"
+    if field_unit not in FIELD_UNITS:
+        raise ValueError("磁场单位必须显式选择 Oe / A/m / kA/m / T / mT。")
+    if moment_unit not in MOMENT_UNITS:
+        raise ValueError("磁矩单位必须显式选择 emu / A m^2。")
     field_name = _pick_column(frame.columns, field_column, _FIELD_ALIASES, "磁场")
     moment_name = _pick_column(frame.columns, moment_column, _MOMENT_ALIASES, "磁矩")
     if field_name == moment_name:
@@ -179,14 +285,24 @@ def read_vsm(path, *, name=None, field_column=None, moment_column=None, field_un
         raise ValueError("VSM 磁场范围为 0，无法分析磁滞回线。")
     field_am = field_raw * FIELD_UNITS[field_unit]
     field_oe = field_am / FIELD_UNITS["Oe"]
-    if moment_unit == "A m^2":
+    magnetization_from_column = "magnetization" in _normalized(moment_name)
+    if magnetization_from_column:
+        if mass_mg is None:
+            raise ValueError("选择磁化强度列时必须同时提供样品质量（mg）。")
+        magnetization_values = moment_raw
+        moment_emu = magnetization_values * (mass_mg / 1000.0)
+        moment_am2 = moment_emu * 1e-3
+    elif moment_unit == "A m^2":
         moment_am2 = moment_raw * MOMENT_UNITS[moment_unit]
         moment_emu = moment_am2 / 1e-3
+        magnetization_values = None
     else:
         moment_emu = moment_raw
         moment_am2 = moment_emu * 1e-3
-    magnetization = (moment_emu * 1000.0 / mass_mg if mass_mg is not None
-                     else np.full(len(moment_emu), np.nan))
+        magnetization_values = None
+    magnetization = (magnetization_values if magnetization_values is not None
+                     else (moment_emu * 1000.0 / mass_mg if mass_mg is not None
+                           else np.full(len(moment_emu), np.nan)))
     standard = pd.DataFrame({
         "source_row": source_rows,
         "field_oe": field_oe,
@@ -196,6 +312,10 @@ def read_vsm(path, *, name=None, field_column=None, moment_column=None, field_un
         "magnetization": magnetization,
     })
     warnings = []
+    if header_mass_mg is not None and metadata.get("mass_source") == "user" and mass_mg is not None:
+        if abs(mass_mg - header_mass_mg) > 0.01 * header_mass_mg:
+            warnings.append(f"[KNOWN] 用户质量 {mass_mg:g} mg 与 DAT 文件头 Mass(g)="
+                            f"{header_mass_g:g} g（{header_mass_mg:g} mg）相差超过 1%；使用用户值。")
     if len(standard) < 10:
         warnings.append(f"[KNOWN] VSM 数据仅 {len(standard)} 点；磁滞指标可能受采样密度限制。")
     if not (field_oe.min() < 0 < field_oe.max()):
@@ -210,7 +330,8 @@ def read_vsm(path, *, name=None, field_column=None, moment_column=None, field_un
         "field_range_oe": [float(field_oe.min()), float(field_oe.max())],
         "field_range_original": [float(field_raw.min()), float(field_raw.max())],
     })
-    return VSMData(name or path.stem, standard, metadata, warnings)
+    return VSMData(name or metadata.get("dat_metadata", {}).get("id") or path.stem,
+                   standard, metadata, warnings)
 
 
 def _split_branches(field, warnings):
@@ -408,7 +529,7 @@ def analyze_vsm(data: VSMData, *, background_mode="none", background_min_field_o
     if closure_fraction is not None and closure_fraction > 0.05:
         warnings.append(f"[KNOWN] 回线在最大场处未闭合（差异约 {closure_fraction:.3g} Ms）；"
                         "不能把端点值当作真实饱和值。")
-    if field.max() != -field.min():
+    if abs(field.max() + field.min()) > 0.01 * max(abs(field.max()), abs(field.min())):
         warnings.append(f"[KNOWN] 磁场范围不对称（{field.min():g} – {field.max():g} Oe）；"
                         "Hc 平均值可能受偏置影响。")
 

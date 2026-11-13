@@ -36,6 +36,7 @@ class VSMConfig:
     field_unit: str = "Oe"
     moment_unit: str = "emu"
     mass_mg: float | None = None
+    mass_from_header: bool = False
     sheet: int | str = 0
     header_row: int = 0
     encoding: str | None = None
@@ -67,6 +68,7 @@ def _configuration(config: VSMConfig) -> dict:
         "field_unit": config.field_unit,
         "moment_unit": config.moment_unit,
         "mass_mg": config.mass_mg,
+        "mass_from_header": config.mass_from_header,
         "sheet": config.sheet,
         "header_row": config.header_row,
         "encoding": config.encoding,
@@ -93,6 +95,8 @@ def validate_configuration(config: VSMConfig) -> None:
             raise ValueError("样品质量必须是数值（mg）。")
         if not (config.mass_mg > 0):
             raise ValueError("样品质量必须大于 0 mg。")
+    if not isinstance(config.mass_from_header, bool):
+        raise ValueError("mass_from_header 必须为布尔值。")
     if isinstance(config.header_row, bool) or not isinstance(config.header_row, int) or config.header_row < 0:
         raise ValueError("header_row 必须是非负整数。")
     if isinstance(config.dpi, bool) or not isinstance(config.dpi, int) or config.dpi <= 0:
@@ -190,6 +194,7 @@ def execute(config: VSMConfig, *, progress=lambda percent, text: None,
         data = read_vsm(config.path, name=config.name, field_column=config.field_column,
                         moment_column=config.moment_column, field_unit=config.field_unit,
                         moment_unit=config.moment_unit, mass_mg=config.mass_mg,
+                        mass_from_header=config.mass_from_header,
                         sheet=config.sheet, header_row=config.header_row,
                         encoding=config.encoding, delimiter=config.delimiter)
         if data.metadata["sha256"] != raw_sha256:

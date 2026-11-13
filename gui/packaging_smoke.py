@@ -129,15 +129,29 @@ def run_smoke(app, output):
                                                       "status": s_runs[0].validation_status,
                                                       "plot_refs": len(s_runs[0].plot_refs)}
                 window.grab().save(str(output / "client-sparameters.png"))
-                vsm_path = output / "synthetic_vsm.csv"
-                rows = ["field_oe,moment_emu"]
-                rows += [f"{-3000 + 60*i},{0.01*20*math.tanh((-3000 + 60*i - 100)/120)}" for i in range(101)]
-                rows += [f"{3000 - 60*i},{0.01*20*math.tanh((3000 - 60*i + 100)/120)}" for i in range(1, 101)]
-                vsm_path.write_text("\n".join(rows), encoding="utf-8")
+                vsm_path = output / "synthetic_vsm.dat"
+                lines = [
+                    "ID=SYNTHETIC ONLY  Mass(g)=0.01  Volume(cm^3)=0  Area(mm^2)=0  slope=0  constant=0  "
+                    "Unit=CGS  Rate(A/s)=0.500  Room_T(℃)=22.0  PoleGap=Gap2  emuFactor(emu/V)=2.0",
+                    "Hci(Oe)=100.0  Mr(emu)=0.1  Ms(emu)=0.2",
+                    "Time(s)\tField(Oe)\tTemperature(K)\tAngle(deg)\tMoment(emu)\t"
+                    "Magnetization(Mass)(emu/g)\tLockX(V)\tLcokY(V)\tInduction(Gs)",
+                ]
+                rows = []
+                for i in range(101):
+                    h = 3000 - 60 * i
+                    m = 0.01 * 20 * math.tanh((h + 100) / 120)
+                    rows.append("\t".join(["12:00:00.000", f"{h:.6E}", "NaN", "NaN", f"{m:.6E}",
+                                           f"{m / 0.01:.6E}", "0", "0", "Inf"]))
+                for i in range(1, 101):
+                    h = -3000 + 60 * i
+                    m = 0.01 * 20 * math.tanh((h - 100) / 120)
+                    rows.append("\t".join(["12:00:01.000", f"{h:.6E}", "NaN", "NaN", f"{m:.6E}",
+                                           f"{m / 0.01:.6E}", "0", "0", "Inf"]))
+                vsm_path.write_text("\n".join(lines + rows), encoding="utf-8")
                 v_measurement = window.workspace.add_measurement("vsm", [vsm_path], instrument="VSM")
                 window.workspace.start_measurement_vsm_analysis()
                 window.vsm.output.setText(str(output / "vsm-analysis"))
-                window.vsm.mass.setText("10")
                 window.vsm.start_analysis()
                 phase = "vsm"
             elif phase == "vsm":

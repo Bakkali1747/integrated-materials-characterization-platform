@@ -1,6 +1,6 @@
 # 项目与样品工作区
 
-v0.16.0 在 Phase B 基础上补齐工作区 schema 版本与迁移，接入实测 S 参数和 VSM 磁滞回线分析。桌面界面的“工作区”页面可创建项目、创建样品、关联 Electromagnetic / VSM / XRD 测试，并从 Electromagnetic 或 VSM 测试发起分析，完成后自动登记 AnalysisRun。
+v0.17.0 在 Phase B 基础上补齐工作区 schema 版本与迁移，接入实测 S 参数和 VSM 磁滞回线分析（含 Lake Shore `.dat`）。桌面界面的“工作区”页面可创建项目、创建样品、关联 Electromagnetic / VSM / XRD 测试，并从 Electromagnetic 或 VSM 测试发起分析，完成后自动登记 AnalysisRun。
 
 ## 数据组织
 
@@ -39,7 +39,7 @@ Project
 2. 选择一个 Electromagnetic 测试：
    - 有 `.memp`、CSV 或 Excel 时，可点击“用此测试开始电磁分析”；
    - 有 `.sdat` 时，可点击“用此测试开始S参数分析”。
-3. 选择 VSM 测试时，可点击“用此测试开始VSM分析”；磁场/磁矩单位、样品质量与背景扣除仍需在 VSM 页面显式确认。
+3. 选择 VSM 测试时，可点击“用此测试开始VSM分析”；磁场/磁矩单位、样品质量与背景扣除仍需在 VSM 页面确认。Lake Shore `.dat` 会从文件头预填质量和单位。
 4. 平台切换到对应页面并载入原始文件；参数仍由用户确认并显式点击开始。
 5. 分析完成后自动创建 AnalysisRun，并把项目/样品/测试上下文写回工作区。
 
