@@ -35,6 +35,6 @@ v0.15.0：`core.common.workspace_schema` 在打开工作区前建立/迁移 `wor
 
 Phase C（v0.16.0）：`core/vsm.py` 负责显式列/单位/质量解析与磁滞指标、背景扣除；`core/vsm_service.py` 保存运行产物与记录；`plotting/vsm_plot.py` 与 `export/vsm_report.py` 复用同一数据表绘图和报告；VSM 页面与 `run_vsm.py` 只做适配。工作区“载入运行结果”按 `analysis_type` 分发到电磁、S 参数或 VSM 页面，不跨类型复用加载器。v0.17.0 在同一模块增加 Lake Shore 风格 DAT 读取（文件头 Mass/Unit 与制表符数据表），不引入新的计算路径。
 
-Phase D（v0.18.0）：`core/xrd.py` 解析显式文本、检测峰并计算 FWHM/d/Scherrer 与参考峰匹配；`core/xrd_service.py` 保存峰表与记录；`plotting/xrd_plot.py`、`export/xrd_report.py`、`XrdPage` 与 `run_xrd.py` 只做适配。工作区载入分发增加 `xrd_peaks`，仍不跨类型复用加载器。v0.19.0 在同一模块增加 Bruker RAW4 文本读取（二进制 `.raw` 通过同名 `.txt`）与仅用于峰检测的移动平均；原始数据与导出不被平滑。
+Phase D（v0.18.0）：`core/xrd.py` 解析显式文本、检测峰并计算 FWHM/d/Scherrer 与参考峰匹配；`core/xrd_service.py` 保存峰表与记录；`plotting/xrd_plot.py`、`export/xrd_report.py`、`XrdPage` 与 `run_xrd.py` 只做适配。工作区载入分发增加 `xrd_peaks`，仍不跨类型复用加载器。v0.19.0 增加 Bruker RAW4 文本读取与仅用于峰检测的移动平均（原始数据与导出不被平滑）；v0.20.0 增加 RAW4 二进制直读（几何签名 + 尾部 float32 计数），仅在失败时回退同名 TXT。
 
 本阶段提前支持这份 memp 是用户确认的范围调整。正式发布依据 VERSIONING.md，阶段结束后等待用户验收。

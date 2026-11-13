@@ -1,7 +1,7 @@
 # 综合材料表征分析平台项目交接文档
 
 最后核对日期：2026-11-13  
-当前版本：`v0.19.0`  
+当前版本：`v0.20.0`  
 当前阶段：PRD Phase D 完成  
 主仓库：<https://github.com/Bakkali1747/integrated-materials-characterization-platform>
 
@@ -9,22 +9,22 @@
 
 本项目是面向个人科研使用的 Windows 本地桌面应用，目标是以真实样品为中心，统一管理电磁、VSM、XRD 等材料表征数据、分析运行和科研产物。
 
-项目由原“微波吸收分析软件”演进而来。v0.13.0 在保留原有电磁分析能力的基础上新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加工作区 schema v1 与 S 参数运行；v0.16.0 新增 VSM；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 完成 XRD 峰分析；v0.19.0 支持真实 Bruker RAW4 文本与二进制+同名 TXT。
+项目由原“微波吸收分析软件”演进而来。v0.13.0 新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加 schema v1 与 S 参数；v0.16.0 新增 VSM；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 完成 XRD 峰分析；v0.19.0 支持真实 Bruker RAW4 文本；v0.20.0 直接解析二进制 RAW4。
 
 应用采用新的名称、安装目录、本地数据目录和安装器 AppId，可以和旧版微波吸收分析软件并存，不会覆盖旧应用。
 
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.19.0 基线提交：`de5c170`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
-- 版本标签：`v0.19.0`
-- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.19.0-win64.exe`
-- 安装程序 SHA-256：`a8c5bccda0a5ae3b6ecbd6726889ac99750f5fad835d171d7fd92b6dc41bbac0`；同时见 `output/releases/SHA256SUMS-0.19.0.txt`
-- 当前已验证测试：`419 passed`
+- v0.20.0 基线提交：构建后回填（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
+- 版本标签：`v0.20.0`
+- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.20.0-win64.exe`
+- 安装程序 SHA-256：构建后回填；同时写入 `output/releases/SHA256SUMS-0.20.0.txt`
+- 当前已验证测试：`420 passed`
 - Ruff：通过
 - 源码版和冻结安装版自检：通过（电磁、S 参数、VSM、XRD 四类工作区自动登记）
 - 已验证产物：17 类电磁科研图、报告、S 参数、VSM 回线与报告、XRD 图谱与报告、比较、批量、历史和导出
-- 真实数据：9 个 Lake Shore VSM DAT；2 组 Bruker RAW4 XRD（A/B 各 `.raw` + `.txt`）
+- 真实数据：9 个 Lake Shore VSM DAT；2 组 Bruker RAW4 XRD（二进制直读与 TXT 计数逐点一致）
 
 原仓库保留为历史远程 `legacy-origin`：
 
@@ -89,7 +89,8 @@ Project
 
 ### 3.4 XRD
 
-- 读取 `.csv`、`.txt`、`.xy`、`.dat` 文本，以及 Bruker RAW4 文本（`;RAW4.00`）和二进制 `.raw`（通过同目录同名 `.txt`）。
+- 读取 `.csv`、`.txt`、`.xy`、`.dat` 文本，以及 Bruker RAW4 文本（`;RAW4.00`）和二进制 `.raw`（直接解析；失败时才回退同名 `.txt`）。
+- 二进制 RAW4 定位头部几何签名与文件尾部 float32 计数，校验点数、2θ 范围、有限非负计数与整数计数比例；记录几何头/数据偏移。
 - 有表头按列名，无表头只接受两列（2θ，强度）；2θ 严格递增；缺失/非数值/非有限值报错。
 - RAW4 从 `[RangeHeader]` 读取起始 2θ、步长、声明点数，从 `[Data]` 读取 `Angle, PSD`；从文件头读取波长（A/B 为 1.5418 Å）。
 - 峰检测：可选移动平均平滑（默认 5 点，只用于检测与 FWHM）+ 地形突出度（默认 5%）+ 最小峰间距；峰位取扫描网格点。
@@ -146,7 +147,7 @@ v0.16.0 已实现 VSM 基础闭环：解析、单位、质量归一化、磁滞�
 
 v0.18.0 已实现 XRD 基础闭环：文本解析、峰检测、FWHM、d 间距、Scherrer 表观尺寸、可选线性背景、参考峰匹配、绘图、导出、报告与工作区登记。以下属于后续增强：
 
-- 不支持除 Bruker RAW4 以外的厂商专有二进制格式；RAW4 二进制依赖同名 TXT，尚未直接解析二进制数据段。
+- 不支持除 Bruker RAW4 以外的厂商专有二进制格式；RAW4 直读基于已观察结构，其他版本可能回退同名 TXT 或拒绝。
 - 不支持 Rietveld/全谱拟合、Kα2 剥离、仪器展宽校正、织构或应力分析。
 - 参考相匹配只使用用户提供的峰列表；未内置 PDF 数据库。
 - 尚未实现峰形拟合（Gaussian/Lorentzian/Pseudo-Voigt）与自动背景模型选择。
@@ -304,7 +305,7 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - XRD 峰检测平滑只用于检测与 FWHM，原始强度与导出数据不得被平滑。
 - XRD 的 Scherrer 尺寸未做仪器展宽校正，只能报告为表观尺寸。
 - XRD 参考峰匹配只是筛查，不是物相鉴定，不得据此宣称样品为单一物相。
-- Bruker 二进制 RAW 当前通过同名 TXT 转换文件读取；不宣称已验证二进制内部数据逐点一致。
+- Bruker 二进制 RAW 通过已观察到的 RAW4 几何签名与尾部计数直读；TXT 回退仅用于直读失败，不能保证覆盖所有厂商版本。
 - 原始科研文件不提交 Git。
 
 ## 10. 当前技术债和风险
@@ -314,12 +315,12 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - 尚无工作区备份、恢复和项目导入/导出界面。
 - 单样品报告和历史页导出尚未自动登记到 AnalysisRun。
 - VSM 的 Lake Shore DAT 支持基于本项目真实文件观察结构；其他厂商/二进制 `.dat` 不解析。Minor loop、FORC、温度/角度序列和用户背景文件尚未实现。
-- XRD 仅支持显式文本格式（CSV/TXT/XY/DAT）与 Bruker RAW4 文本；二进制 RAW 依赖同名 TXT。不支持 Rietveld、Kα2 剥离、仪器展宽校正与内置 PDF 数据库。
+- XRD 仅支持显式文本格式（CSV/TXT/XY/DAT）与已观察结构的 Bruker RAW4；RAW4 直读依赖几何签名与尾部 float32 计数，其他版本或布局会拒绝/回退 TXT。不支持 Rietveld、Kα2 剥离、仪器展宽校正与内置 PDF 数据库。
 - README 的部分历史章节仍保留旧测试数量或旧阶段描述，需要后续统一清理。
 - Windows 安装程序没有商业代码签名，可能显示“未知发布者”。
 - 冻结版已在当前开发机验收，但仍需在另一台干净 Windows 电脑验证兼容性。
 - v0.14.0 起安装包与 SHA-256 作为 GitHub Release 附件发布；更早版本仍只有源码和标签。
-- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.19.0>
+- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.20.0>
 
 ## 11. 版本与发布工作流
 

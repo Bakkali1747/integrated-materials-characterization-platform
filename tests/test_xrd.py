@@ -53,6 +53,34 @@ def test_read_bruker_raw4_text(tmp_path):
     assert data.frame["intensity"].iloc[-1] == 49
 
 
+def write_raw4_binary(path, *, points=100, start=10.0, step=.02, wavelength=1.5406,
+                      counts=None):
+    """构造一个已观察结构的 RAW4 二进制：几何签名 + 末尾 float32 计数。"""
+    import struct
+
+    counts = list(range(10, 10 + points)) if counts is None else list(counts)
+    header = bytearray(200)
+    struct.pack_into("<2d", header, 100, start, step)
+    struct.pack_into("<i", header, 116, points)
+    struct.pack_into("<d", header, 140, wavelength)
+    path.write_bytes(bytes(header) + struct.pack(f"<{points}f", *counts))
+    return path
+
+
+def test_read_bruker_raw4_binary_direct(tmp_path):
+    path = write_raw4_binary(tmp_path / "A.raw", points=120, counts=[5] * 120)
+    data = read_xrd(path)
+
+    assert data.metadata["parser"] == "bruker-raw4-binary-v1"
+    assert data.metadata["raw_binary_direct"] is True
+    assert data.metadata["wavelength_angstrom"] == pytest.approx(1.5406)
+    assert len(data.frame) == 120
+    assert data.frame["intensity"].tolist() == [5.0] * 120
+    assert data.frame["two_theta_deg"].iloc[0] == pytest.approx(10.0)
+    assert data.frame["two_theta_deg"].iloc[-1] == pytest.approx(10.0 + .02 * 119)
+    assert not any("同名 TXT" in warning for warning in data.warnings)
+
+
 def test_binary_raw_uses_same_stem_txt_companion(tmp_path):
     raw = tmp_path / "A.raw"
     raw.write_bytes(b"\x00\x01\x02binary-header" + b"\x00" * 64)

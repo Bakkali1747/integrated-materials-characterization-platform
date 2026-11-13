@@ -6,6 +6,7 @@
 
 import csv
 import hashlib
+import struct
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from core.parser import decode_text
 SUPPORTED_SUFFIXES = {".csv", ".txt", ".xy", ".dat", ".raw"}
 PARSER_VERSION = "xrd-delimited-v1"
 RAW4_TEXT_PARSER = "bruker-raw4-text-v1"
+RAW4_BINARY_PARSER = "bruker-raw4-binary-v1"
 
 _TWO_THETA_ALIASES = {"2theta", "2thetadeg", "twotheta", "twothetadeg", "angle", "2θ", "2θdeg",
                       "角度", "衍射角"}
@@ -194,6 +196,86 @@ def _raw_text_source(path, encoding):
     }
 
 
+def _raw4_binary_table(path):
+    """直接解析 Bruker RAW4 二进制：定位几何签名与文件尾部 float32 计数。
+
+    只接受已观察到的结构：头部存在 (start double, increment double,
+    point-count int32, wavelength double) 连续布局，数据为末尾 float32 计数。
+    校验失败时抛 ValueError，由调用方回退同名 TXT 或给出明确错误。
+    """
+    raw = path.read_bytes()
+    size = len(raw)
+    if size < 200:
+        raise ValueError("二进制 RAW 文件过小，未识别出 RAW4 结构。")
+    candidates = []
+    for offset in range(100, max(100, size - 64)):
+        try:
+            start, step = struct.unpack_from("<2d", raw, offset)
+            points = struct.unpack_from("<i", raw, offset + 16)[0]
+            wavelength = struct.unpack_from("<d", raw, offset + 40)[0]
+        except struct.error:
+            break
+        if not (0 <= start <= 180 and 1e-5 < step <= 1 and 10 <= points <= size // 4
+                and 0.5 <= wavelength <= 3):
+            continue
+        data_offset = size - 4 * points
+        if data_offset <= 100 or data_offset >= size:
+            continue
+        try:
+            preview = np.frombuffer(raw, dtype="<f4", count=min(points, 64), offset=data_offset)
+        except ValueError:
+            continue
+        if not np.isfinite(preview).all() or (preview < 0).any() or preview.max() > 1e9:
+            continue
+        end_angle = start + step * (points - 1)
+        if not 0 <= end_angle <= 180.05:
+            continue
+        candidates.append((offset, start, step, points, wavelength, data_offset))
+    if not candidates:
+        raise ValueError("未识别出已知的 Bruker RAW4 二进制几何结构。")
+    best = None
+    for offset, start, step, points, wavelength, data_offset in candidates:
+        counts = np.frombuffer(raw, dtype="<f4", count=points, offset=data_offset)
+        if not np.isfinite(counts).all() or (counts < 0).any():
+            continue
+        integer_ratio = float(np.mean(np.isclose(counts, np.round(counts), atol=1e-3)))
+        score = (integer_ratio, points)
+        if best is None or score > best[0]:
+            best = (score, offset, start, step, points, wavelength, data_offset, counts, integer_ratio)
+    if best is None:
+        raise ValueError("识别到 RAW4 几何参数，但尾部数据段不是有效计数数组。")
+    _, offset, start, step, points, wavelength, data_offset, counts, integer_ratio = best
+    two_theta = start + step * np.arange(points, dtype=float)
+    frame = pd.DataFrame({
+        "source_row": np.arange(1, points + 1),
+        "two_theta_deg": two_theta,
+        "intensity": counts.astype(float),
+    })
+    info = {
+        "parser": RAW4_BINARY_PARSER, "has_header": True,
+        "header": ["two_theta_deg", "intensity"], "raw4_binary": True, "raw4_text": False,
+        "wavelength_angstrom": float(wavelength), "wavelength_source": "binary_range_header",
+        "start_two_theta": float(start), "step_two_theta": float(step),
+        "declared_points": float(points), "data_offset": data_offset,
+        "geometry_header_offset": offset, "count_integer_ratio": integer_ratio,
+        "raw4_version": raw[:8].split(b"\x00")[0].decode("latin1", errors="replace"),
+    }
+    source_meta = {"sha256": hashlib.sha256(raw).hexdigest(), "file_size_bytes": size,
+                   "encoding": None, "raw_binary": True, "raw_binary_direct": True}
+    return frame, list(range(1, points + 1)), info, source_meta
+
+
+def _raw4_binary_or_text(path, encoding):
+    """优先直接解析二进制 RAW4；失败时回退同名 TXT，并保留具体错误信息。"""
+    try:
+        return _raw4_binary_table(path)
+    except ValueError as binary_error:
+        text, source_meta = _raw_text_source(path, encoding)
+        frame, source_rows, info = _read_table(text, None)
+        source_meta["binary_direct_error"] = str(binary_error)
+        return frame, source_rows, info, source_meta
+
+
 def _text_source(path, encoding):
     if path.suffix.lower() == ".raw":
         return _raw_text_source(path, encoding)
@@ -292,11 +374,16 @@ def read_xrd(path, *, name=None, two_theta_column=None, intensity_column=None,
         raise ValueError(f"XRD 仅支持 .csv / .txt / .xy / .dat / .raw；不解析 {suffix or '无扩展名'} 文件。")
     if sheet:
         raise ValueError("XRD 文本格式不支持工作表；请选择 .csv/.txt/.xy/.dat/.raw。")
-    text, source_meta = _text_source(path, encoding)
-    actual_encoding = source_meta["encoding"]
-    actual_delimiter = delimiter if delimiter is not None else ("\t" if suffix == ".dat" else
-                                                               ("," if suffix == ".csv" else None))
-    frame, source_rows, table_info = _read_table(text, actual_delimiter, header_row)
+    if suffix == ".raw":
+        frame, source_rows, table_info, source_meta = _raw4_binary_or_text(path, encoding)
+        actual_encoding = source_meta.get("encoding")
+        actual_delimiter = "binary" if table_info.get("raw4_binary") else "text"
+    else:
+        text, source_meta = _text_source(path, encoding)
+        actual_encoding = source_meta["encoding"]
+        actual_delimiter = delimiter if delimiter is not None else ("\t" if suffix == ".dat" else
+                                                                   ("," if suffix == ".csv" else None))
+        frame, source_rows, table_info = _read_table(text, actual_delimiter, header_row)
     two_theta_name = _pick_column(frame.columns, two_theta_column, _TWO_THETA_ALIASES, "2θ")
     intensity_name = _pick_column(frame.columns, intensity_column, _INTENSITY_ALIASES, "强度")
     if two_theta_name == intensity_name:
@@ -326,8 +413,10 @@ def read_xrd(path, *, name=None, two_theta_column=None, intensity_column=None,
         actual_step = float(np.median(np.diff(two_theta)))
         if abs(actual_step - float(declared_step)) > max(.001, abs(float(declared_step)) * .02):
             warnings.append(f"[KNOWN] RAW4 声明步长 {declared_step:g}°，实际中位步长 {actual_step:g}°。")
-    if source_meta.get("raw_binary"):
+    if source_meta.get("raw_binary") and not source_meta.get("raw_binary_direct"):
         warnings.append("[KNOWN] 二进制 RAW 通过同目录同名 TXT 转换文件读取；原始 .raw 未被修改。")
+        if source_meta.get("binary_direct_error"):
+            warnings.append(f"[KNOWN] 二进制 RAW 直接解析未通过：{source_meta['binary_direct_error']}")
     standard = pd.DataFrame({
         "source_row": source_rows,
         "two_theta_deg": two_theta,
@@ -352,14 +441,18 @@ def inspect_xrd_table(path, *, encoding=None, delimiter=None, header_row=0) -> d
     suffix = path.suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
         raise ValueError(f"XRD 仅支持 .csv / .txt / .xy / .dat / .raw；不解析 {suffix or '无扩展名'} 文件。")
-    text, source_meta = _text_source(path, encoding)
-    actual_delimiter = delimiter if delimiter is not None else ("\t" if suffix == ".dat" else
-                                                               ("," if suffix == ".csv" else None))
-    frame, source_rows, info = _read_table(text, actual_delimiter, header_row)
+    if suffix == ".raw":
+        frame, source_rows, info, source_meta = _raw4_binary_or_text(path, encoding)
+        actual_delimiter = "binary" if info.get("raw4_binary") else "text"
+    else:
+        text, source_meta = _text_source(path, encoding)
+        actual_delimiter = delimiter if delimiter is not None else ("\t" if suffix == ".dat" else
+                                                                   ("," if suffix == ".csv" else None))
+        frame, source_rows, info = _read_table(text, actual_delimiter, header_row)
     return {"columns": [str(column) for column in frame.columns],
             "rows": int(len(frame)), "preview": frame.head(6).fillna("").astype(str),
             "source_rows": source_rows[:6],
-            "metadata": {"encoding": source_meta["encoding"],
+            "metadata": {"encoding": source_meta.get("encoding"),
                          "delimiter": actual_delimiter if actual_delimiter is not None else "whitespace",
                          **source_meta, **info}}
 
