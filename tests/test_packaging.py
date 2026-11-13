@@ -17,7 +17,7 @@ def test_frozen_data_outside_install_directory(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "user"))
     monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path / "readonly"), raising=False)
-    assert application_paths.user_data_root() == tmp_path / "user/MicrowaveAbsorptionAnalyzer"
+    assert application_paths.user_data_root() == tmp_path / "user/IntegratedMaterialsCharacterizationPlatform"
     assert application_paths.resource_root() == tmp_path / "readonly"
 
 

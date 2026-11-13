@@ -8,7 +8,7 @@
 
 默认值：GHz、1–5 mm、0.01 mm、曲线厚度 2 mm、阈值 −10 dB、分析图 300 dpi、PNG。手动导出图片至少 600 dpi（用户设置更高时跟随），兼顾交互速度与投稿质量。缺失数据插值固定 OFF，不提供未经实现的 ON 开关。MEMP 的单位和 SDAT 的单位/字段映射仍由各自 parser/schema 解释；更改 CSV/Excel 默认单位后应重新导入文件检查。
 
-源码设置文件位于项目 `settings/gui.json`，不纳入 Git。客户端设置文件位于 `%LOCALAPPDATA%\MicrowaveAbsorptionAnalyzer\settings\gui.json`，与安装目录分离。配置无效时保留原文件，显示提示并使用默认值；只有明确再次保存才替换它。写入失败时当前参数保持不变。
+源码设置文件位于项目 `settings/gui.json`，不纳入 Git。客户端设置文件位于 `%LOCALAPPDATA%\IntegratedMaterialsCharacterizationPlatform\settings\gui.json`，与安装目录分离。配置无效时保留原文件，显示提示并使用默认值；只有明确再次保存才替换它。写入失败时当前参数保持不变。
 
 ## 图片输出
 
@@ -26,6 +26,6 @@
 
 ## 启动与验收
 
-源码：`.\.venv\Scripts\python.exe run_gui.py`。独立客户端：安装 `MicrowaveAbsorptionAnalyzer-Setup-0.9.0-win64.exe`，从桌面快捷方式打开。
+源码：`.\.venv\Scripts\python.exe run_gui.py`。独立客户端：安装 `MaterialsCharacterizationPlatform-Setup-0.13.0-win64.exe`，从桌面快捷方式打开。
 
 建议测试：保存 300 dpi / SVG 后重启；确认参数恢复；完成一个样品并导出全部图片；打开历史目录检查缩放；对批量任务请求取消并核对已有结果保留。CLI `run_batch.py` 继续可用。v0.9 是本阶段软件版本，不提前声明 v1.0 或外部科学验证完成。

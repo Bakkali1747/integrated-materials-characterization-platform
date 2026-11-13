@@ -13,5 +13,5 @@ def resource_root():
 def user_data_root():
     """源码运行保持项目目录；安装版使用当前用户 LocalAppData。"""
     if getattr(sys, "frozen", False):
-        return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "MicrowaveAbsorptionAnalyzer"
+        return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "IntegratedMaterialsCharacterizationPlatform"
     return Path(__file__).resolve().parent

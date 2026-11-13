@@ -16,6 +16,7 @@ datas += [(str(root / 'docs/origin_data.md'), 'docs')]
 datas += [(str(root / 'docs/optimizations.md'), 'docs')]
 datas += [(str(root / 'docs/report.md'), 'docs')]
 datas += [(str(root / 'docs/sparameters.md'), 'docs')]
+datas += [(str(root / 'docs/workspace.md'), 'docs')]
 datas += collect_data_files('docx')
 datas += collect_data_files('reportlab')
 for package in ('numpy', 'pandas', 'matplotlib', 'openpyxl', 'xlrd', 'PySide6', 'PySide6_Essentials',
@@ -31,6 +32,6 @@ a = Analysis([str(root / 'run_gui.py')], pathex=[str(root)], binaries=[], datas=
 # Windows 10+ 提供 Qt 所需的非版本化 ICU API；不能带入 Poppler 的同名版本化 ICU。
 a.binaries = [entry for entry in a.binaries if Path(entry[0]).name.lower() not in ('icuuc.dll', 'icuin.dll') and not Path(entry[0]).name.lower().startswith('icudt')]
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='MicrowaveAbsorptionAnalyzer',
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='IntegratedMaterialsCharacterizationPlatform',
           debug=False, strip=False, upx=False, console=bool(os.environ.get('CLIENT_DEBUG_CONSOLE')))
-coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='MicrowaveAbsorptionAnalyzer')
+coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='IntegratedMaterialsCharacterizationPlatform')

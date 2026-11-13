@@ -1,4 +1,4 @@
-"""中文桌面主窗口；Phase 1 以外的导航明确显示未开放。"""
+"""综合材料表征分析平台主窗口。"""
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -22,14 +22,15 @@ from gui.pages.results_page import ResultsPage
 from gui.pages.settings_page import SettingsPage
 from gui.pages.single_sample_page import SingleSamplePage
 from gui.pages.sparameter_page import SParameterPage
+from gui.pages.workspace_page import WorkspacePage
 from gui.theme import apply_theme
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, settings_store=None):
+    def __init__(self, settings_store=None, workspace_repository=None):
         super().__init__()
         apply_theme(QApplication.instance())
-        self.setWindowTitle(f"微波吸收材料分析软件 · v{__version__} · GUI Phase 4")
+        self.setWindowTitle(f"综合材料表征分析平台 · v{__version__} · Phase A")
         self.resize(1400, 900)
         self.setMinimumSize(1200, 750)
         self.setAcceptDrops(True)
@@ -44,9 +45,9 @@ class MainWindow(QMainWindow):
         side_layout = QVBoxLayout(sidebar)
         side_layout.setContentsMargins(6, 20, 6, 10)
         side_layout.setSpacing(4)
-        brand = QLabel("微波吸收分析")
+        brand = QLabel("材料表征平台")
         brand.setObjectName("brandTitle")
-        brand_sub = QLabel("MICROWAVE ABSORPTION")
+        brand_sub = QLabel("MATERIALS CHARACTERIZATION")
         brand_sub.setObjectName("brandSub")
         version = QLabel(f"v{__version__}")
         version.setObjectName("brandBadge")
@@ -69,7 +70,7 @@ class MainWindow(QMainWindow):
         self.navigation = QListWidget()
         self.navigation.setObjectName("nav")
         self.navigation.setFrameShape(QFrame.Shape.NoFrame)
-        self.navigation.addItems(["首页", "单样品分析", "S参数分析", "多样品比较", "批量分析", "结果查看", "设置"])
+        self.navigation.addItems(["首页", "工作区", "电磁性能", "S参数分析", "多样品比较", "批量分析", "历史结果", "设置"])
         side_layout.addWidget(self.navigation, 1)
         footer = QLabel("本地计算 · 数据不外传\n缺失数据插值 OFF")
         footer.setObjectName("sideFooter")
@@ -79,8 +80,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(sidebar)
         self.stack = QStackedWidget()
         self.home = HomePage()
+        self.workspace = WorkspacePage(workspace_repository)
         self.single = SingleSamplePage()
         self.stack.addWidget(self.home)
+        self.stack.addWidget(self.workspace)
         self.stack.addWidget(self.single)
         self.sparameters = SParameterPage()
         self.comparison = ComparisonPage()
@@ -120,6 +123,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(body)
         self.navigation.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.home.navigate.connect(self.navigation.setCurrentRow)
+        self.workspace.message.connect(self.statusBar().showMessage)
         self.single.message.connect(self.statusBar().showMessage)
         self.navigation.setCurrentRow(0)
         self.statusBar().showMessage("就绪 · 缺失数据插值 OFF · 真实数据验证 PENDING")
@@ -138,21 +142,21 @@ class MainWindow(QMainWindow):
         self.set_ui_mode(values.get("ui_mode", "simple"))
 
     def set_ui_mode(self, mode):
-        """日常模式隐藏 S 参数/比较/批量与高级参数；完整模式全部恢复。"""
+        """日常模式隐藏 S 参数/比较/批量与高级参数；项目和电磁分析始终可用。"""
         simple = mode != "full"
         self.ui_mode = mode
         self.mode_hint.setText("DAILY WORKSPACE" if simple else "FULL WORKSPACE")
         self.side_footer.setText(
-            ("日常模式 · 仅 ε/μ / 历史 / 设置" if simple else "完整功能 · 含 S 参数 / 比较 / 批量")
+            ("日常模式 · 工作区 / 电磁 / 历史" if simple else "完整功能 · 含 S 参数 / 比较 / 批量")
             + "\n本地计算 · 数据不外传")
-        for row in (2, 3, 4):
+        for row in (3, 4, 5):
             self.navigation.setRowHidden(row, simple)
         self.home.set_simple(simple)
         for page in (self.single, self.comparison, self.batch):
             page.parameters.set_simple(simple)
         self.single.set_simple(simple)
         self.history.set_simple(simple)
-        if simple and self.navigation.currentRow() in (2, 3, 4):
+        if simple and self.navigation.currentRow() in (3, 4, 5):
             self.navigation.setCurrentRow(0)
 
     def save_settings(self, values):
@@ -177,7 +181,7 @@ class MainWindow(QMainWindow):
         """拖拽复用与文件对话框相同的导入路径。"""
         paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
         if paths and not any(p.busy for p in self.task_pages):
-            self.navigation.setCurrentRow(1)
+            self.navigation.setCurrentRow(2)
             self.single.import_paths(paths)
             event.acceptProposedAction()
 

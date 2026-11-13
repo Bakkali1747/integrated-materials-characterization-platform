@@ -19,7 +19,7 @@ def configure_logging():
     """写入固定项目日志目录，保留完整调试异常；轮转限制文件体积。"""
     folder = ROOT / "logs"
     folder.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("microwave.gui")
+    logger = logging.getLogger("materials.platform.gui")
     if not logger.handlers:
         handler = RotatingFileHandler(folder / "app.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8")
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
@@ -30,7 +30,7 @@ def configure_logging():
 def install_error_reporting():
     """把未捕获异常与 Qt 消息写入 app.log，避免槽函数异常只落在 stderr。"""
     from PySide6.QtCore import QtMsgType, qInstallMessageHandler
-    logger = logging.getLogger("microwave.gui")
+    logger = logging.getLogger("materials.platform.gui")
 
     def hook(kind, value, tb):
         if issubclass(kind, KeyboardInterrupt):
@@ -59,7 +59,7 @@ def main():
         from PySide6.QtWidgets import QApplication
     except ImportError as error:
         configure_logging()
-        logging.getLogger("microwave.gui").exception("Qt 运行库加载失败")
+        logging.getLogger("materials.platform.gui").exception("Qt 运行库加载失败")
         message = f"Qt 运行库加载失败：{error}\n请重新安装客户端；源码环境请安装 requirements-gui.txt。\n日志：{ROOT / 'logs/app.log'}"
         if getattr(sys, "frozen", False) and "--self-test" not in sys.argv:
             import ctypes
@@ -68,7 +68,7 @@ def main():
             print(message, file=sys.stderr)
         return 1
     app = QApplication(sys.argv)
-    app.setApplicationName("微波吸收材料分析软件")
+    app.setApplicationName("综合材料表征分析平台")
     app.setStyle("Fusion")
     try:
         configure_logging()
@@ -79,7 +79,7 @@ def main():
         from gui.main_window import MainWindow
         window = MainWindow()
     except Exception as error:
-        logging.getLogger("microwave.gui").exception("客户端启动失败")
+        logging.getLogger("materials.platform.gui").exception("客户端启动失败")
         from PySide6.QtWidgets import QMessageBox
         QMessageBox.critical(None, "启动失败", f"无法启动客户端：{error}\n日志目录：{ROOT / 'logs'}")
         return 1

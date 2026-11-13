@@ -1,7 +1,7 @@
 [project]
-name = "microwave-absorption-analyzer"
-version = "0.12.2"
-description = "Local, traceable microwave absorption analysis"
+name = "integrated-materials-characterization-platform"
+version = "0.13.0"
+description = "Local, sample-centered and traceable materials characterization platform"
 requires-python = ">=3.11"
 
 [build-system]

@@ -10,6 +10,7 @@ from application_paths import resource_root, user_data_root
 
 def run_smoke(app, output):
     """输入专用验收目录；记录 UI、解析、图形与追溯结果并返回退出码。"""
+    from core.common import WorkspaceRepository
     from gui.controllers.analysis_controller import inspect_file
     from gui.controllers.export_controller import export_figure
     from gui.main_window import MainWindow
@@ -19,11 +20,23 @@ def run_smoke(app, output):
     from gui.controllers.settings_controller import SettingsStore, defaults
     smoke_settings = SettingsStore(output / "preferences/gui.json")
     smoke_settings.save(defaults())
-    window = MainWindow(settings_store=smoke_settings)
+    workspace_repository = WorkspaceRepository(output / "workspace")
+    window = MainWindow(settings_store=smoke_settings, workspace_repository=workspace_repository)
     window.show()
-    window.navigation.setCurrentRow(1)
-    page = window.single
     source = resource_root() / "sample_data" / "synthetic_constant.csv"
+    project = window.workspace.create_project("安装版自检项目", tags=["synthetic", "smoke"])
+    sample = window.workspace.create_sample("安装版自检样品", sample_id="SMOKE-001", material_system="Synthetic")
+    measurement = window.workspace.add_measurement("electromagnetic", [source])
+    report["workspace"] = {
+        "project_id": project.project_id,
+        "sample_id": sample.sample_id,
+        "measurement_id": measurement.measurement_id,
+        "source_integrity": workspace_repository.verify_measurement_sources(
+            project.project_id, sample.sample_id, measurement.measurement_id
+        ),
+    }
+    window.navigation.setCurrentRow(2)
+    page = window.single
     page.parameters.output.setText(str(output / "analysis"))
     page.parameters.fields["thickness_max"].setValue(1.1)
     page.parameters.fields["thickness_step"].setValue(.1)
@@ -87,7 +100,7 @@ def run_smoke(app, output):
                 path.write_text("\n".join(lines), encoding="utf-8")
                 spage = window.sparameters
                 spage.file.setText(str(path)); spage.name.setText("synthetic_sparameters"); spage.output.setText(str(output))
-                window.navigation.setCurrentRow(2)
+                window.navigation.setCurrentRow(3)
                 spage.start_analysis()
                 phase = "sparameters"
             elif phase == "sparameters":
@@ -100,7 +113,7 @@ def run_smoke(app, output):
                 compare.parameters.output.setText(str(output))
                 compare.parameters.fields["thickness_max"].setValue(1.1)
                 compare.parameters.fields["thickness_step"].setValue(.1)
-                window.navigation.setCurrentRow(3)
+                window.navigation.setCurrentRow(4)
                 compare.start_comparison()
                 phase = "comparison"
             elif phase == "comparison":
@@ -118,7 +131,7 @@ def run_smoke(app, output):
                 bpage.parameters.output.setText(str(output / "batch-output"))
                 bpage.parameters.fields["thickness_max"].setValue(1.1)
                 bpage.parameters.fields["thickness_step"].setValue(.1)
-                window.navigation.setCurrentRow(4)
+                window.navigation.setCurrentRow(5)
                 bpage.scan(batch_source)
                 phase = "batch-scan"
             elif phase == "batch-scan":
@@ -132,7 +145,7 @@ def run_smoke(app, output):
                     raise RuntimeError(window.batch.error.text() or "批量失败隔离验收失败")
                 report["batch"] = {k:result["record"][k] for k in ("status", "success_count", "failed_count")}
                 window.grab().save(str(output / "client-batch.png"))
-                window.navigation.setCurrentRow(5)
+                window.navigation.setCurrentRow(6)
                 window.history.discovered([result["directory"] / "batch_record.json"])
                 window.history.load_selected()
                 phase = "history"
@@ -153,7 +166,7 @@ def run_smoke(app, output):
                 if report["quality_control"] != "PASS":
                     raise RuntimeError("Quality Control 未展示")
                 window.grab().save(str(output / "client-history.png"))
-                window.navigation.setCurrentRow(6)
+                window.navigation.setCurrentRow(7)
                 analysis_dpi = page.completed["record"]["configuration"]["figure_dpi"]
                 window.settings.dpi.setValue(120)
                 window.settings.format.setCurrentText("svg")
@@ -162,9 +175,11 @@ def run_smoke(app, output):
                 saved, warning = smoke_settings.load()
                 if warning or saved["dpi"] != 120 or saved["figure_format"] != "svg":
                     raise RuntimeError("设置保存验收失败")
-                reopened = MainWindow(settings_store=smoke_settings)
+                reopened = MainWindow(settings_store=smoke_settings, workspace_repository=workspace_repository)
                 if reopened.single.parameters.figure_dpi != 120 or reopened.sparameters.figure_format != "svg":
                     raise RuntimeError("设置重启恢复失败")
+                if len(workspace_repository.list_projects()) != 1 or len(workspace_repository.list_samples()) != 1:
+                    raise RuntimeError("项目与样品工作区重启恢复失败")
                 reopened.close(); reopened.deleteLater()
                 report["settings_persistence"] = "PASS"
                 report["existing_snapshot_unchanged"] = page.completed["record"]["configuration"]["figure_dpi"] == analysis_dpi

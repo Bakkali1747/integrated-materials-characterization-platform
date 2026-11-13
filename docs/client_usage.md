@@ -1,18 +1,19 @@
 # Windows 独立客户端
 
-当前安装包为 v0.12.2（缓存复用加入分析引擎版本；Excel 映射预览与正式解析使用相同工作表和表头行），默认“日常模式”，并从同目录 .sdat 夹具自动读取样品厚度 D；同时包含浅色科研主题、S 参数屏蔽效能/Smith 图、期刊图尺寸、单样品中文 DOCX/PDF 报告、共享分析管线、图片溯源、复用、维护与分享入口。操作见 `gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
+当前安装包为 v0.13.0，新增 PRD Phase A 的项目与样品工作区，同时完整保留 v0.12.2 电磁分析能力。默认“日常模式”；操作见 `workspace.md`、`gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
 
 ## 安装和启动
 
-双击 `MicrowaveAbsorptionAnalyzer-Setup-0.12.2-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“微波吸收材料分析软件”。安装文件 SHA-256 见 `output/releases/SHA256SUMS-0.12.2.txt`。
+双击 `MaterialsCharacterizationPlatform-Setup-0.13.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“综合材料表征分析平台”。
 
 目标为 Windows 10（1809 或更高）/Windows 11 x64。界面为中文，安装向导按钮使用英文。客户端未做商业代码签名，Windows 可能显示“未知发布者”；请只使用随交付提供哈希的安装文件。
 
 ## 数据保存
 
-- 默认分析输出：`%LOCALAPPDATA%\MicrowaveAbsorptionAnalyzer\output`
-- 日志：`%LOCALAPPDATA%\MicrowaveAbsorptionAnalyzer\logs\app.log`
-- 默认设置：`%LOCALAPPDATA%\MicrowaveAbsorptionAnalyzer\settings\gui.json`；升级和卸载保留用户数据目录。
+- 默认分析输出：`%LOCALAPPDATA%\IntegratedMaterialsCharacterizationPlatform\output`
+- 项目工作区：`%LOCALAPPDATA%\IntegratedMaterialsCharacterizationPlatform\workspace`
+- 日志：`%LOCALAPPDATA%\IntegratedMaterialsCharacterizationPlatform\logs\app.log`
+- 默认设置：`%LOCALAPPDATA%\IntegratedMaterialsCharacterizationPlatform\settings\gui.json`；升级和卸载保留用户数据目录。
 - 用户可以在单样品页面选择其他输出目录。
 - 每次分析独立建目录，仍记录原文件哈希、参数、软件版本、构建提交及验证状态。
 - 在 Windows“已安装的应用”中卸载程序；卸载不删除上述科研结果和日志。
@@ -27,7 +28,7 @@
 .\output\package-env\Scripts\python.exe packaging/build_client.py
 ```
 
-构建脚本生成 `output/packaging/build_info.json`，随后构建 `output/dist/MicrowaveAbsorptionAnalyzer`，最后用 `output/packaging-tools/InnoSetup/ISCC.exe` 生成 `output/releases` 中的安装包。发布构建必须在干净提交上运行；开发构建会准确标记 dirty。
+构建脚本生成 `output/packaging/build_info.json`，随后构建 `output/dist/IntegratedMaterialsCharacterizationPlatform`，最后用 `output/packaging-tools/InnoSetup/ISCC.exe` 生成 `output/releases` 中的安装包。发布构建必须在干净提交上运行；开发构建会准确标记 dirty。
 
 构建脚本清理 PyInstaller 缓存并隔离 PATH，不从外部开发工具中收集同名运行库。Qt 使用 Windows 系统 ICU，禁止捆绑 Poppler 的不兼容版本。
 
@@ -36,7 +37,7 @@
 冻结版自检（开发验收使用，普通用户无需输入）：
 
 ```powershell
-MicrowaveAbsorptionAnalyzer.exe --self-test "验收输出目录"
+IntegratedMaterialsCharacterizationPlatform.exe --self-test "验收输出目录"
 ```
 
 自检经过真实 Qt 导入和分析按钮、后台任务、四类嵌入图、Excel 导入和四种图片导出，输出 `smoke_report.json`。仍需在其他独立 Windows 电脑上确认兼容性；同机隔离 PATH 验收不等于跨机器实测。

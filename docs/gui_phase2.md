@@ -1,6 +1,6 @@
 # GUI Phase 2 · v0.7.0
 
-继续使用桌面快捷方式，或在源码目录运行 `.\.venv\Scripts\python.exe run_gui.py`。安装包更新已安装的同一客户端，不删除历史数据。安装版默认输出在 `%LOCALAPPDATA%\MicrowaveAbsorptionAnalyzer\output`。
+继续使用桌面快捷方式，或在源码目录运行 `.\.venv\Scripts\python.exe run_gui.py`。安装包更新已安装的同一客户端，不删除历史数据。安装版默认输出在 `%LOCALAPPDATA%\IntegratedMaterialsCharacterizationPlatform\output`。
 
 ## 单样品完整科研图
 

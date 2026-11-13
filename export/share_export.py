@@ -90,7 +90,7 @@ def export_shareable(run_directory, output_directory):
     validation = record.get("validation_status") or record.get("schema_status") or "unknown"
     raw_sha = record.get("raw_sha256", "unavailable")
     lines = [
-        "可分享运行记录（由微波吸收材料分析软件生成）",
+        "可分享运行记录（由综合材料表征分析平台生成）",
         f"原始运行目录名：{run.name}",
         f"运行状态：{status}",
         f"验证状态：{validation}",

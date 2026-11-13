@@ -47,10 +47,12 @@ def result(source, tmp_path):
 def test_main_window_start_and_navigation(window, qtbot):
     assert window.minimumWidth() == 1200
     assert window.minimumHeight() == 750
-    assert "微波吸收材料分析软件" in window.windowTitle()
+    assert "综合材料表征分析平台" in window.windowTitle()
     window.navigation.setCurrentRow(1)
-    assert window.stack.currentWidget() is window.single
+    assert window.stack.currentWidget() is window.workspace
     window.navigation.setCurrentRow(2)
+    assert window.stack.currentWidget() is window.single
+    window.navigation.setCurrentRow(3)
     assert "S 参数" in window.stack.currentWidget().text()
 
 
