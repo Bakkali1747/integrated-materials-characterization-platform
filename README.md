@@ -1,5 +1,7 @@
 # 综合材料表征分析平台
 
+开发者接手、架构、发布流程和后续路线见 [项目交接文档](docs/PROJECT_HANDOFF.md)。
+
 当前为 v0.13.0（PRD Phase A）。本版本在 v0.12.2 电磁分析能力上新增以样品为中心的本地工作区：Project、Sample、Measurement、AnalysisRun 四类实体，项目/样品界面，以及原始测试文件路径和 SHA-256 追溯。原始文件不会被复制、移动或修改。使用说明见 [项目与样品工作区](docs/workspace.md)。
 
 产品将按 PRD 分阶段演进：Phase B 把现有电磁分析挂载到 Sample/Measurement；Phase C 增加 VSM；Phase D 增加 XRD。当前版本不会把尚未实现或尚未验证的 VSM/XRD 结果标记为可用。
