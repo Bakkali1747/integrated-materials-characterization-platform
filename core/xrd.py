@@ -14,12 +14,13 @@ import pandas as pd
 
 from core.parser import decode_text
 
-SUPPORTED_SUFFIXES = {".csv", ".txt", ".xy", ".dat"}
+SUPPORTED_SUFFIXES = {".csv", ".txt", ".xy", ".dat", ".raw"}
 PARSER_VERSION = "xrd-delimited-v1"
+RAW4_TEXT_PARSER = "bruker-raw4-text-v1"
 
 _TWO_THETA_ALIASES = {"2theta", "2thetadeg", "twotheta", "twothetadeg", "angle", "2θ", "2θdeg",
                       "角度", "衍射角"}
-_INTENSITY_ALIASES = {"intensity", "counts", "cps", "i", "强度", "计数"}
+_INTENSITY_ALIASES = {"intensity", "counts", "cps", "i", "psd", "强度", "计数"}
 _PHASE_ALIASES = {"phase", "material", "name", "相", "物相"}
 
 
@@ -56,8 +57,156 @@ def _split_line(line, delimiter):
     return next(csv.reader([line], delimiter=delimiter, strict=True))
 
 
+def _raw4_float(value):
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _raw4_sections(lines):
+    """解析 Bruker RAW4 文本的节区、VarInfo 块和 [Data] 位置。"""
+    sections, var_blocks, block = {}, [], {}
+    current = None
+    data_index = None
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            if current == "VarInfo":
+                var_blocks.append(block)
+                block = {}
+            current = stripped[1:-1]
+            if current == "Data":
+                data_index = index
+                break
+            sections.setdefault(current, {})
+            continue
+        if current is None or not stripped or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        if current == "VarInfo":
+            block[key.strip()] = value.strip()
+        else:
+            sections[current][key.strip()] = value.strip()
+    if current == "VarInfo":
+        var_blocks.append(block)
+    return sections, var_blocks, data_index
+
+
+def _raw4_table(text):
+    """解析 RAW4 文本的 [Data] 段；返回 frame、源行号和元数据。"""
+    lines = text.splitlines()
+    sections, var_blocks, data_index = _raw4_sections(lines)
+    if data_index is None:
+        raise ValueError("RAW4 文本缺少 [Data] 段。")
+    header_index = None
+    for index in range(data_index + 1, len(lines)):
+        if lines[index].strip():
+            header_index = index
+            break
+    if header_index is None:
+        raise ValueError("RAW4 [Data] 段没有表头。")
+    header_line = lines[header_index]
+    delimiter = "," if "," in header_line else None
+
+    def split(line):
+        if delimiter is None:
+            return line.split()
+        return next(csv.reader([line], delimiter=delimiter, strict=True))
+
+    header = [token.strip() for token in split(header_line)]
+    while header and header[-1] == "":
+        header.pop()
+    if not header:
+        raise ValueError("RAW4 [Data] 段表头为空。")
+    rows, source_rows = [], []
+    for index in range(header_index + 1, len(lines)):
+        stripped = lines[index].strip()
+        if not stripped:
+            continue
+        if stripped.startswith("["):
+            break
+        try:
+            tokens = [token.strip() for token in split(lines[index])]
+        except csv.Error as error:
+            raise ValueError(f"RAW4 源行 {index + 1} 无法拆分：{error}") from error
+        while len(tokens) > len(header) and tokens[-1] == "":
+            tokens.pop()
+        if len(tokens) != len(header):
+            raise ValueError(f"RAW4 源行 {index + 1} 应有 {len(header)} 列，实际 {len(tokens)} 列。")
+        rows.append(tokens)
+        source_rows.append(index + 1)
+    if not rows:
+        raise ValueError("RAW4 [Data] 段没有数据行。")
+    frame = pd.DataFrame(rows, columns=header)
+    range_header = sections.get("RangeHeader", {})
+    hardware = sections.get("HardwareConfiguration", {})
+    wavelength = _raw4_float(range_header.get("ActuallyUsedLambda"))
+    wavelength_source = "ActuallyUsedLambda"
+    if wavelength is None:
+        wavelength = _raw4_float(hardware.get("AlphaAverage"))
+        wavelength_source = "AlphaAverage"
+    if wavelength is None:
+        wavelength = _raw4_float(hardware.get("Alpha1"))
+        wavelength_source = "Alpha1"
+    sample_id = None
+    for block in var_blocks:
+        if str(block.get("Type", "")).strip().upper() == "SAMPLEID":
+            sample_id = block.get("Value")
+    info = {
+        "parser": RAW4_TEXT_PARSER, "has_header": True, "header": header, "raw4_text": True,
+        "raw4_header": sections.get("RawHeader", {}), "raw4_hardware": hardware,
+        "raw4_range": range_header, "raw4_var_info": var_blocks, "raw4_sample_id": sample_id,
+        "wavelength_angstrom": wavelength, "wavelength_source": wavelength_source,
+        "start_two_theta": _raw4_float(range_header.get("Start")),
+        "step_two_theta": _raw4_float(range_header.get("Increment")),
+        "declared_points": _raw4_float(range_header.get("NumberOfMeasuredData")
+                                         or range_header.get("Steps")),
+    }
+    return frame, source_rows, info
+
+
+def _raw_text_source(path, encoding):
+    """读取 RAW4 文本；二进制 .raw 使用同目录同名 .txt 转换文件并记录两者。"""
+    raw = path.read_bytes()
+    if b"\x00" not in raw:
+        try:
+            text, actual_encoding = decode_text(raw, encoding)
+        except ValueError:
+            text = None
+        if text is not None and text.lstrip("\ufeff \t\r\n").startswith(";RAW4"):
+            return text, {"sha256": hashlib.sha256(raw).hexdigest(), "file_size_bytes": len(raw),
+                          "encoding": actual_encoding, "raw_binary": False}
+    companion = path.with_suffix(".txt")
+    if not companion.is_file():
+        raise ValueError("Bruker 二进制 .raw 需要同目录同名 .txt（RAW4 文本转换文件）；"
+                         "当前版本不直接解析二进制 RAW。请先用 BrmlToV4Converter 导出 .txt。")
+    companion_raw = companion.read_bytes()
+    companion_text, companion_encoding = decode_text(companion_raw, encoding)
+    if not companion_text.lstrip("\ufeff \t\r\n").startswith(";RAW4"):
+        raise ValueError(f"同名转换文件不是 RAW4 文本：{companion}")
+    return companion_text, {
+        "sha256": hashlib.sha256(raw).hexdigest(), "file_size_bytes": len(raw),
+        "encoding": companion_encoding, "raw_binary": True,
+        "companion_path": str(companion.resolve()),
+        "companion_sha256": hashlib.sha256(companion_raw).hexdigest(),
+        "companion_size_bytes": len(companion_raw),
+    }
+
+
+def _text_source(path, encoding):
+    if path.suffix.lower() == ".raw":
+        return _raw_text_source(path, encoding)
+    raw = path.read_bytes()
+    text, actual_encoding = decode_text(raw, encoding)
+    return text, {"sha256": hashlib.sha256(raw).hexdigest(), "file_size_bytes": len(raw),
+                  "encoding": actual_encoding}
+
+
 def _read_table(text, delimiter, header_row=0):
     """读取带可选表头的文本表；返回 frame、源行号和表头信息。"""
+    if text.lstrip("\ufeff \t\r\n").startswith(";RAW4"):
+        return _raw4_table(text)
     content = []
     row_numbers = []
     for number, line in enumerate(text.splitlines(), 1):
@@ -129,9 +278,10 @@ def _numeric_column(frame, column, label, source_rows):
 
 def read_xrd(path, *, name=None, two_theta_column=None, intensity_column=None,
              sheet=0, header_row=0, encoding=None, delimiter=None) -> XRDData:
-    """读取 XRD 文本文件；返回标准表、元数据和警告。
+    """读取 XRD 文件；返回标准表、元数据和警告。
 
-    支持 .csv/.txt/.xy/.dat。表头存在时按列名选择；无表头只接受两列
+    支持 .csv/.txt/.xy/.dat 和 Bruker RAW4。二进制 .raw 通过同目录同名 .txt
+    读取并在元数据中记录两者。表头存在时按列名选择；无表头只接受两列
     （2θ，强度）。2θ 必须严格递增；不排序、不插值、不裁剪。
     """
     path = Path(path)
@@ -139,11 +289,11 @@ def read_xrd(path, *, name=None, two_theta_column=None, intensity_column=None,
         raise FileNotFoundError(f"原始文件不存在：{path}")
     suffix = path.suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
-        raise ValueError(f"XRD 仅支持 .csv / .txt / .xy / .dat；不解析 {suffix or '无扩展名'} 文件。")
+        raise ValueError(f"XRD 仅支持 .csv / .txt / .xy / .dat / .raw；不解析 {suffix or '无扩展名'} 文件。")
     if sheet:
-        raise ValueError("XRD 文本格式不支持工作表；请选择 .csv/.txt/.xy/.dat。")
-    raw = path.read_bytes()
-    text, actual_encoding = decode_text(raw, encoding)
+        raise ValueError("XRD 文本格式不支持工作表；请选择 .csv/.txt/.xy/.dat/.raw。")
+    text, source_meta = _text_source(path, encoding)
+    actual_encoding = source_meta["encoding"]
     actual_delimiter = delimiter if delimiter is not None else ("\t" if suffix == ".dat" else
                                                                ("," if suffix == ".csv" else None))
     frame, source_rows, table_info = _read_table(text, actual_delimiter, header_row)
@@ -155,6 +305,10 @@ def read_xrd(path, *, name=None, two_theta_column=None, intensity_column=None,
     intensity = _numeric_column(frame, intensity_name, "强度", source_rows)
     if len(two_theta) < 5:
         raise ValueError("XRD 数据少于 5 个点。")
+    declared = table_info.get("declared_points")
+    if declared is not None and int(round(declared)) != len(two_theta):
+        raise ValueError(f"RAW4 声明 {int(round(declared))} 点，实际读取 {len(two_theta)} 点，"
+                         "文件可能不完整。")
     difference = np.diff(two_theta)
     if np.any(difference <= 0):
         bad = [source_rows[i + 1] for i in np.flatnonzero(difference <= 0)]
@@ -164,18 +318,29 @@ def read_xrd(path, *, name=None, two_theta_column=None, intensity_column=None,
         warnings.append(f"[KNOWN] XRD 数据仅 {len(two_theta)} 点；峰宽与 Scherrer 尺寸不确定度较大。")
     if np.any(intensity < 0):
         warnings.append(f"[KNOWN] 强度存在 {int(np.sum(intensity < 0))} 个负值；保留原值，不裁剪。")
+    declared_start = table_info.get("start_two_theta")
+    if declared_start is not None and abs(float(two_theta[0]) - float(declared_start)) > .01:
+        warnings.append(f"[KNOWN] RAW4 声明起始 2θ={declared_start:g}°，实际首点 {two_theta[0]:g}°。")
+    declared_step = table_info.get("step_two_theta")
+    if declared_step is not None and len(two_theta) > 1:
+        actual_step = float(np.median(np.diff(two_theta)))
+        if abs(actual_step - float(declared_step)) > max(.001, abs(float(declared_step)) * .02):
+            warnings.append(f"[KNOWN] RAW4 声明步长 {declared_step:g}°，实际中位步长 {actual_step:g}°。")
+    if source_meta.get("raw_binary"):
+        warnings.append("[KNOWN] 二进制 RAW 通过同目录同名 TXT 转换文件读取；原始 .raw 未被修改。")
     standard = pd.DataFrame({
         "source_row": source_rows,
         "two_theta_deg": two_theta,
         "intensity": intensity,
     })
     metadata = {
-        "raw_file": str(path.resolve()), "sha256": hashlib.sha256(raw).hexdigest(),
-        "file_size_bytes": len(raw), "parser": PARSER_VERSION, "encoding": actual_encoding,
+        "raw_file": str(path.resolve()), "parser": table_info.get("parser", PARSER_VERSION),
         "delimiter": actual_delimiter if actual_delimiter is not None else "whitespace",
         "column_map": {"two_theta": two_theta_name, "intensity": intensity_name},
-        "two_theta_unit": "deg", "source_rows": source_rows, **table_info,
+        "two_theta_unit": "deg", "source_rows": source_rows,
+        **source_meta, **table_info,
     }
+    metadata["encoding"] = actual_encoding
     return XRDData(name or path.stem, standard, metadata, warnings)
 
 
@@ -186,17 +351,17 @@ def inspect_xrd_table(path, *, encoding=None, delimiter=None, header_row=0) -> d
         raise FileNotFoundError(f"原始文件不存在：{path}")
     suffix = path.suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
-        raise ValueError(f"XRD 仅支持 .csv / .txt / .xy / .dat；不解析 {suffix or '无扩展名'} 文件。")
-    text, actual_encoding = decode_text(path.read_bytes(), encoding)
+        raise ValueError(f"XRD 仅支持 .csv / .txt / .xy / .dat / .raw；不解析 {suffix or '无扩展名'} 文件。")
+    text, source_meta = _text_source(path, encoding)
     actual_delimiter = delimiter if delimiter is not None else ("\t" if suffix == ".dat" else
                                                                ("," if suffix == ".csv" else None))
     frame, source_rows, info = _read_table(text, actual_delimiter, header_row)
     return {"columns": [str(column) for column in frame.columns],
             "rows": int(len(frame)), "preview": frame.head(6).fillna("").astype(str),
             "source_rows": source_rows[:6],
-            "metadata": {"encoding": actual_encoding,
+            "metadata": {"encoding": source_meta["encoding"],
                          "delimiter": actual_delimiter if actual_delimiter is not None else "whitespace",
-                         **info}}
+                         **source_meta, **info}}
 
 
 def suggest_xrd_columns(columns):
@@ -362,12 +527,19 @@ def _match_reference(peaks, reference, tolerance_deg, minimum_relative):
 
 def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
                 background_mode="none", background_left=(10.0, 20.0),
-                background_right=(70.0, 80.0), min_prominence_relative=0.02,
-                min_distance_deg=0.1, reference=None, match_tolerance_deg=0.2,
-                reference_min_relative=5.0) -> dict:
-    """计算背景、峰位、FWHM、d 间距、Scherrer 尺寸与参考相匹配分数。"""
+                background_right=(70.0, 80.0), min_prominence_relative=0.05,
+                min_distance_deg=0.1, smoothing_points=5, reference=None,
+                match_tolerance_deg=0.2, reference_min_relative=5.0) -> dict:
+    """计算背景、峰位、FWHM、d 间距、Scherrer 尺寸与参考相匹配分数。
+
+    smoothing_points > 1 时只用移动平均曲线做峰检测与 FWHM；原始强度、
+    背景扣除结果和导出数据保持不变。
+    """
     if background_mode not in {"none", "linear"}:
         raise ValueError("background_mode 必须为 none 或 linear。")
+    if isinstance(smoothing_points, bool) or not isinstance(smoothing_points, int) \
+            or smoothing_points < 1 or smoothing_points % 2 != 1:
+        raise ValueError("峰检测平滑点数必须为正奇数（1 表示不平滑）。")
     if not np.isfinite(wavelength_angstrom) or wavelength_angstrom <= 0:
         raise ValueError("X 射线波长必须为有限正数（Å）。")
     if not np.isfinite(k_factor) or k_factor <= 0:
@@ -388,16 +560,23 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
         background = np.zeros_like(raw)
         background_info = {"mode": "none"}
     corrected = raw - background
-    maximum = float(corrected.max())
+    if smoothing_points > 1:
+        kernel = np.ones(smoothing_points) / smoothing_points
+        detection = np.convolve(np.pad(corrected, (smoothing_points // 2, smoothing_points // 2),
+                                       mode="edge"), kernel, mode="valid")
+    else:
+        detection = corrected
+    maximum = float(detection.max())
     if maximum <= 0:
         raise ValueError("背景扣除后最大强度不大于 0，无法检测峰。")
     candidates = []
-    for index in _local_maxima(corrected):
-        prominence, baseline = _prominence(corrected, index)
-        if prominence < min_prominence_relative * maximum:
+    for index in _local_maxima(detection):
+        prominence, baseline = _prominence(detection, index)
+        if prominence < min_prominence_relative * maximum or detection[index] <= 0:
             continue
         candidates.append({"index": index, "two_theta_deg": float(x[index]),
                            "intensity": float(raw[index]), "corrected_intensity": float(corrected[index]),
+                           "detection_intensity": float(detection[index]),
                            "prominence": prominence, "baseline": baseline})
     selected = []
     for candidate in sorted(candidates, key=lambda item: item["prominence"], reverse=True):
@@ -407,7 +586,7 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
     peaks = []
     for candidate in selected:
         index = candidate["index"]
-        fwhm = _fwhm(x, corrected, index, candidate["baseline"])
+        fwhm = _fwhm(x, detection, index, candidate["baseline"])
         theta = np.radians(candidate["two_theta_deg"] / 2.0)
         d_spacing = float(wavelength_angstrom / (2.0 * np.sin(theta))) if np.sin(theta) > 0 else None
         size_nm = None
@@ -419,17 +598,18 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
         peaks.append({
             "two_theta_deg": candidate["two_theta_deg"], "intensity": candidate["intensity"],
             "background": float(background[index]), "corrected_intensity": candidate["corrected_intensity"],
+            "detection_intensity": candidate["detection_intensity"],
             "prominence": candidate["prominence"], "baseline": candidate["baseline"],
             "fwhm_deg": fwhm, "d_angstrom": d_spacing, "crystallite_size_nm": size_nm,
-            "relative_intensity_pct": float(candidate["corrected_intensity"] / maximum * 100.0),
+            "relative_intensity_pct": float(candidate["prominence"] / maximum * 100.0),
             "at_scan_grid": True,
         })
     if not peaks:
         warnings.append("[KNOWN] 未检测到满足阈值的峰；峰分析不可计算。")
     else:
-        peak_max = max(peak["corrected_intensity"] for peak in peaks)
+        peak_max = max(peak["prominence"] for peak in peaks)
         for peak in peaks:
-            peak["relative_intensity_pct"] = float(peak["corrected_intensity"] / peak_max * 100.0)
+            peak["relative_intensity_pct"] = float(peak["prominence"] / peak_max * 100.0)
     step = float(np.median(np.diff(x)))
     for peak in peaks:
         if peak["fwhm_deg"] is not None and peak["fwhm_deg"] < 2.0 * step:
@@ -443,10 +623,13 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
         "point_count": int(len(x)), "two_theta_range_deg": [float(x.min()), float(x.max())],
         "step_median_deg": step, "peak_count": len(peaks),
         "background": background_info, "clipping": "OFF", "interpolation": "OFF",
-        "sorting": "preserved", "smoothing": "OFF", "wavelength_angstrom": float(wavelength_angstrom),
+        "sorting": "preserved", "smoothing": "moving_average_for_detection" if smoothing_points > 1 else "OFF",
+        "smoothing_points": int(smoothing_points),
+        "wavelength_angstrom": float(wavelength_angstrom),
         "k_factor": float(k_factor), "status": status,
     }
     note = ("[COMMON] 峰位为本次扫描网格点；FWHM 在半高处线性插值。"
+            "峰检测平滑仅用于检测与 FWHM，原始强度与导出数据未平滑。"
             "Scherrer 尺寸未做仪器展宽校正，仅为表观尺寸。参考相匹配是筛查，不是物相鉴定。")
     return {"status": status, "peaks": peaks, "reference_matching": matching,
             "background": background_info, "quality": quality, "warnings": warnings,

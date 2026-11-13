@@ -42,7 +42,7 @@ from core.common import (
 ELECTROMAGNETIC_SOURCES = {".csv", ".xlsx", ".xls", ".memp"}
 SPARAMETER_SOURCE = ".sdat"
 VSM_SOURCES = {".csv", ".xlsx", ".xls", ".txt", ".dat"}
-XRD_SOURCES = {".csv", ".txt", ".xy", ".dat"}
+XRD_SOURCES = {".csv", ".txt", ".xy", ".dat", ".raw"}
 
 
 def _tags(text: str) -> list[str]:
@@ -557,7 +557,7 @@ class WorkspacePage(QWidget):
         if kind is MeasurementType.XRD and has_xrd_source:
             self.xrd_button.setToolTip("用该 XRD 测试的原始文件创建峰分析。")
         elif kind is MeasurementType.XRD:
-            self.xrd_button.setToolTip("该测试没有 .csv / .txt / .xy / .dat 数据文件。")
+            self.xrd_button.setToolTip("该测试没有 .csv / .txt / .xy / .dat / .raw 数据文件。")
         else:
             self.xrd_button.setToolTip("XRD 分析只接受 XRD 测试的原始文件。")
 
@@ -709,7 +709,7 @@ class WorkspacePage(QWidget):
         candidates = [path for path in self._source_paths(measurement) if path.suffix.lower() in XRD_SOURCES]
         if not candidates:
             QMessageBox.information(self, "没有 XRD 数据文件",
-                                    "该测试没有 .csv / .txt / .xy / .dat 数据文件。")
+                                    "该测试没有 .csv / .txt / .xy / .dat / .raw 数据文件。")
             return None
         path = candidates[0]
         if not path.is_file():

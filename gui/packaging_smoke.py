@@ -176,15 +176,20 @@ def run_smoke(app, output):
                 report["vsm_reports"] = [str(item) for item in export_vsm_report(
                     window.vsm.completed["directory"], output / "vsm_report", dpi=120)]
                 window.grab().save(str(output / "client-vsm.png"))
-                xrd_path = output / "synthetic_xrd.csv"
-                xrd_lines = ["two_theta_deg,intensity"]
+                xrd_path = output / "synthetic_xrd.txt"
+                xrd_lines = [";RAW4.00", "[RawHeader]", "Date=08/03/2026", "Time=20:23:19", "",
+                             "[HardwareConfiguration]", "Alpha1=1.5406", "Alpha2=1.54439",
+                             "AlphaAverage=1.5418", "", "[RangeHeader]", "Start=10.0",
+                             "Increment=0.02", "ActuallyUsedLambda=1.5418",
+                             "NumberOfMeasuredData=4001", "", "[VarInfo]", "Type=SAMPLEID",
+                             "Value=SYNTHETIC XRD", "", "[Data]", "Angle, PSD,"]
                 for i in range(4001):
                     angle = 10.0 + i * 0.02
                     intensity = (100.0 + 0.5 * angle
                                  + 500.0 * math.exp(-((angle - 20.0) / 0.08) ** 2)
                                  + 300.0 * math.exp(-((angle - 30.0) / 0.10) ** 2)
                                  + 200.0 * math.exp(-((angle - 40.0) / 0.12) ** 2))
-                    xrd_lines.append(f"{angle:.4f},{intensity:.6f}")
+                    xrd_lines.append(f"{angle:.4f}, {intensity:.6f},")
                 xrd_path.write_text("\n".join(xrd_lines), encoding="utf-8")
                 x_measurement = window.workspace.add_measurement("xrd", [xrd_path], instrument="XRD")
                 window.workspace.start_measurement_xrd_analysis()

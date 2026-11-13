@@ -1,5 +1,14 @@
 # 变更记录
 
+## v0.19.0 — XRD 支持真实 Bruker RAW4
+
+- 新增 Bruker RAW4 文本解析：`;RAW4.00`、`[RangeHeader]`、`[HardwareConfiguration]`、`[VarInfo]` 与 `[Data]` 的 `Angle, PSD` 数据；核对声明点数、起始 2θ 与步长。
+- 从 RAW4 文件头自动读取波长（`ActuallyUsedLambda` → `AlphaAverage` → `Alpha1`），界面预填、用户可覆盖；A/B 真实文件为 1.5418 Å。
+- 二进制 `.raw` 支持通过同目录同名 `.txt` RAW4 转换文件读取，记录 `.raw` SHA-256 与 `.txt` 路径/哈希，并明确提示；无同名 TXT 时给出可操作错误。
+- XRD 峰检测新增移动平均平滑（默认 5 点，仅用于检测与 FWHM，原始数据不平滑），默认最小突出度调整为 5%，抑制真实数据的噪声峰。
+- 用真实 A/B 的 RAW 与 TXT 验证：解析、波长、2θ 范围、峰检测与报告均通过；A/B 主峰位于约 44.7°、65°、82°。
+- 419 项测试通过；新增 RAW4 文本、二进制+同名 TXT、无同名 TXT 拒绝与界面波长预填测试。
+
 ## v0.18.0 — XRD 峰分析（Phase D）
 
 - 新增 XRD 文本解析：`.csv/.txt/.xy/.dat`，显式表头列名或两列无表头布局；2θ 严格递增，缺失/非数值/非有限值报错。

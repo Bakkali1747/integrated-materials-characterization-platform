@@ -1,10 +1,10 @@
 # Windows 独立客户端
 
-当前安装包为 v0.18.0，新增 XRD 峰分析（峰检测、FWHM、d 间距、Scherrer 表观尺寸、可选背景与参考峰匹配），并保留 v0.17.0 的 VSM、S 参数与电磁工作区闭环。默认“日常模式”；操作见 `xrd.md`、`vsm.md`、`workspace.md`、`gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
+当前安装包为 v0.19.0，支持真实 Bruker RAW4 XRD（文本或二进制+同名 TXT）以及 v0.17.0 的 VSM、S 参数与电磁工作区闭环。默认“日常模式”；操作见 `xrd.md`、`vsm.md`、`workspace.md`、`gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
 
 ## 安装和启动
 
-双击 `MaterialsCharacterizationPlatform-Setup-0.18.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“综合材料表征分析平台”。
+双击 `MaterialsCharacterizationPlatform-Setup-0.19.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“综合材料表征分析平台”。
 
 目标为 Windows 10（1809 或更高）/Windows 11 x64。界面为中文，安装向导按钮使用英文。客户端未做商业代码签名，Windows 可能显示“未知发布者”；请只使用随交付提供哈希的安装文件。
 

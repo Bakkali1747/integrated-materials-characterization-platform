@@ -29,13 +29,14 @@ class XRDConfig:
     header_row: int = 0
     encoding: str | None = None
     delimiter: str | None = None
-    wavelength_angstrom: float = 1.5406
+    wavelength_angstrom: float | None = None
     k_factor: float = 0.9
     background_mode: str = "none"
     background_left: tuple = (10.0, 20.0)
     background_right: tuple = (70.0, 80.0)
-    min_prominence_relative: float = 0.02
+    min_prominence_relative: float = 0.05
     min_distance_deg: float = 0.1
+    smoothing_points: int = 5
     reference_path: Path | None = None
     match_tolerance_deg: float = 0.2
     reference_min_relative: float = 5.0
@@ -67,6 +68,7 @@ def _configuration(config: XRDConfig) -> dict:
         "background_right_deg": list(config.background_right),
         "min_prominence_relative": config.min_prominence_relative,
         "min_distance_deg": config.min_distance_deg,
+        "smoothing_points": config.smoothing_points,
         "reference_path": str(config.reference_path) if config.reference_path else None,
         "match_tolerance_deg": config.match_tolerance_deg,
         "reference_min_relative": config.reference_min_relative,
@@ -78,9 +80,10 @@ def _configuration(config: XRDConfig) -> dict:
 def validate_configuration(config: XRDConfig) -> None:
     if not isinstance(config.name, str) or not config.name.strip():
         raise ValueError("样品名称不能为空。")
-    if not isinstance(config.wavelength_angstrom, (int, float)) or isinstance(config.wavelength_angstrom, bool) \
-            or not config.wavelength_angstrom > 0:
-        raise ValueError("X 射线波长必须为有限正数（Å）。")
+    if config.wavelength_angstrom is not None:
+        if not isinstance(config.wavelength_angstrom, (int, float)) or isinstance(config.wavelength_angstrom, bool) \
+                or not config.wavelength_angstrom > 0:
+            raise ValueError("X 射线波长必须为有限正数（Å）。")
     if not isinstance(config.k_factor, (int, float)) or isinstance(config.k_factor, bool) or not config.k_factor > 0:
         raise ValueError("Scherrer 常数 K 必须为有限正数。")
     if config.background_mode not in {"none", "linear"}:
@@ -95,6 +98,9 @@ def validate_configuration(config: XRDConfig) -> None:
         raise ValueError("最小相对突出度必须在 [0, 1) 内。")
     if config.min_distance_deg < 0 or config.match_tolerance_deg <= 0:
         raise ValueError("最小峰间距必须非负，匹配容差必须为正。")
+    if isinstance(config.smoothing_points, bool) or not isinstance(config.smoothing_points, int) \
+            or config.smoothing_points < 1 or config.smoothing_points % 2 != 1:
+        raise ValueError("峰检测平滑点数必须为正奇数（1 表示不平滑）。")
     if not 0 <= config.reference_min_relative <= 100:
         raise ValueError("参考峰最小相对强度必须在 0–100% 内。")
     if config.reference_path is not None and not Path(config.reference_path).is_file():
@@ -198,15 +204,25 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
                         encoding=config.encoding, delimiter=config.delimiter)
         if data.metadata["sha256"] != raw_sha256:
             raise ValueError("分析启动后原始文件发生变化，请重新导入。")
+        wavelength = config.wavelength_angstrom
+        wavelength_source = "user"
+        if wavelength is None:
+            wavelength = data.metadata.get("wavelength_angstrom")
+            wavelength_source = data.metadata.get("wavelength_source", "file")
+        if wavelength is None:
+            raise ValueError("文件未声明 X 射线波长；请显式提供 wavelength_angstrom。")
+        record["configuration"].update({"wavelength_angstrom": float(wavelength),
+                                        "wavelength_source": wavelength_source})
         reference = read_xrd_reference(config.reference_path, encoding=config.encoding) \
             if config.reference_path else None
         checkpoint(35, "背景与峰检测")
-        analysis = analyze_xrd(data, wavelength_angstrom=config.wavelength_angstrom,
+        analysis = analyze_xrd(data, wavelength_angstrom=float(wavelength),
                                k_factor=config.k_factor, background_mode=config.background_mode,
                                background_left=config.background_left,
                                background_right=config.background_right,
                                min_prominence_relative=config.min_prominence_relative,
-                               min_distance_deg=config.min_distance_deg, reference=reference,
+                               min_distance_deg=config.min_distance_deg,
+                               smoothing_points=config.smoothing_points, reference=reference,
                                match_tolerance_deg=config.match_tolerance_deg,
                                reference_min_relative=config.reference_min_relative)
         table = _analysis_table(data, analysis)

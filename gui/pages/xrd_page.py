@@ -92,13 +92,17 @@ class XrdPage(TaskPage):
         self.min_prominence = QDoubleSpinBox()
         self.min_prominence.setRange(0.0, 100.0)
         self.min_prominence.setDecimals(2)
-        self.min_prominence.setValue(2.0)
+        self.min_prominence.setValue(5.0)
         self.min_prominence.setSuffix(" %")
         self.min_distance = QDoubleSpinBox()
         self.min_distance.setRange(0.0, 10.0)
         self.min_distance.setDecimals(3)
         self.min_distance.setValue(0.1)
         self.min_distance.setSuffix(" °")
+        self.smoothing = QComboBox()
+        for points in (1, 3, 5, 7, 9, 15, 25):
+            self.smoothing.addItem("不平滑" if points == 1 else f"{points} 点", points)
+        self.smoothing.setCurrentIndex(2)
         row = QHBoxLayout()
         row.addWidget(QLabel("波长"))
         row.addWidget(self.wavelength)
@@ -108,6 +112,8 @@ class XrdPage(TaskPage):
         row.addWidget(self.min_prominence)
         row.addWidget(QLabel("最小峰间距"))
         row.addWidget(self.min_distance)
+        row.addWidget(QLabel("检测平滑"))
+        row.addWidget(self.smoothing)
         self.layout.addLayout(row)
 
         self.background = QComboBox()
@@ -201,7 +207,8 @@ class XrdPage(TaskPage):
 
     def choose_file(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择 XRD 原始文件", "", "XRD 数据 (*.csv *.txt *.xy *.dat);;所有文件 (*)")
+            self, "选择 XRD 原始文件", "",
+            "XRD 数据 (*.csv *.txt *.xy *.dat *.raw);;Bruker RAW (*.raw *.txt);;所有文件 (*)")
         if path:
             self.file.setText(path)
             self.name.setText(Path(path).stem)
@@ -228,6 +235,9 @@ class XrdPage(TaskPage):
             self.show_error(f"读取列名失败：{error}")
             return
         two_theta, intensity = suggest_xrd_columns(preview["columns"])
+        metadata = preview["metadata"]
+        if metadata.get("wavelength_angstrom"):
+            self.wavelength.setValue(float(metadata["wavelength_angstrom"]))
         for combo, suggested in ((self.two_theta_column, two_theta), (self.intensity_column, intensity)):
             current = combo.currentText().strip()
             combo.blockSignals(True)
@@ -250,6 +260,12 @@ class XrdPage(TaskPage):
         except Exception:
             pass
         self.message.emit(f"读取到 {len(preview['columns'])} 列、{preview['rows']} 行；请确认 2θ 与强度列。")
+        if metadata.get("raw4_text"):
+            hint = ("Bruker RAW4 文本：已从文件头读取波长"
+                    f"{metadata.get('wavelength_angstrom')} Å（{metadata.get('wavelength_source')}）。")
+            if metadata.get("raw_binary"):
+                hint += " 二进制 .raw 通过同名 .txt 转换文件读取。"
+            self.message.emit(hint)
 
     def _config(self):
         path, name, output = self.file.text().strip(), self.name.text().strip(), self.output.text().strip()
@@ -270,6 +286,7 @@ class XrdPage(TaskPage):
             background_right=(float(self.right_low.value()), float(self.right_high.value())),
             min_prominence_relative=float(self.min_prominence.value()) / 100.0,
             min_distance_deg=float(self.min_distance.value()),
+            smoothing_points=int(self.smoothing.currentData()),
             reference_path=Path(reference) if reference else None,
             match_tolerance_deg=float(self.match_tolerance.value()),
             dpi=self.export_dpi, entry_point="gui_xrd")
