@@ -14,6 +14,7 @@ from gui.workers.analysis_worker import AnalysisWorker
 class TaskPage(QWidget):
     message = Signal(str)
     busy_changed = Signal(bool)
+    exports_saved = Signal(object)
 
     def __init__(self, title):
         super().__init__()
@@ -149,6 +150,8 @@ class TaskPage(QWidget):
             self.last_data_directory=p.with_name(p.name+".data")
             self.data_button.setVisible(True)
             self.data_button.setEnabled(True)
+            if self.completed:
+                self.exports_saved.emit({"directory": str(self.completed["directory"]), "paths": [str(p)]})
             self.message.emit(f"图片与独立数据已保存：{p}")
         self.launch(operation, saved)
 
@@ -166,5 +169,10 @@ class TaskPage(QWidget):
             return
         from gui.controllers.export_controller import export_all_builders
         source, extension, dpi = self.completed["directory"], self.figure_format, self.export_dpi
-        self.launch(lambda p,c: export_all_builders(builders,source,output,extension,dpi,p,c),
-                    lambda path:self.message.emit(f"全部图片已保存：{path}"))
+        def exported(path):
+            folder = Path(path)
+            images = sorted(str(item) for item in folder.rglob("*")
+                            if item.is_file() and item.suffix.lower() in {".png", ".tiff", ".tif", ".pdf", ".svg"})
+            self.exports_saved.emit({"directory": str(source), "paths": images})
+            self.message.emit(f"全部图片已保存：{path}")
+        self.launch(lambda p,c: export_all_builders(builders,source,output,extension,dpi,p,c), exported)

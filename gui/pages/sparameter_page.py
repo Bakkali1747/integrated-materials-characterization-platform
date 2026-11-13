@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -26,6 +27,8 @@ from plotting.theory_measured import CAUTION, plot_theory_measured
 
 
 class SParameterPage(TaskPage):
+    analysis_completed = Signal(object)
+
     def __init__(self):
         super().__init__("S 参数分析 · 实测 .sdat（候选映射）")
         self.theory_runs = {}
@@ -149,6 +152,7 @@ class SParameterPage(TaskPage):
         self.quantity.setCurrentIndex(0); self.channel.setCurrentIndex(0)
         self.plot.set_figures({"Magnitude": result["figures"]["magnitude"]})
         self.display_builder = lambda r=result: s_figure(r, "magnitude")
+        self.analysis_completed.emit(result)
 
     def render_selected(self):
         if not self.completed:

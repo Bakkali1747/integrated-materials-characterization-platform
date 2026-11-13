@@ -41,12 +41,13 @@ def run_smoke(app, output):
     page.parameters.fields["thickness_step"].setValue(.1)
     window.workspace.start_measurement_analysis()
     phase = "import"
+    s_measurement = None
 
     def save_report():
         (output / "smoke_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def tick():
-        nonlocal phase
+        nonlocal phase, s_measurement
         if any(p.busy for p in window.task_pages):
             return
         try:
@@ -106,15 +107,25 @@ def run_smoke(app, output):
                 lines = ['<Cluster><Name>SYNTHETIC ONLY</Name></Cluster>']
                 lines += ["\t".join(str(x) for x in [2+i*.08, .1, 0, .7, 0, .7, 0, .1, 0]) for i in range(201)]
                 path.write_text("\n".join(lines), encoding="utf-8")
+                s_measurement = window.workspace.add_measurement("electromagnetic", [path], instrument="VNA")
                 spage = window.sparameters
-                spage.file.setText(str(path)); spage.name.setText("synthetic_sparameters"); spage.output.setText(str(output))
-                window.navigation.setCurrentRow(3)
+                window.workspace.start_measurement_sparameter_analysis()
+                spage.output.setText(str(output))
                 spage.start_analysis()
                 phase = "sparameters"
             elif phase == "sparameters":
                 if not window.sparameters.completed:
                     raise RuntimeError(window.sparameters.error.text())
                 report["sparameters"] = window.sparameters.completed["record"]["schema_status"]
+                s_runs = workspace_repository.list_analysis_runs(
+                    project.project_id, sample.sample_id, s_measurement.measurement_id)
+                if len(s_runs) != 1 or s_runs[0].analysis_type != "s_parameters":
+                    raise RuntimeError("S 参数运行未自动登记到工作区")
+                if s_runs[0].validation_status not in {"PENDING", "WARNING"}:
+                    raise RuntimeError("S 参数运行状态不符合待验证规则")
+                report["workspace_sparameter_run"] = {"id": s_runs[0].analysis_run_id,
+                                                      "status": s_runs[0].validation_status,
+                                                      "plot_refs": len(s_runs[0].plot_refs)}
                 window.grab().save(str(output / "client-sparameters.png"))
                 compare = window.comparison
                 compare.add_source(output / "synthetic.xlsx", "synthetic_copy")

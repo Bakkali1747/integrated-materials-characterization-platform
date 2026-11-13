@@ -31,4 +31,6 @@ Phase 2 已实现阻抗图/衰减/损耗角/Cole-Cole/C0/四分之一波长。Ph
 
 Phase B（v0.14.0）：WorkspacePage → Measurement → MainWindow → SingleSamplePage → `gui.controllers.analysis_controller` / `core.analysis_service` 执行原分析；成功后 `core.common.analysis_link` 校验测试类型、源文件归属与 SHA-256，再追加 AnalysisRun 并更新测试状态。工作区不复制科学公式，运行状态只映射为 `PENDING` / `WARNING`，不自动产生 `VALIDATED`。
 
+v0.15.0：`core.common.workspace_schema` 在打开工作区前建立/迁移 `workspace.json`，只读校验旧实体并拒绝未来版本或损坏文件；`analysis_link` 增加通用登记入口，S 参数页面通过 `TaskPage.exports_saved` / `SParameterPage.analysis_completed` 挂载 `s_parameters` AnalysisRun。
+
 本阶段提前支持这份 memp 是用户确认的范围调整。正式发布依据 VERSIONING.md，阶段结束后等待用户验收。

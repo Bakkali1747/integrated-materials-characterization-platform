@@ -1,10 +1,10 @@
 # Windows 独立客户端
 
-当前安装包为 v0.14.0（PRD Phase B），在 v0.13.0 项目与样品工作区基础上，把电磁分析接入测试记录：分析成功后自动登记 AnalysisRun。默认“日常模式”；操作见 `workspace.md`、`gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
+当前安装包为 v0.15.0，在 v0.14.0 工作区基础上新增 schema v1 迁移与实测 S 参数运行挂载。默认“日常模式”；操作见 `workspace.md`、`gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
 
 ## 安装和启动
 
-双击 `MaterialsCharacterizationPlatform-Setup-0.14.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“综合材料表征分析平台”。
+双击 `MaterialsCharacterizationPlatform-Setup-0.15.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“综合材料表征分析平台”。
 
 目标为 Windows 10（1809 或更高）/Windows 11 x64。界面为中文，安装向导按钮使用英文。客户端未做商业代码签名，Windows 可能显示“未知发布者”；请只使用随交付提供哈希的安装文件。
 

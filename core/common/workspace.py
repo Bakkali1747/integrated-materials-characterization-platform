@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from core import __version__
+from core.common import workspace_schema
 from core.common.analysis_run import AnalysisRun
 from core.common.measurement import Measurement, MeasurementType
 from core.common.project_models import Project
@@ -19,7 +20,8 @@ _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    """毫秒精度：同一秒内连续添加的测试/运行仍保持可排序的先后关系。"""
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="milliseconds")
 
 
 def _new_id(prefix: str) -> str:
@@ -48,6 +50,13 @@ class WorkspaceRepository:
         self.root = Path(root).expanduser().resolve()
         self.projects_root = self.root / "projects"
         self.projects_root.mkdir(parents=True, exist_ok=True)
+        self.schema = workspace_schema.initialize_schema(self.root)
+
+    def schema_info(self) -> dict[str, Any]:
+        """返回本轮打开的 schema 版本与迁移结果，供界面和诊断显示。"""
+        return {"schema_version": self.schema.version, "path": str(self.schema.path),
+                "created": self.schema.created, "migrated": self.schema.migrated,
+                "previous_version": self.schema.previous_version}
 
     @staticmethod
     def _write_json(path: Path, value: dict[str, Any]) -> None:

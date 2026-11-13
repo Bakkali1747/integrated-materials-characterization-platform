@@ -130,9 +130,12 @@ class MainWindow(QMainWindow):
         self.single.message.connect(self.statusBar().showMessage)
         self.pending_workspace_analysis = None
         self.workspace.analysis_requested.connect(self.start_workspace_analysis)
+        self.workspace.sparameter_analysis_requested.connect(self.start_workspace_sparameter_analysis)
         self.workspace.run_load_requested.connect(self.open_workspace_run)
         self.single.analysis_completed.connect(self.record_workspace_analysis)
         self.single.exports_saved.connect(self.record_workspace_exports)
+        self.sparameters.analysis_completed.connect(self.record_workspace_sparameter_run)
+        self.sparameters.exports_saved.connect(self.record_workspace_exports)
         self.navigation.setCurrentRow(0)
         self.statusBar().showMessage("就绪 · 缺失数据插值 OFF · 真实数据验证 PENDING")
         if settings_warning:
@@ -192,9 +195,40 @@ class MainWindow(QMainWindow):
             f"已载入工作区测试文件：{Path(request['path']).name}；确认参数后点击“开始分析”，完成后自动登记运行。")
 
     def record_workspace_analysis(self, result):
-        """分析成功后登记 AnalysisRun；来源哈希、类型与状态由核心模块校验。"""
+        """电磁分析成功后登记 AnalysisRun；来源哈希、类型与状态由核心模块校验。"""
+        return self._record_workspace_result(
+            result, "electromagnetic_rl",
+            lambda context, payload: self.workspace.record_electromagnetic_run(
+                context["project_id"], context["sample_id"], context["measurement_id"],
+                payload["directory"], payload["record"]))
+
+    def start_workspace_sparameter_analysis(self, request):
+        """工作区实测 .sdat → S 参数页面；只在用户点击后开始计算。"""
+        if any(page.busy for page in self.task_pages):
+            self.statusBar().showMessage("当前任务运行中，请完成或取消后再开始 S 参数分析。")
+            return
+        if self.ui_mode != "full":
+            self.set_ui_mode("full")
+        self.pending_workspace_analysis = dict(request)
+        self.navigation.setCurrentRow(3)
+        self.sparameters.file.setText(request["path"])
+        self.sparameters.name.setText(Path(request["path"]).stem)
+        self.sparameters.error.clear()
+        self.statusBar().showMessage(
+            f"已载入工作区 S 参数文件：{Path(request['path']).name}；确认设置后点击“开始 S 参数分析”。")
+
+    def record_workspace_sparameter_run(self, result):
+        """S 参数分析成功后登记 AnalysisRun；候选映射状态不会被升级。"""
+        return self._record_workspace_result(
+            result, "s_parameters",
+            lambda context, payload: self.workspace.record_sparameter_run(
+                context["project_id"], context["sample_id"], context["measurement_id"],
+                payload["directory"], payload["record"]))
+
+    def _record_workspace_result(self, result, kind, register):
+        """统一校验待登记上下文与源文件，再交给页面登记；失败不写入运行。"""
         context = self.pending_workspace_analysis
-        if not context:
+        if not context or context.get("kind") != kind:
             return None
         raw_file = str(result["record"].get("raw_file") or "")
         same = (bool(raw_file)
@@ -205,9 +239,7 @@ class MainWindow(QMainWindow):
             return None
         run = None
         try:
-            run = self.workspace.record_electromagnetic_run(
-                context["project_id"], context["sample_id"], context["measurement_id"],
-                result["directory"], result["record"])
+            run = register(context, result)
         except Exception as error:
             logging.getLogger("microwave.gui").exception("登记工作区分析运行失败")
             self.statusBar().showMessage(f"分析已完成，但登记工作区运行失败：{error}")

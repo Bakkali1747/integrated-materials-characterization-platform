@@ -12,6 +12,7 @@ from core.common import (
     WorkspaceRepository,
     analysis_run_status,
     link_electromagnetic_run,
+    link_sparameter_run,
 )
 from gui.main_window import MainWindow
 from gui.pages.workspace_page import WorkspacePage
@@ -125,6 +126,7 @@ def test_workspace_page_creates_project_sample_and_measurement(qtbot, tmp_path):
     assert page.samples.item(0, 2).text() == "! PENDING"
     assert page.measurements.rowCount() == 1
     assert measurement.measurement_type == "electromagnetic"
+    assert "schema v" in page.schema_label.text()
 
 
 def _completed_run(directory: Path, source: Path, *, warnings=(), status="success") -> dict:
@@ -220,6 +222,88 @@ def test_link_rejects_non_electromagnetic_measurement(tmp_path):
                                  measurement.measurement_id, directory, record)
 
 
+def _completed_sparameter_run(directory: Path, source: Path, *, warnings=()) -> dict:
+    """构造 S 参数完成记录与最小产物；QC 警告保存在 quality_checks 中。"""
+    directory.mkdir(parents=True, exist_ok=True)
+    figures = directory / "figures"
+    figures.mkdir()
+    (figures / "SE.png").write_bytes(b"synthetic png")
+    (directory / "sparameters_by_frequency.csv").write_text("frequency_ghz\n2\n", encoding="utf-8")
+    (directory / "quality_checks.json").write_text(json.dumps({"warnings": list(warnings)}), encoding="utf-8")
+    return {
+        "status": "success",
+        "sample": source.stem,
+        "raw_file": str(source.resolve()),
+        "raw_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "software_version": "0.15.0",
+        "source": {"parser": "sdat-v1"},
+        "schema_status": "candidate_high_confidence",
+        "mapping": {"schema_id": "candidate", "schema_status": "candidate_high_confidence"},
+        "tolerances": {"magnitude_atol": 1e-6},
+        "quality_checks": {"warnings": list(warnings)},
+        "git": {"commit": "abc123", "dirty": False},
+    }
+
+
+def _sparameter_sample(repository, tmp_path):
+    source = tmp_path / "FCIP-10.sdat"
+    source.write_bytes(b"synthetic candidate sdat; not a manufacturer file")
+    project = repository.create_project("S parameters")
+    sample = repository.create_sample(project.project_id, "FCIP", sample_id="FCIP-10")
+    measurement = repository.add_measurement(project.project_id, sample.sample_id, "electromagnetic", [source])
+    return source, project, sample, measurement
+
+
+def test_link_sparameter_run_records_candidate_parameters(tmp_path):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    source, project, sample, measurement = _sparameter_sample(repository, tmp_path)
+    directory = tmp_path / "sp-runs" / "run-1"
+    record = _completed_sparameter_run(directory, source)
+
+    run = link_sparameter_run(repository, project.project_id, sample.sample_id,
+                              measurement.measurement_id, directory, record)
+
+    assert run.analysis_type == "s_parameters"
+    assert run.validation_status == ValidationStatus.PENDING.value
+    assert run.parameters["schema_status"] == "candidate_high_confidence"
+    assert run.parameters["tolerances"]["magnitude_atol"] == 1e-6
+    assert run.analysis_engine_version == "0.15.0/sdat-v1"
+    assert any(ref.endswith("sparameters_by_frequency.csv") for ref in run.result_refs)
+    assert run.plot_refs == [str((directory / "figures" / "SE.png").resolve())]
+    assert run.warnings == []
+    assert repository.get_measurement(project.project_id, sample.sample_id,
+                                      measurement.measurement_id).validation_status == "PENDING"
+
+
+def test_link_sparameter_run_surfaces_qc_warnings_as_warning_status(tmp_path):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    source, project, sample, measurement = _sparameter_sample(repository, tmp_path)
+    directory = tmp_path / "sp-runs" / "run-2"
+    warning = "[COMPUTED] A 有 2 个负值，包括容差内轻微负值；未 clip。"
+    record = _completed_sparameter_run(directory, source, warnings=[warning])
+
+    run = link_sparameter_run(repository, project.project_id, sample.sample_id,
+                              measurement.measurement_id, directory, record)
+
+    assert run.validation_status == ValidationStatus.WARNING.value
+    assert run.warnings == [warning]
+    assert repository.get_measurement(project.project_id, sample.sample_id,
+                                      measurement.measurement_id).validation_status == "WARNING"
+
+
+def test_link_sparameter_run_rejects_changed_source(tmp_path):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    source, project, sample, measurement = _sparameter_sample(repository, tmp_path)
+    directory = tmp_path / "sp-runs" / "run-3"
+    record = _completed_sparameter_run(directory, source)
+    record["raw_sha256"] = "f" * 64
+
+    with pytest.raises(ValueError, match="SHA-256"):
+        link_sparameter_run(repository, project.project_id, sample.sample_id,
+                            measurement.measurement_id, directory, record)
+    assert repository.list_analysis_runs(project.project_id, sample.sample_id, measurement.measurement_id) == []
+
+
 def test_workspace_page_starts_and_records_electromagnetic_analysis(qtbot, tmp_path, frame):
     repository = WorkspaceRepository(tmp_path / "workspace")
     page = WorkspacePage(repository)
@@ -260,6 +344,52 @@ def test_workspace_page_starts_and_records_electromagnetic_analysis(qtbot, tmp_p
     assert str(exported.resolve()) in repository.find_analysis_run_by_result_directory(second)[2].export_refs
 
 
+def test_workspace_page_selects_the_newly_added_measurement(qtbot, tmp_path):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    page = WorkspacePage(repository)
+    qtbot.addWidget(page)
+    page.create_project("多个测试")
+    page.create_sample("FCIP", sample_id="FCIP-13")
+    csv_source = tmp_path / "FCIP-13.csv"
+    csv_source.write_text("frequency_ghz,eps_real,eps_imag,mu_real,mu_imag\n2,4,.2,1.5,.3\n", encoding="utf-8")
+    sdat_source = tmp_path / "FCIP-13.sdat"
+    sdat_source.write_bytes(b"synthetic candidate sdat")
+
+    page.add_measurement("electromagnetic", [csv_source])
+    second = page.add_measurement("electromagnetic", [sdat_source])
+
+    assert page.current_measurement_id == second.measurement_id
+    assert page.sparameter_button.isEnabled()
+    assert not page.analyze_button.isEnabled()
+
+
+def test_workspace_page_starts_and_records_sparameter_analysis(qtbot, tmp_path):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    page = WorkspacePage(repository)
+    qtbot.addWidget(page)
+    project = page.create_project("S 参数 GUI")
+    sample = page.create_sample("FCIP", sample_id="FCIP-11")
+    source = tmp_path / "FCIP-11.sdat"
+    source.write_bytes(b"synthetic candidate sdat")
+    measurement = page.add_measurement("electromagnetic", [source])
+
+    assert not page.analyze_button.isEnabled()
+    assert page.sparameter_button.isEnabled()
+    with qtbot.waitSignal(page.sparameter_analysis_requested) as signal:
+        request = page.start_measurement_sparameter_analysis()
+    assert request == signal.args[0]
+    assert request["kind"] == "s_parameters"
+    assert Path(request["path"]) == source.resolve()
+
+    directory = tmp_path / "sp-run"
+    page.record_sparameter_run(project.project_id, sample.sample_id, measurement.measurement_id,
+                               directory, _completed_sparameter_run(directory, source))
+    assert page.runs.rowCount() == 1
+    assert page.runs.item(0, 1).text() == "S 参数分析"
+    assert repository.get_measurement(project.project_id, sample.sample_id,
+                                      measurement.measurement_id).validation_status == "PENDING"
+
+
 def test_main_window_registers_completed_workspace_analysis(qtbot, tmp_path, frame):
     repository = WorkspaceRepository(tmp_path / "workspace")
     window = MainWindow(workspace_repository=repository)
@@ -282,13 +412,47 @@ def test_main_window_registers_completed_workspace_analysis(qtbot, tmp_path, fra
     assert repository.list_analysis_runs(project.project_id, sample.sample_id,
                                          measurement.measurement_id)[0].analysis_run_id == run.analysis_run_id
 
-    window.pending_workspace_analysis = {"project_id": project.project_id, "sample_id": sample.sample_id,
+    window.pending_workspace_analysis = {"kind": "electromagnetic_rl", "project_id": project.project_id,
+                                         "sample_id": sample.sample_id,
                                          "measurement_id": measurement.measurement_id,
                                          "path": str(tmp_path / "other.csv")}
     other = tmp_path / "other-run"
     assert window.record_workspace_analysis(
         {"directory": other, "record": _completed_run(other, source)}) is None
     assert window.pending_workspace_analysis is None
+
+
+def test_main_window_registers_workspace_sparameter_run_and_exports(qtbot, tmp_path):
+    repository = WorkspaceRepository(tmp_path / "workspace")
+    window = MainWindow(workspace_repository=repository)
+    qtbot.addWidget(window)
+    project = window.workspace.create_project("S 参数主窗口")
+    sample = window.workspace.create_sample("FCIP", sample_id="FCIP-12")
+    source = tmp_path / "FCIP-12.sdat"
+    source.write_bytes(b"synthetic candidate sdat")
+    measurement = window.workspace.add_measurement("electromagnetic", [source])
+
+    window.workspace.start_measurement_sparameter_analysis()
+    assert window.navigation.currentRow() == 3
+    assert window.pending_workspace_analysis["kind"] == "s_parameters"
+    assert window.pending_workspace_analysis["measurement_id"] == measurement.measurement_id
+    assert window.sparameters.file.text() == str(source)
+    assert window.ui_mode == "full"
+
+    directory = tmp_path / "sp-run"
+    run = window.record_workspace_sparameter_run(
+        {"directory": directory, "record": _completed_sparameter_run(directory, source)})
+    assert run is not None and run.analysis_type == "s_parameters"
+    assert window.pending_workspace_analysis is None
+    assert repository.list_analysis_runs(project.project_id, sample.sample_id,
+                                         measurement.measurement_id)[0].analysis_run_id == run.analysis_run_id
+
+    exported = tmp_path / "exports" / "SE.png"
+    exported.parent.mkdir()
+    exported.write_bytes(b"png")
+    window.sparameters.exports_saved.emit({"directory": str(directory), "paths": [str(exported)]})
+    linked = repository.find_analysis_run_by_result_directory(directory)[2]
+    assert str(exported.resolve()) in linked.export_refs
 
 
 def test_workspace_analysis_run_export_refs_are_deduplicated(tmp_path):

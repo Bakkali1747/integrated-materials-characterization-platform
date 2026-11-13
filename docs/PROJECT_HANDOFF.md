@@ -1,28 +1,28 @@
 # 综合材料表征分析平台项目交接文档
 
 最后核对日期：2026-11-13  
-当前版本：`v0.14.0`  
-当前阶段：PRD Phase B  
+当前版本：`v0.15.0`  
+当前阶段：Phase B 完成 / Phase C 前平台硬化  
 主仓库：<https://github.com/Bakkali1747/integrated-materials-characterization-platform>
 
 ## 1. 项目定位
 
 本项目是面向个人科研使用的 Windows 本地桌面应用，目标是以真实样品为中心，统一管理电磁、VSM、XRD 等材料表征数据、分析运行和科研产物。
 
-项目由原“微波吸收分析软件”演进而来。v0.13.0 在完整保留原有电磁分析能力的基础上，新增项目、样品、测试和分析运行四类平台实体。v0.14.0（Phase B）把现有电磁分析接入该工作区：从 Electromagnetic 测试发起分析，完成后追加 AnalysisRun，并登记结果、图片与导出文件引用。
+项目由原“微波吸收分析软件”演进而来。v0.13.0 在完整保留原有电磁分析能力的基础上，新增项目、样品、测试和分析运行四类平台实体。v0.14.0（Phase B）把电磁分析接入该工作区。v0.15.0 补齐工作区 schema 版本与迁移，并把实测 S 参数分析挂载到 Measurement。
 
 应用采用新的名称、安装目录、本地数据目录和安装器 AppId，可以和旧版微波吸收分析软件并存，不会覆盖旧应用。
 
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.14.0 基线提交：`e33b501`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
-- 版本标签：`v0.14.0`
-- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.14.0-win64.exe`
-- 安装程序 SHA-256：`cee7344ed03da0e4a4a35327559663095a2ff9fc4b6f80d6fd48959f3dd9644f`；同时见 `output/releases/SHA256SUMS-0.14.0.txt`
-- 当前已验证测试：`364 passed`
+- v0.15.0 基线提交：构建后回填（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
+- 版本标签：`v0.15.0`
+- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.15.0-win64.exe`
+- 安装程序 SHA-256：构建后回填；同时写入 `output/releases/SHA256SUMS-0.15.0.txt`
+- 当前已验证测试：`377 passed`
 - Ruff：通过
-- 源码版和冻结安装版自检：通过（冻结版自检包含工作区自动登记 AnalysisRun）
+- 源码版和冻结安装版自检：通过（包含电磁与 S 参数两种工作区自动登记）
 - 已验证产物：17 类科研图、报告、S 参数、比较、批量、历史和导出
 
 原仓库保留为历史远程 `legacy-origin`：
@@ -53,11 +53,12 @@ Project
 - 重新核验来源文件并区分 `PASS`、`CHANGED`、`MISSING`。
 - 以追加方式保存 AnalysisRun，避免新分析覆盖历史运行。
 - 使用统一科研状态：`VALIDATED`、`PENDING`、`WARNING`、`NOT COMPUTABLE`、`UNSUPPORTED`、`FAILED`。
-- v0.14.0 起可从 Electromagnetic Measurement 发起分析；分析成功后自动追加 AnalysisRun。
+- v0.14.0 起可从 Electromagnetic Measurement 发起 ε/μ 分析；v0.15.0 增加实测 S 参数分析；成功后自动追加 AnalysisRun。
 - AnalysisRun 保存结果目录、数值产物、图片与显式导出文件的绝对路径引用；同一测试重跑不覆盖历史。
 - 开始分析与登记运行前两次核验源文件 SHA-256；不一致时拒绝执行或拒绝登记。
 - 样品详情可查看该测试的全部历史运行、打开结果目录，或只读载入已保存结果（不重新计算）。
 - 分析结论只映射为 `PENDING` 或 `WARNING`，绝不自动生成 `VALIDATED`。
+- v0.15.0 新增工作区 schema v1：旧工作区只读校验后迁移，未来版本或损坏文件拒绝打开且不改写。
 
 工作区使用 UTF-8 JSON 文件，不依赖数据库。所有 JSON 写入使用临时文件原子替换。
 
@@ -81,6 +82,7 @@ Project
 - 绘制 S 参数曲线、屏蔽效能图和 Smith 圆图。
 - 记录源文件哈希、逐点质量检查和分析状态。
 - 支持独立 CLI、GUI 和批量入口。
+- v0.15.0 起可从 Electromagnetic Measurement 的 `.sdat` 发起 S 参数分析，完成后登记 `s_parameters` AnalysisRun；QC 警告合并进运行记录。
 
 当前 S 参数字段映射仍是 `candidate_high_confidence`，不是厂商正式确认格式；尚未实现 NRW 反演。
 
@@ -101,11 +103,10 @@ Project
 
 ### 4.1 Phase B 已完成，后续增强
 
-v0.14.0 已打通 Measurement → 电磁分析 → AnalysisRun → 结果引用 → 历史查看的闭环，原 Phase B 七步全部实现。以下属于后续增强，不阻塞 Phase C：
+v0.14.0 打通了 Measurement → 电磁分析 → AnalysisRun → 结果引用 → 历史查看的闭环；v0.15.0 补上 schema v1 迁移与实测 S 参数运行挂载。以下属于后续增强，不阻塞 Phase C：
 
-- 实测 `.sdat` 的 S 参数运行尚未挂载到 Measurement；目前仍使用独立 S 参数页面。
-- 单样品报告和历史页导出尚未自动追加到 AnalysisRun 的 `export_refs`，只有从电磁页面保存图片会登记。
-- 工作区尚无 schema 版本、备份恢复和项目导入/导出界面。
+- 单样品报告和历史页导出尚未自动追加到 AnalysisRun 的 `export_refs`；从电磁或 S 参数页面保存图片会登记。
+- 工作区备份/恢复、项目导入/导出和多用户并发写入尚未实现。
 - 运行表暂不支持按状态筛选或删除；AnalysisRun 保持追加语义。
 
 ### 4.2 Phase C：VSM
@@ -176,11 +177,12 @@ run_*.py                    GUI 和 CLI 入口
 2. `docs/architecture.md`
 3. `docs/workspace.md`
 4. `core/common/workspace.py`
-5. `core/common/analysis_link.py`
-6. `core/analysis_service.py`
-7. `gui/pages/workspace_page.py`
-8. `gui/pages/single_sample_page.py`
-9. `VERSIONING.md`
+5. `core/common/workspace_schema.py`
+6. `core/common/analysis_link.py`
+7. `core/analysis_service.py`
+8. `gui/pages/workspace_page.py`
+9. `gui/pages/single_sample_page.py`
+10. `VERSIONING.md`
 
 ## 7. 开发与测试
 
@@ -256,15 +258,15 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 
 ## 10. 当前技术债和风险
 
-- 工作区尚无正式 `schema_version` 和数据迁移框架（Phase B 已把该事项列为下一步）。
+- 工作区 schema v1 已有迁移框架，但还没有 v1→v2 的实际结构迁移；新增字段时必须登记迁移并递增版本。
 - 工作区尚无多人并发写入控制；AnalysisRun 只追加，导出引用为原地追加。
 - 尚无工作区备份、恢复和项目导入/导出界面。
-- S 参数运行、单样品报告导出尚未自动登记到 AnalysisRun。
+- 单样品报告和历史页导出尚未自动登记到 AnalysisRun。
 - README 的部分历史章节仍保留旧测试数量或旧阶段描述，需要后续统一清理。
 - Windows 安装程序没有商业代码签名，可能显示“未知发布者”。
 - 冻结版已在当前开发机验收，但仍需在另一台干净 Windows 电脑验证兼容性。
 - v0.14.0 起安装包与 SHA-256 作为 GitHub Release 附件发布；更早版本仍只有源码和标签。
-- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.14.0>
+- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.15.0>
 
 ## 11. 版本与发布工作流
 
@@ -284,8 +286,7 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 
 1. 克隆新仓库并确认 `origin` 指向新项目。
 2. 安装锁定依赖，运行 Ruff 和全量测试。
-3. 启动 GUI，体验工作区“测试 → 电磁分析 → AnalysisRun → 载入结果”闭环。
+3. 启动 GUI，体验工作区“测试 → 电磁/S 参数分析 → AnalysisRun → 载入结果”闭环。
 4. 阅读 PRD、架构文档和本交接文档。
-5. 增加工作区 schema 版本与迁移测试，并补上 S 参数运行挂载。
-6. 开发 Phase C（VSM），最后开发 Phase D（XRD）。
+5. 开发 Phase C（VSM），最后开发 Phase D（XRD）。
 
