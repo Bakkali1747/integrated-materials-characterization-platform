@@ -26,6 +26,6 @@
 
 ## 启动与验收
 
-源码：`.\.venv\Scripts\python.exe run_gui.py`。独立客户端：安装 `MaterialsCharacterizationPlatform-Setup-0.20.0-win64.exe`，从桌面快捷方式打开。
+源码：`.\.venv\Scripts\python.exe run_gui.py`。独立客户端：安装 `MaterialsCharacterizationPlatform-Setup-0.21.0-win64.exe`，从桌面快捷方式打开。
 
 建议测试：保存 300 dpi / SVG 后重启；确认参数恢复；完成一个样品并导出全部图片；打开历史目录检查缩放；对批量任务请求取消并核对已有结果保留。CLI `run_batch.py` 继续可用。v0.9 是本阶段软件版本，不提前声明 v1.0 或外部科学验证完成。

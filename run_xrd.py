@@ -21,7 +21,9 @@ def analyze(path, *, output="output", name=None, two_theta_column=None, intensit
             header_row=0, encoding=None, delimiter=None, wavelength_angstrom=None, k_factor=0.9,
             background_mode="none", background_left=(10.0, 20.0), background_right=(70.0, 80.0),
             min_prominence_relative=0.05, min_distance_deg=0.1, smoothing_points=5,
-            reference_path=None, match_tolerance_deg=0.2, style=None, report=False):
+            fit_peaks=True, instrument_mode="none", instrument_fwhm_deg=0.0,
+            instrument_file=None, reference_path=None,
+            match_tolerance_deg=0.2, style=None, report=False):
     """执行 XRD 分析并保存图组；返回结果目录。"""
     style = style or PlotStyle()
     config = XRDConfig(path=Path(path), name=name or Path(path).stem, output=Path(output),
@@ -32,6 +34,9 @@ def analyze(path, *, output="output", name=None, two_theta_column=None, intensit
                        background_right=background_right,
                        min_prominence_relative=min_prominence_relative,
                        min_distance_deg=min_distance_deg, smoothing_points=smoothing_points,
+                       fit_peaks=fit_peaks, instrument_mode=instrument_mode,
+                       instrument_fwhm_deg=instrument_fwhm_deg,
+                       instrument_file=Path(instrument_file) if instrument_file else None,
                        reference_path=reference_path,
                        match_tolerance_deg=match_tolerance_deg, dpi=style.dpi, entry_point="cli_xrd",
                        extra_configuration={"plot_style": vars(style)})
@@ -81,6 +86,13 @@ def main():
     parser.add_argument("--min-distance", type=float, default=0.1)
     parser.add_argument("--smoothing", type=int, default=5,
                         help="峰检测移动平均点数（正奇数；1=不平滑；原始数据不平滑）")
+    parser.add_argument("--no-fit", dest="fit_peaks", action="store_false", default=True,
+                        help="关闭 Pseudo-Voigt 峰形拟合，只用半高插值")
+    parser.add_argument("--instrument", default="none", choices=["none", "constant", "csv"],
+                        help="仪器展宽校正模式")
+    parser.add_argument("--instrument-fwhm", type=float, default=0.0,
+                        help="常数仪器 FWHM（度）")
+    parser.add_argument("--instrument-file", help="仪器展宽曲线 CSV（2θ,FWHM）")
     parser.add_argument("--reference")
     parser.add_argument("--match-tolerance", type=float, default=0.2)
     parser.add_argument("--dpi", type=int, default=600)
@@ -94,8 +106,10 @@ def main():
                 background_mode=args.background, background_left=tuple(args.background_left),
                 background_right=tuple(args.background_right),
                 min_prominence_relative=args.min_prominence, min_distance_deg=args.min_distance,
-                smoothing_points=args.smoothing, reference_path=args.reference,
-                match_tolerance_deg=args.match_tolerance,
+                smoothing_points=args.smoothing, fit_peaks=args.fit_peaks,
+                instrument_mode=args.instrument, instrument_fwhm_deg=args.instrument_fwhm,
+                instrument_file=args.instrument_file,
+                reference_path=args.reference, match_tolerance_deg=args.match_tolerance,
                 style=PlotStyle(dpi=args.dpi), report=args.report)
         return 0
     except Exception as error:

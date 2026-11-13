@@ -58,9 +58,15 @@ def load_xrd_request(directory):
             "figures": {key: None for key in _figure_keys(saved["metrics"])}}
 
 
+def _fmt_fit(value):
+    return "—" if value is None else f"{float(value):.6g}"
+
+
 def xrd_summary_text(record, metrics):
     """生成界面摘要；缺失值明确写不可计算。"""
     background = metrics.get("background") or {}
+    quality = metrics.get("quality") or {}
+    instrument = quality.get("instrument_broadening") or {}
     peaks = metrics.get("peaks") or []
     lines = [
         f"样品：{record.get('sample')}",
@@ -68,14 +74,20 @@ def xrd_summary_text(record, metrics):
         f"2θ 范围：{record.get('two_theta_range_deg')}°；{record.get('point_count')} 点",
         f"波长：{record.get('configuration', {}).get('wavelength_angstrom')} Å；"
         f"K={record.get('configuration', {}).get('k_factor')}",
-        f"背景：{background.get('mode', 'none')}",
+        f"背景：{background.get('mode', 'none')}；检测平滑：{quality.get('smoothing_points', 1)} 点",
+        f"峰形拟合：{'开启' if quality.get('fit_peaks') else '关闭'}；"
+        f"收敛 {quality.get('fit_converged_count', 0)}/{len(peaks)}",
+        f"仪器展宽：{instrument.get('mode', 'none')}"
+        + (f"（常数 {instrument.get('fwhm_deg')}°）" if instrument.get("mode") == "constant" else ""),
         f"检测峰：{len(peaks)} 个",
         f"状态：{record.get('status')}；验证：{record.get('validation_status')}",
     ]
     for peak in peaks[:20]:
         lines.append(
-            f"  2θ={peak['two_theta_deg']:.4g}°  I={peak['relative_intensity_pct']:.3g}%  "
-            f"FWHM={_fmt(peak.get('fwhm_deg'))}°  d={_fmt(peak.get('d_angstrom'))} Å  "
+            f"  2θ={peak.get('center_deg', peak['two_theta_deg']):.4g}°  "
+            f"I={peak['relative_intensity_pct']:.3g}%  FWHM={_fmt(peak.get('fwhm_deg'))}°  "
+            f"拟合FWHM={_fmt_fit(peak.get('fwhm_fit_deg'))}°  η={_fmt_fit(peak.get('eta'))}  "
+            f"R²={_fmt_fit(peak.get('fit_r_squared'))}  d={_fmt(peak.get('d_angstrom'))} Å  "
             f"D={_fmt(peak.get('crystallite_size_nm'))} nm")
     if len(peaks) > 20:
         lines.append(f"  仅显示前 20 个峰；完整 {len(peaks)} 个见 xrd_peaks.csv。")
@@ -88,8 +100,9 @@ def xrd_summary_text(record, metrics):
     warnings = list(record.get("warnings") or [])
     if warnings:
         lines += ["", "警告：", *warnings]
-    lines += ["", "[COMMON] 峰位为扫描网格点；FWHM 半高线性插值；Scherrer 尺寸未做仪器展宽校正。",
-              "背景扣除与参考匹配是显式选项；未平滑、排序、裁剪或补值。"]
+    lines += ["", "[COMMON] Pseudo-Voigt 拟合 R²<0.8 时保留半高插值；仪器展宽按 Gaussian 平方差校正；"
+                  "未校正时 Scherrer 尺寸为表观尺寸。",
+              "背景扣除、平滑与参考匹配是显式选项；原始强度未平滑、排序、裁剪或补值。"]
     return "\n".join(lines)
 
 

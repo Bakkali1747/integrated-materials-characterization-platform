@@ -19,10 +19,11 @@ from plotting.style import journal_style, plt
 from plotting.xrd_plot import plot_xrd_pattern, plot_xrd_phase_matches
 
 METHODS = [
-    "[COMMON] 2θ 必须严格递增；不排序、不插值、不平滑、不裁剪原始强度。",
-    "[COMMON] 峰位取本次扫描网格上的局部极大值；FWHM 在峰半高处线性插值。",
-    "[COMMON] d = λ / (2 sinθ)；Scherrer D = Kλ / (β cosθ)，未做仪器展宽校正，仅为表观尺寸。",
-    "[COMMON] 背景扣除为可选的左右高角窗口线性拟合，默认关闭。",
+    "[COMMON] 2θ 必须严格递增；不排序、不插值、不裁剪原始强度。",
+    "[COMMON] 峰位取扫描网格点；Pseudo-Voigt 拟合使用局部线性基线，R²<0.8 时保留半高插值 FWHM。",
+    "[COMMON] 仪器展宽按 Gaussian 平方差校正：β_obs² = β_sample² + β_instrument²；未校正时尺寸为表观值。",
+    "[COMMON] d = λ / (2 sinθ)；Scherrer D = Kλ / (β cosθ)。",
+    "[COMMON] 背景扣除为可选的左右高角窗口线性拟合，默认关闭；峰检测平滑不改变原始强度。",
     "[COMMON] 参考相匹配是按容差的峰位筛查，不是物相鉴定；分数不证明样品只含该相。",
     "[COMMON] 图片数据来自同一分析表，未从图像反推；图内标签使用英文，正文为中文。",
 ]
@@ -71,6 +72,11 @@ def _report_data(directory):
         ("数据点数", record.get("point_count", "未记录")),
         ("波长 (Å)", _value(configuration.get("wavelength_angstrom"))),
         ("Scherrer K", _value(configuration.get("k_factor"))),
+        ("峰形拟合", "Pseudo-Voigt" if configuration.get("fit_peaks") else "关闭（半高插值）"),
+        ("仪器展宽", _value(configuration.get("instrument_mode"))),
+        ("仪器 FWHM (°)", _value(configuration.get("instrument_fwhm_deg"))),
+        ("仪器展宽文件", Path(configuration["instrument_file"]).name
+         if configuration.get("instrument_file") else "未使用"),
         ("背景", background.get("mode", "none")),
         ("检测峰数", len(metrics.get("peaks") or [])),
         ("图 DPI", configuration.get("figure_dpi", "未记录")),
@@ -79,9 +85,11 @@ def _report_data(directory):
     for index, peak in enumerate(metrics.get("peaks") or [], 1):
         if index > 15:
             break
-        results.append((f"峰 {index}", f"2θ={_value(peak.get('two_theta_deg'))}°, "
+        results.append((f"峰 {index}", f"2θ={_value(peak.get('center_deg', peak.get('two_theta_deg')))}°, "
                                       f"I={_value(peak.get('relative_intensity_pct'))}%, "
                                       f"FWHM={_value(peak.get('fwhm_deg'))}°, "
+                                      f"拟合FWHM={_value(peak.get('fwhm_fit_deg'))}°, "
+                                      f"η={_value(peak.get('eta'))}, R²={_value(peak.get('fit_r_squared'))}, "
                                       f"d={_value(peak.get('d_angstrom'))} Å, "
                                       f"D={_value(peak.get('crystallite_size_nm'))} nm"))
     if len(metrics.get("peaks") or []) > 15:

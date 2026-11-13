@@ -3,9 +3,11 @@
 import math
 
 import numpy as np
+import pandas as pd
 import pytest
 
-from core.xrd import analyze_xrd, inspect_xrd_table, read_xrd, read_xrd_reference, suggest_xrd_columns
+from core.xrd import analyze_xrd, inspect_xrd_table, read_instrument_broadening, read_xrd, read_xrd_reference, suggest_xrd_columns
+from core.xrd_fit import fit_pseudo_voigt, pseudo_voigt
 from core.xrd_service import XRDConfig, execute, load_completed_xrd_run
 from export.xrd_report import export_xrd_report
 
@@ -110,6 +112,71 @@ def test_inspect_bruker_raw4_exposes_wavelength(tmp_path):
     assert preview["metadata"]["wavelength_angstrom"] == pytest.approx(1.5418)
     assert preview["metadata"]["parser"] == "bruker-raw4-text-v1"
     assert "Angle" in preview["columns"] and "PSD" in preview["columns"]
+
+
+def test_pseudo_voigt_fit_recovers_parameters():
+    x = np.arange(18.0, 22.0, .002)
+    y = 100.0 + pseudo_voigt(x, 20.0, .2, .4, 500.0, 0.0, 0.0)
+
+    result = fit_pseudo_voigt(x, y, 20.0, .2, .002)
+
+    assert result["converged"] is True
+    assert result["center_deg"] == pytest.approx(20.0, abs=.002)
+    assert result["fwhm_deg"] == pytest.approx(.2, rel=.02)
+    assert result["eta"] == pytest.approx(.4, abs=.05)
+    assert result["r_squared"] > .999
+
+
+def _gaussian_pattern(path, center=20.0, fwhm=.3, amplitude=500.0, low=18.0, high=22.0, step=.005):
+    x = np.arange(low, high + step / 2, step)
+    z = (x - center) / fwhm
+    y = 100.0 + amplitude * np.exp(-4.0 * math.log(2.0) * z * z)
+    path.write_text("two_theta_deg,intensity\n" + "\n".join(f"{a:.5f},{b:.6f}" for a, b in zip(x, y)),
+                    encoding="utf-8")
+    return path
+
+
+def test_instrument_constant_corrects_scherrer(tmp_path):
+    path = _gaussian_pattern(tmp_path / "peak.csv")
+    data = read_xrd(path)
+    result = analyze_xrd(data, smoothing_points=1, fit_peaks=True, min_prominence_relative=.01,
+                         instrument_broadening={"mode": "constant", "fwhm_deg": .2})
+
+    peak = result["peaks"][0]
+    assert peak["fwhm_deg"] == pytest.approx(.3, rel=.03)
+    assert peak["fwhm_fit_deg"] == pytest.approx(.3, rel=.03)
+    assert peak["instrument_fwhm_deg"] == pytest.approx(.2)
+    assert peak["corrected_fwhm_deg"] == pytest.approx(math.sqrt(.3 ** 2 - .2 ** 2), rel=.08)
+    assert peak["crystallite_size_nm"] > peak["crystallite_size_apparent_nm"]
+
+
+def test_instrument_csv_interpolation_and_out_of_range(tmp_path):
+    curve = tmp_path / "instrument.csv"
+    curve.write_text("two_theta_deg,fwhm\n10,0.10\n20,0.20\n", encoding="utf-8")
+    broadening = read_instrument_broadening(curve)
+    assert broadening["points"] == [[10.0, .1], [20.0, .2]]
+
+    path = write_csv(tmp_path / "pattern.csv")
+    data = read_xrd(path)
+    result = analyze_xrd(data, smoothing_points=1, fit_peaks=True, min_prominence_relative=.01,
+                         instrument_broadening=broadening)
+
+    assert any("超出仪器展宽曲线范围" in warning for warning in result["warnings"])
+    assert any(peak["corrected_fwhm_deg"] is None for peak in result["peaks"])
+
+
+def test_execute_records_fit_and_instrument_fields(tmp_path):
+    path = _gaussian_pattern(tmp_path / "peak.csv")
+    result = execute(XRDConfig(path=path, name="fit", output=tmp_path / "out", dpi=40,
+                               wavelength_angstrom=1.5406, min_prominence_relative=.01,
+                               smoothing_points=1, fit_peaks=True,
+                               instrument_mode="constant", instrument_fwhm_deg=.1))
+    frame = pd.read_csv(result.directory / "xrd_peaks.csv")
+    for column in ("center_deg", "fwhm_fit_deg", "eta", "fit_r_squared", "corrected_fwhm_deg",
+                   "crystallite_size_apparent_nm", "crystallite_size_nm"):
+        assert column in frame.columns
+    assert result.record["quality"]["instrument_broadening"]["mode"] == "constant"
+    assert result.record["configuration"]["fit_peaks"] is True
 
 
 def test_read_xrd_csv_and_headerless_xy(tmp_path):

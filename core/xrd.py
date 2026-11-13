@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from core.parser import decode_text
+from core.xrd_fit import fit_pseudo_voigt
 
 SUPPORTED_SUFFIXES = {".csv", ".txt", ".xy", ".dat", ".raw"}
 PARSER_VERSION = "xrd-delimited-v1"
@@ -23,6 +24,7 @@ RAW4_BINARY_PARSER = "bruker-raw4-binary-v1"
 _TWO_THETA_ALIASES = {"2theta", "2thetadeg", "twotheta", "twothetadeg", "angle", "2θ", "2θdeg",
                       "角度", "衍射角"}
 _INTENSITY_ALIASES = {"intensity", "counts", "cps", "i", "psd", "强度", "计数"}
+_FWHM_ALIASES = {"fwhm", "fwhmdeg", "仪器展宽", "仪器半高宽", "半高宽"}
 _PHASE_ALIASES = {"phase", "material", "name", "相", "物相"}
 
 
@@ -511,6 +513,58 @@ def read_xrd_reference(path, *, two_theta_column=None, intensity_column=None,
     return records
 
 
+def read_instrument_broadening(path, *, encoding=None, delimiter=None) -> dict:
+    """读取仪器展宽曲线（2θ，FWHM）；返回常数/曲线描述，供 Gaussian 合成校正。"""
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"仪器展宽文件不存在：{path}")
+    text, _ = _text_source(path, encoding)
+    suffix = path.suffix.lower()
+    actual_delimiter = delimiter if delimiter is not None else ("\t" if suffix == ".dat" else
+                                                               ("," if suffix == ".csv" else None))
+    frame, source_rows, _ = _read_table(text, actual_delimiter)
+    two_theta_name = _pick_column(frame.columns, None, _TWO_THETA_ALIASES, "2θ")
+    fwhm_name = _pick_column(frame.columns, None, _FWHM_ALIASES, "仪器 FWHM")
+    two_theta = _numeric_column(frame, two_theta_name, "2θ", source_rows)
+    fwhm = _numeric_column(frame, fwhm_name, "仪器 FWHM", source_rows)
+    if len(two_theta) < 2:
+        raise ValueError("仪器展宽曲线至少需要 2 个点。")
+    if np.any(np.diff(two_theta) <= 0):
+        raise ValueError("仪器展宽曲线的 2θ 必须严格递增。")
+    if np.any(fwhm < 0):
+        raise ValueError("仪器 FWHM 不能为负。")
+    return {"mode": "csv", "source": str(path.resolve()),
+            "points": [[float(x), float(y)] for x, y in zip(two_theta, fwhm)]}
+
+
+def _instrument_fwhm(center_deg, broadening):
+    """返回该 2θ 的仪器 FWHM；曲线范围外返回 None，不外推。"""
+    if not broadening or broadening.get("mode") in (None, "none"):
+        return 0.0
+    mode = broadening["mode"]
+    if mode == "constant":
+        value = float(broadening.get("fwhm_deg", 0.0))
+        return value if value > 0 else 0.0
+    if mode == "csv":
+        points = broadening.get("points") or []
+        if not points:
+            return None
+        xs = np.array([point[0] for point in points], dtype=float)
+        ys = np.array([point[1] for point in points], dtype=float)
+        if center_deg < xs.min() or center_deg > xs.max():
+            return None
+        return float(np.interp(center_deg, xs, ys))
+    raise ValueError(f"未知仪器展宽模式：{mode}")
+
+
+def _scherrer_size_nm(fwhm_deg, center_deg, wavelength_angstrom, k_factor):
+    theta = np.radians(center_deg / 2.0)
+    if fwhm_deg is None or fwhm_deg <= 0 or theta <= 0:
+        return None
+    beta = np.radians(fwhm_deg)
+    return float(k_factor * wavelength_angstrom / (beta * np.cos(theta)) / 10.0)
+
+
 def _local_maxima(values):
     return [index for index in range(1, len(values) - 1)
             if values[index] > values[index - 1] and values[index] >= values[index + 1]]
@@ -621,15 +675,20 @@ def _match_reference(peaks, reference, tolerance_deg, minimum_relative):
 def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
                 background_mode="none", background_left=(10.0, 20.0),
                 background_right=(70.0, 80.0), min_prominence_relative=0.05,
-                min_distance_deg=0.1, smoothing_points=5, reference=None,
+                min_distance_deg=0.1, smoothing_points=5, fit_peaks=True,
+                instrument_broadening=None, reference=None,
                 match_tolerance_deg=0.2, reference_min_relative=5.0) -> dict:
-    """计算背景、峰位、FWHM、d 间距、Scherrer 尺寸与参考相匹配分数。
+    """计算背景、峰位、Pseudo-Voigt 拟合、FWHM、d 间距、Scherrer 尺寸与参考匹配。
 
-    smoothing_points > 1 时只用移动平均曲线做峰检测与 FWHM；原始强度、
-    背景扣除结果和导出数据保持不变。
+    smoothing_points > 1 时只用移动平均曲线做峰检测与初始 FWHM；原始强度、
+    背景扣除结果和导出数据保持不变。fit_peaks=True 时对每个峰做局部
+    Pseudo-Voigt 拟合，R² 不足时保留半高插值结果。仪器展宽按 Gaussian
+    平方差校正；未校正时 Scherrer 尺寸标为表观尺寸。
     """
     if background_mode not in {"none", "linear"}:
         raise ValueError("background_mode 必须为 none 或 linear。")
+    if not isinstance(fit_peaks, bool):
+        raise ValueError("fit_peaks 必须为布尔值。")
     if isinstance(smoothing_points, bool) or not isinstance(smoothing_points, int) \
             or smoothing_points < 1 or smoothing_points % 2 != 1:
         raise ValueError("峰检测平滑点数必须为正奇数（1 表示不平滑）。")
@@ -677,25 +736,58 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
             selected.append(candidate)
     selected.sort(key=lambda item: item["two_theta_deg"])
     peaks = []
+    step = float(np.median(np.diff(x)))
+    instrument_active = bool(instrument_broadening and instrument_broadening.get("mode") not in (None, "none"))
     for candidate in selected:
         index = candidate["index"]
-        fwhm = _fwhm(x, detection, index, candidate["baseline"])
-        theta = np.radians(candidate["two_theta_deg"] / 2.0)
+        interpolated_fwhm = _fwhm(x, detection, index, candidate["baseline"])
+        fit = None
+        if fit_peaks:
+            fit = fit_pseudo_voigt(x, corrected, candidate["two_theta_deg"], interpolated_fwhm, step)
+        fit_converged = bool(fit and fit.get("converged") and fit.get("r_squared") is not None
+                             and fit["r_squared"] >= .8)
+        center = float(fit["center_deg"]) if fit_converged else candidate["two_theta_deg"]
+        fwhm = float(fit["fwhm_deg"]) if fit_converged else interpolated_fwhm
+        fit_reason = None
+        if fit is not None and not fit_converged:
+            fit_reason = fit.get("reason") or "拟合 R² 低于 0.8"
+        theta = np.radians(center / 2.0)
         d_spacing = float(wavelength_angstrom / (2.0 * np.sin(theta))) if np.sin(theta) > 0 else None
-        size_nm = None
-        if fwhm is not None and fwhm > 0 and theta > 0:
-            beta = np.radians(fwhm)
-            size_nm = float(k_factor * wavelength_angstrom / (beta * np.cos(theta)) / 10.0)
+        apparent_size = _scherrer_size_nm(fwhm, center, wavelength_angstrom, k_factor)
+        instrument_fwhm = _instrument_fwhm(center, instrument_broadening) if instrument_active else 0.0
+        corrected_fwhm = None
+        size_nm = apparent_size
+        if instrument_active:
+            if instrument_fwhm is None:
+                warnings.append(f"[KNOWN] {center:.4g}° 超出仪器展宽曲线范围；外推不允许，校正尺寸不可计算。")
+                size_nm = None
+            elif fwhm is None or fwhm <= instrument_fwhm:
+                warnings.append(f"[KNOWN] {center:.4g}° 的观测 FWHM 不大于仪器展宽 "
+                                f"{instrument_fwhm:.4g}°；校正尺寸不可计算。")
+                size_nm = None
+            else:
+                corrected_fwhm = float(np.sqrt(fwhm ** 2 - instrument_fwhm ** 2))
+                size_nm = _scherrer_size_nm(corrected_fwhm, center, wavelength_angstrom, k_factor)
         if fwhm is None:
             warnings.append(f"[KNOWN] {candidate['two_theta_deg']:.4g}° 峰的半高宽未在扫描范围内回落；FWHM/尺寸不可计算。")
         peaks.append({
-            "two_theta_deg": candidate["two_theta_deg"], "intensity": candidate["intensity"],
-            "background": float(background[index]), "corrected_intensity": candidate["corrected_intensity"],
+            "two_theta_deg": candidate["two_theta_deg"],
+            "center_deg": center,
+            "intensity": candidate["intensity"], "background": float(background[index]),
+            "corrected_intensity": candidate["corrected_intensity"],
             "detection_intensity": candidate["detection_intensity"],
             "prominence": candidate["prominence"], "baseline": candidate["baseline"],
-            "fwhm_deg": fwhm, "d_angstrom": d_spacing, "crystallite_size_nm": size_nm,
+            "fwhm_interpolated_deg": interpolated_fwhm, "fwhm_fit_deg": fit["fwhm_deg"] if fit_converged else None,
+            "fwhm_deg": fwhm, "eta": fit["eta"] if fit_converged else None,
+            "fit_r_squared": fit.get("r_squared") if fit else None,
+            "fit_converged": fit_converged, "fit_reason": fit_reason,
+            "instrument_fwhm_deg": instrument_fwhm if instrument_active else 0.0,
+            "corrected_fwhm_deg": corrected_fwhm,
+            "d_angstrom": d_spacing,
+            "crystallite_size_apparent_nm": apparent_size,
+            "crystallite_size_nm": size_nm,
             "relative_intensity_pct": float(candidate["prominence"] / maximum * 100.0),
-            "at_scan_grid": True,
+            "at_scan_grid": not fit_converged,
         })
     if not peaks:
         warnings.append("[KNOWN] 未检测到满足阈值的峰；峰分析不可计算。")
@@ -703,7 +795,6 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
         peak_max = max(peak["prominence"] for peak in peaks)
         for peak in peaks:
             peak["relative_intensity_pct"] = float(peak["prominence"] / peak_max * 100.0)
-    step = float(np.median(np.diff(x)))
     for peak in peaks:
         if peak["fwhm_deg"] is not None and peak["fwhm_deg"] < 2.0 * step:
             warnings.append(f"[KNOWN] {peak['two_theta_deg']:.4g}° 峰 FWHM 接近扫描步长；"
@@ -712,18 +803,28 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
             warnings.append(f"[KNOWN] {peak['two_theta_deg']:.4g}° 峰接近扫描边界。")
     matching = _match_reference(peaks, reference, match_tolerance_deg, reference_min_relative) if reference else []
     status = "success" if peaks else "not_computable"
+    fit_converged_count = sum(1 for peak in peaks if peak.get("fit_converged"))
+    instrument_info = {"mode": "none"}
+    if instrument_broadening:
+        instrument_info = {key: value for key, value in instrument_broadening.items() if key != "points"}
+        if instrument_broadening.get("points"):
+            instrument_info["point_count"] = len(instrument_broadening["points"])
     quality = {
         "point_count": int(len(x)), "two_theta_range_deg": [float(x.min()), float(x.max())],
         "step_median_deg": step, "peak_count": len(peaks),
         "background": background_info, "clipping": "OFF", "interpolation": "OFF",
         "sorting": "preserved", "smoothing": "moving_average_for_detection" if smoothing_points > 1 else "OFF",
         "smoothing_points": int(smoothing_points),
+        "fit_peaks": bool(fit_peaks), "fit_converged_count": fit_converged_count,
+        "fit_failed_count": len(peaks) - fit_converged_count if fit_peaks else 0,
+        "instrument_broadening": instrument_info,
         "wavelength_angstrom": float(wavelength_angstrom),
         "k_factor": float(k_factor), "status": status,
     }
-    note = ("[COMMON] 峰位为本次扫描网格点；FWHM 在半高处线性插值。"
-            "峰检测平滑仅用于检测与 FWHM，原始强度与导出数据未平滑。"
-            "Scherrer 尺寸未做仪器展宽校正，仅为表观尺寸。参考相匹配是筛查，不是物相鉴定。")
+    note = ("[COMMON] 峰位为本次扫描网格点；峰形为局部 Pseudo-Voigt + 线性基线，"
+            "R²<0.8 时保留半高插值 FWHM。峰检测平滑仅用于检测与初始 FWHM，原始强度与导出数据未平滑。"
+            "仪器展宽按 Gaussian 平方差校正；未校正时 Scherrer 尺寸为表观尺寸。"
+            "参考相匹配是筛查，不是物相鉴定。")
     return {"status": status, "peaks": peaks, "reference_matching": matching,
             "background": background_info, "quality": quality, "warnings": warnings,
             "corrected_intensity": corrected, "background_intensity": background,

@@ -6,6 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
@@ -116,6 +117,31 @@ class XrdPage(TaskPage):
         row.addWidget(self.smoothing)
         self.layout.addLayout(row)
 
+        self.fit_peaks = QCheckBox("Pseudo-Voigt 峰形拟合")
+        self.fit_peaks.setChecked(True)
+        self.instrument_mode = QComboBox()
+        self.instrument_mode.addItem("仪器展宽：不校正", "none")
+        self.instrument_mode.addItem("常数 FWHM", "constant")
+        self.instrument_mode.addItem("CSV 曲线", "csv")
+        self.instrument_fwhm = QDoubleSpinBox()
+        self.instrument_fwhm.setRange(0.0, 10.0)
+        self.instrument_fwhm.setDecimals(4)
+        self.instrument_fwhm.setSuffix(" °")
+        self.instrument_file = QLineEdit()
+        self.instrument_file.setPlaceholderText("2θ,FWHM 的两列 CSV（仅 CSV 模式）")
+        instrument_button = QPushButton("选择…")
+        instrument_button.clicked.connect(self.choose_instrument_file)
+        self.instrument_mode.currentIndexChanged.connect(self._toggle_instrument)
+        row = QHBoxLayout()
+        row.addWidget(self.fit_peaks)
+        row.addWidget(self.instrument_mode)
+        row.addWidget(QLabel("常数"))
+        row.addWidget(self.instrument_fwhm)
+        row.addWidget(self.instrument_file, 1)
+        row.addWidget(instrument_button)
+        self.layout.addLayout(row)
+        self._toggle_instrument()
+
         self.background = QComboBox()
         self.background.addItem("不扣除背景", "none")
         self.background.addItem("左右高角线性背景", "linear")
@@ -169,9 +195,9 @@ class XrdPage(TaskPage):
         split.setSizes([800, 360])
         self.layout.addWidget(split, 1)
 
-        self.peaks = QTableWidget(0, 7)
-        self.peaks.setHorizontalHeaderLabels(["2θ (°)", "强度 (%)", "FWHM (°)", "d (Å)", "Scherrer (nm)",
-                                              "突出度", "背景"])
+        self.peaks = QTableWidget(0, 9)
+        self.peaks.setHorizontalHeaderLabels(["2θ (°)", "强度 (%)", "FWHM (°)", "拟合 FWHM (°)", "η",
+                                              "d (Å)", "Scherrer (nm)", "R²", "拟合"])
         self.peaks.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.peaks.horizontalHeader().setStretchLastSection(True)
         self.peaks.setMaximumHeight(180)
@@ -204,6 +230,18 @@ class XrdPage(TaskPage):
         enabled = self.background.currentData() == "linear"
         for spin in (self.left_low, self.left_high, self.right_low, self.right_high):
             spin.setEnabled(enabled)
+
+    def _toggle_instrument(self):
+        mode = self.instrument_mode.currentData()
+        self.instrument_fwhm.setEnabled(mode == "constant")
+        self.instrument_file.setEnabled(mode == "csv")
+
+    def choose_instrument_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择仪器展宽曲线", "", "展宽曲线 (*.csv *.txt *.xy);;所有文件 (*)")
+        if path:
+            self.instrument_file.setText(path)
+            self.instrument_mode.setCurrentIndex(self.instrument_mode.findData("csv"))
 
     def choose_file(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -287,6 +325,10 @@ class XrdPage(TaskPage):
             min_prominence_relative=float(self.min_prominence.value()) / 100.0,
             min_distance_deg=float(self.min_distance.value()),
             smoothing_points=int(self.smoothing.currentData()),
+            fit_peaks=self.fit_peaks.isChecked(),
+            instrument_mode=self.instrument_mode.currentData(),
+            instrument_fwhm_deg=float(self.instrument_fwhm.value()),
+            instrument_file=Path(self.instrument_file.text().strip()) if self.instrument_file.text().strip() else None,
             reference_path=Path(reference) if reference else None,
             match_tolerance_deg=float(self.match_tolerance.value()),
             dpi=self.export_dpi, entry_point="gui_xrd")
@@ -311,13 +353,17 @@ class XrdPage(TaskPage):
         self.summary.setPlainText(xrd_summary_text(record, metrics))
         peaks = metrics.get("peaks") or []
         self.peaks.setRowCount(len(peaks))
-        keys = ("two_theta_deg", "relative_intensity_pct", "fwhm_deg", "d_angstrom",
-                "crystallite_size_nm", "prominence", "background")
+        keys = ("center_deg", "relative_intensity_pct", "fwhm_deg", "fwhm_fit_deg", "eta",
+                "d_angstrom", "crystallite_size_nm", "fit_r_squared")
+        optional = {"fwhm_fit_deg", "eta", "fit_r_squared"}
         for row_index, peak in enumerate(peaks):
             for column_index, key in enumerate(keys):
                 value = peak.get(key)
-                text = "不可计算" if value is None else f"{float(value):.6g}"
+                text = "—" if value is None and key in optional else \
+                    ("不可计算" if value is None else f"{float(value):.6g}")
                 self.peaks.setItem(row_index, column_index, QTableWidgetItem(text))
+            converged = peak.get("fit_converged")
+            self.peaks.setItem(row_index, 8, QTableWidgetItem("是" if converged else "否（插值）"))
         self.plot.set_figures(result["figures"])
         if record.get("status") == "not_computable":
             self.badge.set_status("NOT_COMPUTABLE", "未检测到满足阈值的峰；详见警告。")

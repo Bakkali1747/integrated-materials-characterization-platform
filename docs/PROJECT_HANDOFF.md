@@ -1,7 +1,7 @@
 # 综合材料表征分析平台项目交接文档
 
 最后核对日期：2026-11-13  
-当前版本：`v0.20.0`  
+当前版本：`v0.21.0`  
 当前阶段：PRD Phase D 完成  
 主仓库：<https://github.com/Bakkali1747/integrated-materials-characterization-platform>
 
@@ -9,22 +9,22 @@
 
 本项目是面向个人科研使用的 Windows 本地桌面应用，目标是以真实样品为中心，统一管理电磁、VSM、XRD 等材料表征数据、分析运行和科研产物。
 
-项目由原“微波吸收分析软件”演进而来。v0.13.0 新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加 schema v1 与 S 参数；v0.16.0 新增 VSM；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 完成 XRD 峰分析；v0.19.0 支持真实 Bruker RAW4 文本；v0.20.0 直接解析二进制 RAW4。
+项目由原“微波吸收分析软件”演进而来。v0.13.0 新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加 schema v1 与 S 参数；v0.16.0 新增 VSM；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 完成 XRD 峰分析；v0.19.0 支持真实 Bruker RAW4 文本；v0.20.0 直接解析二进制 RAW4；v0.21.0 增加 Pseudo-Voigt 峰形拟合与仪器展宽校正。
 
 应用采用新的名称、安装目录、本地数据目录和安装器 AppId，可以和旧版微波吸收分析软件并存，不会覆盖旧应用。
 
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.20.0 基线提交：`afd7209`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
-- 版本标签：`v0.20.0`
-- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.20.0-win64.exe`
-- 安装程序 SHA-256：`8707bae64351975069e9e41086396b9d4a28ff19796380b119d42c59e0861027`；同时见 `output/releases/SHA256SUMS-0.20.0.txt`
-- 当前已验证测试：`420 passed`
+- v0.21.0 基线提交：构建后回填（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
+- 版本标签：`v0.21.0`
+- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.21.0-win64.exe`
+- 安装程序 SHA-256：构建后回填；同时写入 `output/releases/SHA256SUMS-0.21.0.txt`
+- 当前已验证测试：`424 passed`
 - Ruff：通过
 - 源码版和冻结安装版自检：通过（电磁、S 参数、VSM、XRD 四类工作区自动登记）
 - 已验证产物：17 类电磁科研图、报告、S 参数、VSM 回线与报告、XRD 图谱与报告、比较、批量、历史和导出
-- 真实数据：9 个 Lake Shore VSM DAT；2 组 Bruker RAW4 XRD（二进制直读与 TXT 计数逐点一致）
+- 真实数据：9 个 Lake Shore VSM DAT；2 组 Bruker RAW4 XRD（二进制直读与 TXT 计数逐点一致；主峰 Pseudo-Voigt 拟合收敛）
 
 原仓库保留为历史远程 `legacy-origin`：
 
@@ -93,8 +93,9 @@ Project
 - 二进制 RAW4 定位头部几何签名与文件尾部 float32 计数，校验点数、2θ 范围、有限非负计数与整数计数比例；记录几何头/数据偏移。
 - 有表头按列名，无表头只接受两列（2θ，强度）；2θ 严格递增；缺失/非数值/非有限值报错。
 - RAW4 从 `[RangeHeader]` 读取起始 2θ、步长、声明点数，从 `[Data]` 读取 `Angle, PSD`；从文件头读取波长（A/B 为 1.5418 Å）。
-- 峰检测：可选移动平均平滑（默认 5 点，只用于检测与 FWHM）+ 地形突出度（默认 5%）+ 最小峰间距；峰位取扫描网格点。
-- 计算 FWHM（半高线性插值）、d 间距、Scherrer 表观尺寸（未做仪器展宽校正）与相对强度。
+- 峰检测：可选移动平均平滑（默认 5 点，只用于检测与初始 FWHM）+ 地形突出度（默认 5%）+ 最小峰间距；峰位取扫描网格点。
+- 可选单峰 Pseudo-Voigt 拟合（局部线性基线）：R² ≥ 0.8 时采用拟合峰位/FWHM/η，否则保留半高插值并标记；结果保存拟合状态、R²、η 与校正尺寸。
+- 计算 FWHM、d 间距、Scherrer 表观尺寸与相对强度；可选仪器展宽校正（常数 FWHM 或 2θ–FWHM CSV，Gaussian 平方差），启用后同时保留表观与校正尺寸。
 - 可选左右高角度窗口线性背景扣除，默认关闭。
 - 可选参考峰列表匹配：按 phase 分组、相对强度加权、容差内最近邻匹配；明确不是物相鉴定。
 - 输出 `parsed_data.csv`、`xrd_peaks.csv/json`、`phase_matching.json`、图谱/参考相棒图与 DOCX/PDF 报告。
@@ -301,9 +302,9 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - VSM 的 Ms 只是当前最大场端值，不宣称真实饱和；Hc/Mr 为离散点线性插值。
 - VSM 背景扣除默认关闭；启用时必须记录拟合窗口、系数与 R²，不得隐式扣除。
 - VSM 的质量归一化只在显式提供质量时执行，不得使用默认质量。
-- XRD 的峰位取扫描网格点，FWHM 为半高线性插值；不得声称完成峰形拟合。
-- XRD 峰检测平滑只用于检测与 FWHM，原始强度与导出数据不得被平滑。
-- XRD 的 Scherrer 尺寸未做仪器展宽校正，只能报告为表观尺寸。
+- XRD 峰位取扫描网格点；Pseudo-Voigt 拟合仅在 R²≥0.8 时采用，否则保留半高插值；不得声称完成全谱拟合或 Rietveld。
+- XRD 峰检测平滑只用于检测与初始 FWHM，原始强度与导出数据不得被平滑。
+- XRD 的 Scherrer 尺寸默认是表观尺寸；仪器展宽校正只在用户提供常数/曲线时启用，并采用 Gaussian 平方差假设。
 - XRD 参考峰匹配只是筛查，不是物相鉴定，不得据此宣称样品为单一物相。
 - Bruker 二进制 RAW 通过已观察到的 RAW4 几何签名与尾部计数直读；TXT 回退仅用于直读失败，不能保证覆盖所有厂商版本。
 - 原始科研文件不提交 Git。
@@ -315,12 +316,12 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - 尚无工作区备份、恢复和项目导入/导出界面。
 - 单样品报告和历史页导出尚未自动登记到 AnalysisRun。
 - VSM 的 Lake Shore DAT 支持基于本项目真实文件观察结构；其他厂商/二进制 `.dat` 不解析。Minor loop、FORC、温度/角度序列和用户背景文件尚未实现。
-- XRD 仅支持显式文本格式（CSV/TXT/XY/DAT）与已观察结构的 Bruker RAW4；RAW4 直读依赖几何签名与尾部 float32 计数，其他版本或布局会拒绝/回退 TXT。不支持 Rietveld、Kα2 剥离、仪器展宽校正与内置 PDF 数据库。
+- XRD 仅支持显式文本格式（CSV/TXT/XY/DAT）与已观察结构的 Bruker RAW4；RAW4 直读依赖几何签名与尾部 float32 计数，其他版本或布局会拒绝/回退 TXT。峰形拟合为单峰 Pseudo-Voigt，仪器展宽校正为常数/CSV 的 Gaussian 平方差；不支持 Rietveld、Kα2 剥离与内置 PDF 数据库。
 - README 的部分历史章节仍保留旧测试数量或旧阶段描述，需要后续统一清理。
 - Windows 安装程序没有商业代码签名，可能显示“未知发布者”。
 - 冻结版已在当前开发机验收，但仍需在另一台干净 Windows 电脑验证兼容性。
 - v0.14.0 起安装包与 SHA-256 作为 GitHub Release 附件发布；更早版本仍只有源码和标签。
-- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.20.0>
+- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.21.0>
 
 ## 11. 版本与发布工作流
 

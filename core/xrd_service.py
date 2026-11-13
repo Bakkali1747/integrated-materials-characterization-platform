@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 from core import __version__
-from core.xrd import XRDData, analyze_xrd, read_xrd, read_xrd_reference
+from core.xrd import XRDData, analyze_xrd, read_instrument_broadening, read_xrd, read_xrd_reference
 from export.provenance import artifact_hashes, git_state, json_safe
 
 XRD_ANALYSIS_KIND = "xrd_peaks"
@@ -37,6 +37,10 @@ class XRDConfig:
     min_prominence_relative: float = 0.05
     min_distance_deg: float = 0.1
     smoothing_points: int = 5
+    fit_peaks: bool = True
+    instrument_mode: str = "none"
+    instrument_fwhm_deg: float = 0.0
+    instrument_file: Path | None = None
     reference_path: Path | None = None
     match_tolerance_deg: float = 0.2
     reference_min_relative: float = 5.0
@@ -69,6 +73,10 @@ def _configuration(config: XRDConfig) -> dict:
         "min_prominence_relative": config.min_prominence_relative,
         "min_distance_deg": config.min_distance_deg,
         "smoothing_points": config.smoothing_points,
+        "fit_peaks": config.fit_peaks,
+        "instrument_mode": config.instrument_mode,
+        "instrument_fwhm_deg": config.instrument_fwhm_deg,
+        "instrument_file": str(config.instrument_file) if config.instrument_file else None,
         "reference_path": str(config.reference_path) if config.reference_path else None,
         "match_tolerance_deg": config.match_tolerance_deg,
         "reference_min_relative": config.reference_min_relative,
@@ -101,6 +109,16 @@ def validate_configuration(config: XRDConfig) -> None:
     if isinstance(config.smoothing_points, bool) or not isinstance(config.smoothing_points, int) \
             or config.smoothing_points < 1 or config.smoothing_points % 2 != 1:
         raise ValueError("峰检测平滑点数必须为正奇数（1 表示不平滑）。")
+    if not isinstance(config.fit_peaks, bool):
+        raise ValueError("fit_peaks 必须为布尔值。")
+    if config.instrument_mode not in {"none", "constant", "csv"}:
+        raise ValueError("仪器展宽模式必须为 none、constant 或 csv。")
+    if not isinstance(config.instrument_fwhm_deg, (int, float)) or isinstance(config.instrument_fwhm_deg, bool) \
+            or config.instrument_fwhm_deg < 0:
+        raise ValueError("仪器 FWHM 必须为非负数值。")
+    if config.instrument_mode == "csv":
+        if config.instrument_file is None or not Path(config.instrument_file).is_file():
+            raise FileNotFoundError(f"仪器展宽曲线文件不存在：{config.instrument_file}")
     if not 0 <= config.reference_min_relative <= 100:
         raise ValueError("参考峰最小相对强度必须在 0–100% 内。")
     if config.reference_path is not None and not Path(config.reference_path).is_file():
@@ -215,6 +233,12 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
                                         "wavelength_source": wavelength_source})
         reference = read_xrd_reference(config.reference_path, encoding=config.encoding) \
             if config.reference_path else None
+        if config.instrument_mode == "constant":
+            broadening = {"mode": "constant", "fwhm_deg": float(config.instrument_fwhm_deg)}
+        elif config.instrument_mode == "csv":
+            broadening = read_instrument_broadening(config.instrument_file, encoding=config.encoding)
+        else:
+            broadening = {"mode": "none"}
         checkpoint(35, "背景与峰检测")
         analysis = analyze_xrd(data, wavelength_angstrom=float(wavelength),
                                k_factor=config.k_factor, background_mode=config.background_mode,
@@ -222,7 +246,9 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
                                background_right=config.background_right,
                                min_prominence_relative=config.min_prominence_relative,
                                min_distance_deg=config.min_distance_deg,
-                               smoothing_points=config.smoothing_points, reference=reference,
+                               smoothing_points=config.smoothing_points,
+                               fit_peaks=config.fit_peaks,
+                               instrument_broadening=broadening, reference=reference,
                                match_tolerance_deg=config.match_tolerance_deg,
                                reference_min_relative=config.reference_min_relative)
         table = _analysis_table(data, analysis)
@@ -230,9 +256,11 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
         payload = _analysis_payload(analysis)
         (directory / "xrd_peaks.json").write_text(
             json.dumps(json_safe(payload), ensure_ascii=False, indent=2), encoding="utf-8")
-        peak_columns = ["two_theta_deg", "intensity", "background", "corrected_intensity",
-                        "prominence", "baseline", "fwhm_deg", "d_angstrom", "crystallite_size_nm",
-                        "relative_intensity_pct"]
+        peak_columns = ["two_theta_deg", "center_deg", "intensity", "background", "corrected_intensity",
+                        "prominence", "baseline", "fwhm_interpolated_deg", "fwhm_fit_deg", "fwhm_deg",
+                        "eta", "fit_r_squared", "fit_converged", "instrument_fwhm_deg",
+                        "corrected_fwhm_deg", "d_angstrom", "crystallite_size_apparent_nm",
+                        "crystallite_size_nm", "relative_intensity_pct"]
         pd.DataFrame([{column: peak.get(column) for column in peak_columns} for peak in analysis["peaks"]],
                      columns=peak_columns).to_csv(directory / "xrd_peaks.csv", index=False)
         if analysis["reference_matching"]:
