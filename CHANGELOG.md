@@ -1,5 +1,13 @@
 # 变更记录
 
+## v0.22.0 — XRD d 间距参考卡片与多相组合筛查
+
+- 参考峰支持 d 间距（`d_angstrom`/`d`/`dspacing`）代替 2θ；匹配时按分析波长换算为 2θ。可选 `formula`、`card` 元数据保留在匹配记录中。
+- 新增多相组合覆盖排名（最多 3 相）：按实测峰强度权重计算组合覆盖率、覆盖峰数与未覆盖峰；同一实测峰不重复计数。
+- `phase_matching.json` 改为包含 `phases`、`combinations` 与 `screening_only=true`；GUI 摘要与 DOCX/PDF 报告增加组合结果。
+- 明确组合排名只是候选相筛查，不是定量相分析。
+- 426 项测试通过；新增 d-only 卡片与多相组合覆盖测试。
+
 ## v0.21.0 — XRD Pseudo-Voigt 拟合与仪器展宽校正
 
 - 新增单峰 Pseudo-Voigt 拟合（局部线性基线，不依赖 scipy）：拟合峰位、FWHM、η、幅度与基线；R² ≥ 0.8 时采用拟合结果，否则保留半高插值并标记。

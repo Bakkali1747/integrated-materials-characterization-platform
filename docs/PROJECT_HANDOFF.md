@@ -1,7 +1,7 @@
 # 综合材料表征分析平台项目交接文档
 
-最后核对日期：2026-11-13  
-当前版本：`v0.21.0`  
+最后核对日期：2026-11-14  
+当前版本：`v0.22.0`  
 当前阶段：PRD Phase D 完成  
 主仓库：<https://github.com/Bakkali1747/integrated-materials-characterization-platform>
 
@@ -9,18 +9,18 @@
 
 本项目是面向个人科研使用的 Windows 本地桌面应用，目标是以真实样品为中心，统一管理电磁、VSM、XRD 等材料表征数据、分析运行和科研产物。
 
-项目由原“微波吸收分析软件”演进而来。v0.13.0 新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加 schema v1 与 S 参数；v0.16.0 新增 VSM；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 完成 XRD 峰分析；v0.19.0 支持真实 Bruker RAW4 文本；v0.20.0 直接解析二进制 RAW4；v0.21.0 增加 Pseudo-Voigt 峰形拟合与仪器展宽校正。
+项目由原“微波吸收分析软件”演进而来。v0.13.0 新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加 schema v1 与 S 参数；v0.16.0 新增 VSM；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 完成 XRD 峰分析；v0.19.0 支持真实 Bruker RAW4 文本；v0.20.0 直接解析二进制 RAW4；v0.21.0 增加 Pseudo-Voigt 拟合与仪器展宽；v0.22.0 增加 d 间距参考卡片与多相组合筛查。
 
 应用采用新的名称、安装目录、本地数据目录和安装器 AppId，可以和旧版微波吸收分析软件并存，不会覆盖旧应用。
 
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.21.0 基线提交：`9677caf`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
-- 版本标签：`v0.21.0`
-- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.21.0-win64.exe`
-- 安装程序 SHA-256：`5b81fd756727750e6ccd29e1c9387a1e667496edc9e414750ac7ea1738cb5267`；同时见 `output/releases/SHA256SUMS-0.21.0.txt`
-- 当前已验证测试：`424 passed`
+- v0.22.0 基线提交：构建后回填（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
+- 版本标签：`v0.22.0`
+- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.22.0-win64.exe`
+- 安装程序 SHA-256：构建后回填；同时写入 `output/releases/SHA256SUMS-0.22.0.txt`
+- 当前已验证测试：`426 passed`
 - Ruff：通过
 - 源码版和冻结安装版自检：通过（电磁、S 参数、VSM、XRD 四类工作区自动登记）
 - 已验证产物：17 类电磁科研图、报告、S 参数、VSM 回线与报告、XRD 图谱与报告、比较、批量、历史和导出
@@ -97,7 +97,7 @@ Project
 - 可选单峰 Pseudo-Voigt 拟合（局部线性基线）：R² ≥ 0.8 时采用拟合峰位/FWHM/η，否则保留半高插值并标记；结果保存拟合状态、R²、η 与校正尺寸。
 - 计算 FWHM、d 间距、Scherrer 表观尺寸与相对强度；可选仪器展宽校正（常数 FWHM 或 2θ–FWHM CSV，Gaussian 平方差），启用后同时保留表观与校正尺寸。
 - 可选左右高角度窗口线性背景扣除，默认关闭。
-- 可选参考峰列表匹配：按 phase 分组、相对强度加权、容差内最近邻匹配；明确不是物相鉴定。
+- 可选参考峰列表匹配：支持 2θ 或 d 间距卡片、phase/formula/card 元数据；按 phase 独立匹配后，再按实测峰覆盖度对最多 3 相组合排序；明确不是物相鉴定或定量相分析。
 - 输出 `parsed_data.csv`、`xrd_peaks.csv/json`、`phase_matching.json`、图谱/参考相棒图与 DOCX/PDF 报告。
 - 可从 XRD Measurement 发起分析并自动登记 `xrd_peaks` AnalysisRun；未检测到峰时登记为 `NOT_COMPUTABLE`。
 
@@ -305,7 +305,7 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - XRD 峰位取扫描网格点；Pseudo-Voigt 拟合仅在 R²≥0.8 时采用，否则保留半高插值；不得声称完成全谱拟合或 Rietveld。
 - XRD 峰检测平滑只用于检测与初始 FWHM，原始强度与导出数据不得被平滑。
 - XRD 的 Scherrer 尺寸默认是表观尺寸；仪器展宽校正只在用户提供常数/曲线时启用，并采用 Gaussian 平方差假设。
-- XRD 参考峰匹配只是筛查，不是物相鉴定，不得据此宣称样品为单一物相。
+- 参考匹配与多相组合只是筛查，不是物相鉴定或定量相分析；不得据此宣称样品只含这些相。
 - Bruker 二进制 RAW 通过已观察到的 RAW4 几何签名与尾部计数直读；TXT 回退仅用于直读失败，不能保证覆盖所有厂商版本。
 - 原始科研文件不提交 Git。
 
@@ -321,7 +321,7 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - Windows 安装程序没有商业代码签名，可能显示“未知发布者”。
 - 冻结版已在当前开发机验收，但仍需在另一台干净 Windows 电脑验证兼容性。
 - v0.14.0 起安装包与 SHA-256 作为 GitHub Release 附件发布；更早版本仍只有源码和标签。
-- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.21.0>
+- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.22.0>
 
 ## 11. 版本与发布工作流
 

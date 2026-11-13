@@ -199,6 +199,7 @@ def _analysis_table(data: XRDData, analysis: dict) -> pd.DataFrame:
 def _analysis_payload(analysis: dict) -> dict:
     return {"status": analysis["status"], "peaks": analysis["peaks"],
             "reference_matching": analysis["reference_matching"],
+            "phase_combinations": analysis.get("phase_combinations", []),
             "background": analysis["background"], "quality": analysis["quality"],
             "warnings": analysis["warnings"], "note": analysis["note"]}
 
@@ -265,7 +266,11 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
                      columns=peak_columns).to_csv(directory / "xrd_peaks.csv", index=False)
         if analysis["reference_matching"]:
             (directory / "phase_matching.json").write_text(
-                json.dumps(json_safe(analysis["reference_matching"]), ensure_ascii=False, indent=2),
+                json.dumps(json_safe({
+                    "phases": analysis["reference_matching"],
+                    "combinations": analysis.get("phase_combinations", []),
+                    "screening_only": True,
+                }), ensure_ascii=False, indent=2),
                 encoding="utf-8")
         x = table["two_theta_deg"]
         record.update({
@@ -275,6 +280,7 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
             "point_count": int(len(x)), "peak_count": len(analysis["peaks"]),
             "quality": analysis["quality"], "background": analysis["background"],
             "reference_matching": analysis["reference_matching"],
+            "phase_combinations": analysis.get("phase_combinations", []),
             "warnings": analysis["warnings"],
             "artifacts_sha256": artifact_hashes(directory),
         })

@@ -272,6 +272,42 @@ def test_reference_phase_matching(tmp_path):
     assert result["reference_matching"][0]["matched_count"] == 3
 
 
+def test_reference_d_spacing_cards(tmp_path):
+    path = write_csv(tmp_path / "pattern.csv")
+    wavelength = 1.5406
+    rows = ["d_angstrom,intensity,phase,formula,card"]
+    for angle, intensity in ((20, 100), (30, 60), (40, 40)):
+        d_value = wavelength / (2 * math.sin(math.radians(angle / 2)))
+        rows.append(f"{d_value:.8f},{intensity},alpha,Fe2O3,PDF-01")
+    reference = tmp_path / "cards.csv"
+    reference.write_text("\n".join(rows), encoding="utf-8")
+    records = read_xrd_reference(reference)
+    assert records[0]["two_theta_deg"] is None
+    assert records[0]["d_angstrom"] is not None
+    assert records[0]["formula"] == "Fe2O3"
+
+    result = analyze_xrd(read_xrd(path), reference=records, match_tolerance_deg=.05,
+                         min_prominence_relative=.01, smoothing_points=1)
+    assert result["reference_matching"][0]["score"] == pytest.approx(1.0, abs=.02)
+    assert result["reference_matching"][0]["matches"][0]["reference_d_angstrom"] is not None
+
+
+def test_multi_phase_combination_coverage(tmp_path):
+    path = write_csv(tmp_path / "pattern.csv")
+    reference = tmp_path / "reference.csv"
+    reference.write_text("two_theta,intensity,phase\n20,100,alpha\n30,60,alpha\n40,100,beta\n",
+                         encoding="utf-8")
+    result = analyze_xrd(read_xrd(path), reference=read_xrd_reference(reference),
+                         match_tolerance_deg=.2, min_prominence_relative=.01, smoothing_points=1)
+
+    assert result["phase_combinations"]
+    best = result["phase_combinations"][0]
+    assert best["phases"] == ["alpha", "beta"]
+    assert best["observed_coverage"] == pytest.approx(1.0)
+    assert best["matched_observed_count"] == 3
+    assert best["unmatched_observed"] == []
+
+
 def test_execute_writes_artifacts_and_reloads(tmp_path):
     path = write_csv(tmp_path / "pattern.csv")
     config = XRDConfig(path=path, name="synthetic", output=tmp_path / "out", dpi=40,

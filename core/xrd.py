@@ -6,6 +6,7 @@
 
 import csv
 import hashlib
+import itertools
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +26,9 @@ _TWO_THETA_ALIASES = {"2theta", "2thetadeg", "twotheta", "twothetadeg", "angle",
                       "角度", "衍射角"}
 _INTENSITY_ALIASES = {"intensity", "counts", "cps", "i", "psd", "强度", "计数"}
 _FWHM_ALIASES = {"fwhm", "fwhmdeg", "仪器展宽", "仪器半高宽", "半高宽"}
+_D_ALIASES = {"d", "dangstrom", "dspacing", "d值", "晶面间距"}
+_FORMULA_ALIASES = {"formula", "化学式", "分子式"}
+_CARD_ALIASES = {"card", "cardno", "pdf", "pdfcard", "卡片", "卡片号"}
 _PHASE_ALIASES = {"phase", "material", "name", "相", "物相"}
 
 
@@ -467,12 +471,24 @@ def suggest_xrd_columns(columns):
             intensity[0] if len(intensity) == 1 else None)
 
 
+def _optional_column(columns, explicit, aliases, label):
+    if explicit:
+        if explicit not in columns:
+            raise ValueError(f"找不到{label}列 {explicit!r}；现有列：{list(columns)}")
+        return explicit
+    matches = [str(column) for column in columns if _normalized(column) in aliases]
+    if len(matches) > 1:
+        raise ValueError(f"{label}列不唯一：{matches}；请显式指定。")
+    return matches[0] if matches else None
+
+
 def read_xrd_reference(path, *, two_theta_column=None, intensity_column=None,
                        phase_column=None, encoding=None, delimiter=None) -> list[dict]:
     """读取参考峰列表；返回按物相分组的峰记录。
 
-    参考文件需有表头或恰好两列（2θ，相对强度）；可选 phase 列。
-    强度按每个物相的最大值归一化为百分比，不做峰位对齐或插值。
+    参考文件需有表头或恰好两列（2θ，相对强度）或 d 间距+强度；可选 phase、
+    formula、card 列。强度按每个物相的最大值归一化为百分比；d 间距在匹配时
+    按分析波长换算为 2θ。不做峰位对齐或插值。
     """
     path = Path(path)
     if not path.is_file():
@@ -482,32 +498,50 @@ def read_xrd_reference(path, *, two_theta_column=None, intensity_column=None,
     actual_delimiter = delimiter if delimiter is not None else ("\t" if suffix == ".dat" else
                                                                ("," if suffix == ".csv" else None))
     frame, source_rows, _ = _read_table(text, actual_delimiter)
-    two_theta_name = _pick_column(frame.columns, two_theta_column, _TWO_THETA_ALIASES, "2θ")
+    two_theta_name = _optional_column(frame.columns, two_theta_column, _TWO_THETA_ALIASES, "2θ")
+    d_name = _optional_column(frame.columns, None, _D_ALIASES, "d 间距")
+    if two_theta_name is None and d_name is None:
+        raise ValueError("参考相需要 2θ 列或 d 间距列。")
     intensity_name = _pick_column(frame.columns, intensity_column, _INTENSITY_ALIASES, "强度")
-    phase_name = None
-    if phase_column:
-        if phase_column not in frame.columns:
-            raise ValueError(f"找不到物相列 {phase_column!r}；现有列：{list(frame.columns)}")
-        phase_name = phase_column
-    else:
-        matches = [str(column) for column in frame.columns if _normalized(column) in _PHASE_ALIASES]
-        phase_name = matches[0] if len(matches) == 1 else None
-    two_theta = _numeric_column(frame, two_theta_name, "2θ", source_rows)
+    phase_name = _optional_column(frame.columns, phase_column, _PHASE_ALIASES, "物相")
+    formula_name = _optional_column(frame.columns, None, _FORMULA_ALIASES, "化学式")
+    card_name = _optional_column(frame.columns, None, _CARD_ALIASES, "卡片号")
+    two_theta = _numeric_column(frame, two_theta_name, "2θ", source_rows) \
+        if two_theta_name else np.full(len(frame), np.nan)
+    d_spacing = _numeric_column(frame, d_name, "d 间距", source_rows) \
+        if d_name else np.full(len(frame), np.nan)
     intensity = _numeric_column(frame, intensity_name, "强度", source_rows)
     if np.any(intensity < 0):
         raise ValueError("参考峰强度不能为负。")
-    phases = frame[phase_name].astype(str).str.strip().to_numpy() if phase_name else np.full(len(frame), "reference")
+    if np.any(np.isfinite(d_spacing) & (d_spacing <= 0)):
+        raise ValueError("参考相 d 间距必须为正。")
+    missing = ~np.isfinite(two_theta) & ~np.isfinite(d_spacing)
+    if missing.any():
+        bad = [source_rows[i] for i in np.flatnonzero(missing)]
+        raise ValueError(f"参考相存在既无 2θ 也无 d 间距的行：源行 {bad[:20]}。")
+    phases = frame[phase_name].astype(str).str.strip().to_numpy() if phase_name \
+        else np.full(len(frame), "reference")
     if np.any(phases == ""):
         raise ValueError("参考峰物相列存在空值。")
+    formulas = frame[formula_name].astype(str).str.strip().to_numpy() if formula_name \
+        else np.full(len(frame), "", dtype=object)
+    cards = frame[card_name].astype(str).str.strip().to_numpy() if card_name \
+        else np.full(len(frame), "", dtype=object)
     records = []
     for phase in dict.fromkeys(phases):
         mask = phases == phase
         values = intensity[mask]
         maximum = float(values.max()) if len(values) and values.max() > 0 else 0.0
-        for angle, value in zip(two_theta[mask], values):
-            records.append({"phase": str(phase), "two_theta_deg": float(angle),
-                            "intensity": float(value),
-                            "relative_intensity_pct": float(value / maximum * 100.0) if maximum else 0.0})
+        for index in np.flatnonzero(mask):
+            angle = float(two_theta[index]) if np.isfinite(two_theta[index]) else None
+            d_value = float(d_spacing[index]) if np.isfinite(d_spacing[index]) else None
+            records.append({
+                "phase": str(phase), "two_theta_deg": angle, "d_angstrom": d_value,
+                "intensity": float(intensity[index]),
+                "relative_intensity_pct": float(intensity[index] / maximum * 100.0) if maximum else 0.0,
+                "formula": formulas[index] if str(formulas[index]).lower() != "nan" else None,
+                "card": cards[index] if str(cards[index]).lower() != "nan" else None,
+            })
     if not records:
         raise ValueError("参考相文件没有有效峰。")
     return records
@@ -640,7 +674,20 @@ def _linear_background(x, y, left_window, right_window):
              "slope": float(slope), "intercept": float(intercept)})
 
 
-def _match_reference(peaks, reference, tolerance_deg, minimum_relative):
+def _reference_angle(record, wavelength_angstrom):
+    angle = record.get("two_theta_deg")
+    if angle is not None and np.isfinite(angle):
+        return float(angle)
+    d_value = record.get("d_angstrom")
+    if d_value is None or not np.isfinite(d_value) or d_value <= 0:
+        return None
+    sine = wavelength_angstrom / (2.0 * d_value)
+    if not 0 < sine <= 1:
+        return None
+    return float(np.degrees(2.0 * np.arcsin(sine)))
+
+
+def _match_reference(peaks, reference, tolerance_deg, minimum_relative, wavelength_angstrom):
     """把参考峰与实测峰按最近邻贪心匹配；返回每个物相的匹配分数。"""
     phases = {}
     for record in reference:
@@ -650,26 +697,77 @@ def _match_reference(peaks, reference, tolerance_deg, minimum_relative):
     for phase, records in phases.items():
         used = set()
         matches = []
-        total_weight = sum(record["relative_intensity_pct"] for record in records) or 1.0
+        valid = []
+        unresolved = 0
+        for record in records:
+            angle = _reference_angle(record, wavelength_angstrom)
+            if angle is None:
+                unresolved += 1
+                continue
+            valid.append((record, angle))
+        total_weight = sum(record["relative_intensity_pct"] for record, _ in valid) or 1.0
         matched_weight = 0.0
-        for record in sorted(records, key=lambda item: item["relative_intensity_pct"], reverse=True):
-            candidates = [(abs(peak["two_theta_deg"] - record["two_theta_deg"]), index)
-                          for index, peak in enumerate(peaks) if index not in used]
+        for record, angle in sorted(valid, key=lambda item: item[0]["relative_intensity_pct"], reverse=True):
+            candidates = [(abs(peaks[index].get("center_deg", peaks[index]["two_theta_deg"]) - angle), index)
+                          for index in range(len(peaks)) if index not in used]
             if not candidates:
                 continue
             delta, index = min(candidates)
             if delta <= tolerance_deg:
                 used.add(index)
                 matched_weight += record["relative_intensity_pct"]
-                matches.append({"reference_2theta_deg": record["two_theta_deg"],
-                                "observed_2theta_deg": peaks[index]["two_theta_deg"],
-                                "delta_deg": float(peaks[index]["two_theta_deg"] - record["two_theta_deg"]),
-                                "reference_relative_intensity_pct": record["relative_intensity_pct"],
-                                "observed_relative_intensity_pct": peaks[index]["relative_intensity_pct"]})
+                observed = peaks[index]
+                matches.append({
+                    "reference_2theta_deg": angle,
+                    "reference_d_angstrom": record.get("d_angstrom"),
+                    "observed_index": index,
+                    "observed_2theta_deg": observed.get("center_deg", observed["two_theta_deg"]),
+                    "delta_deg": float(observed.get("center_deg", observed["two_theta_deg"]) - angle),
+                    "reference_relative_intensity_pct": record["relative_intensity_pct"],
+                    "observed_relative_intensity_pct": observed["relative_intensity_pct"],
+                    "card": record.get("card"), "formula": record.get("formula"),
+                })
         results.append({"phase": phase, "score": float(matched_weight / total_weight),
-                        "matched_count": len(matches), "reference_count": len(records),
+                        "matched_count": len(matches), "reference_count": len(valid),
+                        "unresolved_count": unresolved,
                         "tolerance_deg": float(tolerance_deg), "matches": matches})
     return sorted(results, key=lambda item: item["score"], reverse=True)
+
+
+def _rank_phase_combinations(peaks, phase_results, *, max_phases=3, top_n=3):
+    """按实测峰覆盖度对物相组合排序；仅用于候选相筛查。"""
+    candidates = [result for result in phase_results if result["matched_count"] > 0]
+    if not candidates:
+        return []
+    observed_weight = [max(0.0, float(peak.get("relative_intensity_pct", 0.0))) for peak in peaks]
+    total_weight = sum(observed_weight) or 1.0
+    combinations = []
+    limit = min(max_phases, len(candidates))
+    for count in range(1, limit + 1):
+        for group in itertools.combinations(candidates, count):
+            covered = {}
+            for result in group:
+                for match in result["matches"]:
+                    covered[match["observed_index"]] = max(
+                        covered.get(match["observed_index"], 0.0),
+                        float(match["observed_relative_intensity_pct"]))
+            coverage = sum(covered.values()) / total_weight
+            phase_scores = [result["score"] for result in group]
+            combinations.append({
+                "phases": [result["phase"] for result in group], "phase_count": count,
+                "matched_observed_count": len(covered), "observed_count": len(peaks),
+                "observed_coverage": float(coverage),
+                "mean_phase_score": float(sum(phase_scores) / len(phase_scores)),
+                "unmatched_observed": [
+                    {"index": index, "two_theta_deg": peak.get("center_deg", peak["two_theta_deg"]),
+                     "relative_intensity_pct": peak["relative_intensity_pct"]}
+                    for index, peak in enumerate(peaks) if index not in covered
+                ],
+                "screening_only": True,
+            })
+    combinations.sort(key=lambda item: (item["observed_coverage"], -item["phase_count"],
+                                        item["mean_phase_score"]), reverse=True)
+    return combinations[:top_n]
 
 
 def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
@@ -801,7 +899,9 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
                             "Scherrer 尺寸不确定。")
         if peak["two_theta_deg"] <= x[1] or peak["two_theta_deg"] >= x[-2]:
             warnings.append(f"[KNOWN] {peak['two_theta_deg']:.4g}° 峰接近扫描边界。")
-    matching = _match_reference(peaks, reference, match_tolerance_deg, reference_min_relative) if reference else []
+    matching = _match_reference(peaks, reference, match_tolerance_deg, reference_min_relative,
+                                wavelength_angstrom) if reference else []
+    combinations = _rank_phase_combinations(peaks, matching) if matching else []
     status = "success" if peaks else "not_computable"
     fit_converged_count = sum(1 for peak in peaks if peak.get("fit_converged"))
     instrument_info = {"mode": "none"}
@@ -818,6 +918,8 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
         "fit_peaks": bool(fit_peaks), "fit_converged_count": fit_converged_count,
         "fit_failed_count": len(peaks) - fit_converged_count if fit_peaks else 0,
         "instrument_broadening": instrument_info,
+        "reference_phase_count": len(matching),
+        "phase_combination_count": len(combinations),
         "wavelength_angstrom": float(wavelength_angstrom),
         "k_factor": float(k_factor), "status": status,
     }
@@ -826,6 +928,7 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
             "仪器展宽按 Gaussian 平方差校正；未校正时 Scherrer 尺寸为表观尺寸。"
             "参考相匹配是筛查，不是物相鉴定。")
     return {"status": status, "peaks": peaks, "reference_matching": matching,
+            "phase_combinations": combinations,
             "background": background_info, "quality": quality, "warnings": warnings,
             "corrected_intensity": corrected, "background_intensity": background,
             "note": note}

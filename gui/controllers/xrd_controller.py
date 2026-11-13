@@ -29,6 +29,7 @@ def analyze_xrd_request(config: XRDConfig, progress=lambda percent, text: None, 
     result = execute(config, progress=progress, cancelled=cancelled, cancel_exception=Cancelled)
     payload = {"status": result.analysis["status"], "peaks": result.analysis["peaks"],
                "reference_matching": result.analysis["reference_matching"],
+               "phase_combinations": result.analysis.get("phase_combinations", []),
                "background": result.analysis["background"], "quality": result.analysis["quality"],
                "warnings": result.analysis["warnings"], "note": result.analysis["note"]}
     figures = {}
@@ -97,6 +98,13 @@ def xrd_summary_text(record, metrics):
         for phase in matching:
             lines.append(f"  {phase['phase']}：{phase['score']:.3f}（{phase['matched_count']}/"
                          f"{phase['reference_count']}）")
+    combinations = metrics.get("phase_combinations") or []
+    if combinations:
+        lines += ["", "多相候选组合（按实测峰覆盖度，仅筛查）："]
+        for combo in combinations:
+            names = " + ".join(combo["phases"])
+            lines.append(f"  {names}：覆盖 {combo['matched_observed_count']}/{combo['observed_count']} 峰，"
+                         f"权重 {combo['observed_coverage']:.1%}")
     warnings = list(record.get("warnings") or [])
     if warnings:
         lines += ["", "警告：", *warnings]

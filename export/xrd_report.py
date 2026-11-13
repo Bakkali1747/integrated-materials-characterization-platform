@@ -97,6 +97,10 @@ def _report_data(directory):
     for phase in metrics.get("reference_matching") or []:
         results.append((f"参考相 {phase['phase']}", f"score={phase['score']:.3f}；"
                                                     f"{phase['matched_count']}/{phase['reference_count']} 峰匹配"))
+    for combo in metrics.get("phase_combinations") or []:
+        results.append((f"候选组合 {' + '.join(combo['phases'])}",
+                        f"覆盖 {combo['matched_observed_count']}/{combo['observed_count']} 峰；"
+                        f"权重 {combo['observed_coverage']:.1%}（仅筛查）"))
     warnings = list(record.get("warnings") or [])
     artifacts = record.get("artifacts_sha256", {})
     provenance = [
