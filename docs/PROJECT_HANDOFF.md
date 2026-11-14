@@ -1,7 +1,7 @@
 # 综合材料表征分析平台项目交接文档
 
 最后核对日期：2026-11-15  
-当前版本：`v0.24.0`  
+当前版本：`v0.24.1`  
 当前阶段：PRD Phase D 完成  
 主仓库：<https://github.com/Bakkali1747/integrated-materials-characterization-platform>
 
@@ -9,17 +9,17 @@
 
 本项目是面向个人科研使用的 Windows 本地桌面应用，目标是以真实样品为中心，统一管理电磁、VSM、XRD 等材料表征数据、分析运行和科研产物。
 
-项目由原“微波吸收分析软件”演进而来。v0.13.0 新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加 schema v1 与 S 参数；v0.16.0 新增 VSM；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 完成 XRD 峰分析；v0.19.0 支持真实 Bruker RAW4 文本；v0.20.0 直接解析二进制 RAW4；v0.21.0 增加 Pseudo-Voigt 拟合与仪器展宽；v0.22.0 增加 d 间距参考卡片与多相筛查；v0.23.0 按数据类型重组导航并补齐四类比较/批量；v0.23.1 类型菜单默认折叠；v0.23.2 更换应用图标；v0.23.3 优化 XRD 交互图谱；v0.24.0 内置 COD 无机物相库自动匹配。
+项目由原“微波吸收分析软件”演进而来。v0.13.0 新增项目/样品/测试/分析运行四类实体；v0.14.0 接入电磁分析；v0.15.0 增加 schema v1 与 S 参数；v0.16.0 新增 VSM；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 完成 XRD 峰分析；v0.19.0 支持真实 Bruker RAW4 文本；v0.20.0 直接解析二进制 RAW4；v0.21.0 增加 Pseudo-Voigt 拟合与仪器展宽；v0.22.0 增加 d 间距参考卡片与多相筛查；v0.23.0 按数据类型重组导航并补齐四类比较/批量；v0.23.1 类型菜单默认折叠；v0.23.2 更换应用图标；v0.23.3 优化 XRD 交互图谱；v0.24.0 内置 COD 无机物相库自动匹配；v0.24.1 修复无库环境验证状态。
 
 应用采用新的名称、安装目录、本地数据目录和安装器 AppId，可以和旧版微波吸收分析软件并存，不会覆盖旧应用。
 
 ## 2. 当前交付状态
 
 - Git 默认分支：`main`
-- v0.24.0 基线提交：`7d2891f`（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
-- 版本标签：`v0.24.0`
-- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.24.0-win64.exe`
-- 安装程序 SHA-256：`5d7cab5dc279c6d5cd0c483b4fdeda59b692ad0979ba781971ec9cf9d7be373a`；同时见 `output/releases/SHA256SUMS-0.24.0.txt`
+- v0.24.1 基线提交：构建后回填（安装目录 `_internal/build_info.json` 记录同一提交，`dirty=false`）
+- 版本标签：`v0.24.1`
+- Windows 安装程序：`output/releases/MaterialsCharacterizationPlatform-Setup-0.24.1-win64.exe`
+- 安装程序 SHA-256：构建后回填；同时写入 `output/releases/SHA256SUMS-0.24.1.txt`
 - 当前已验证测试：`437 passed`
 - Ruff：通过
 - 源码版和冻结安装版自检：通过（电磁、S 参数、VSM、XRD 四类工作区自动登记）
@@ -333,7 +333,7 @@ output/releases/MaterialsCharacterizationPlatform-Setup-<版本>-win64.exe
 - Windows 安装程序没有商业代码签名，可能显示“未知发布者”。
 - 冻结版已在当前开发机验收，但仍需在另一台干净 Windows 电脑验证兼容性。
 - v0.14.0 起安装包与 SHA-256 作为 GitHub Release 附件发布；更早版本仍只有源码和标签。
-- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.24.0>
+- GitHub Release：<https://github.com/Bakkali1747/integrated-materials-characterization-platform/releases/tag/v0.24.1>
 
 ## 11. 版本与发布工作流
 
