@@ -32,3 +32,7 @@ pip-*
 pytest-of-*/
 .pytest_*.txt
 .build_*.log
+
+phase_library/
+
+assets/cod_inorg_compact.zip

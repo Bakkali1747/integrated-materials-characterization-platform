@@ -30,6 +30,7 @@ def analyze_xrd_request(config: XRDConfig, progress=lambda percent, text: None, 
     payload = {"status": result.analysis["status"], "peaks": result.analysis["peaks"],
                "reference_matching": result.analysis["reference_matching"],
                "phase_combinations": result.analysis.get("phase_combinations", []),
+               "library_matches": result.analysis.get("library_matches", []),
                "background": result.analysis["background"], "quality": result.analysis["quality"],
                "warnings": result.analysis["warnings"], "note": result.analysis["note"]}
     figures = {}
@@ -105,6 +106,15 @@ def xrd_summary_text(record, metrics):
             names = " + ".join(combo["phases"])
             lines.append(f"  {names}：覆盖 {combo['matched_observed_count']}/{combo['observed_count']} 峰，"
                          f"权重 {combo['observed_coverage']:.1%}")
+    library_matches = metrics.get("library_matches") or []
+    if library_matches:
+        lines += ["", "COD 物相库候选（仅筛查，需卡片/结构核对）："]
+        for match in library_matches[:8]:
+            name = match.get("mineral") or match.get("formula") or f"COD {match['phase_id']}"
+            formula = f" / {match['formula']}" if match.get("mineral") and match.get("formula") else ""
+            lines.append(f"  {name}{formula}：score={match['score']:.3f}；"
+                         f"匹配 {match['matched_count']}/{match['reference_count']} 行；"
+                         f"实测覆盖 {match['observed_coverage']:.1%}")
     warnings = list(record.get("warnings") or [])
     if warnings:
         lines += ["", "警告：", *warnings]

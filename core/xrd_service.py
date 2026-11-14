@@ -8,9 +8,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from core import __version__
+from core.phase_library import PhaseLibrary, ensure_library
 from core.xrd import XRDData, analyze_xrd, read_instrument_broadening, read_xrd, read_xrd_reference
 from export.provenance import artifact_hashes, git_state, json_safe
 
@@ -44,6 +46,9 @@ class XRDConfig:
     reference_path: Path | None = None
     match_tolerance_deg: float = 0.2
     reference_min_relative: float = 5.0
+    auto_phase_match: bool = True
+    phase_library_path: Path | None = None
+    phase_match_tolerance_deg: float = 0.2
     dpi: int = 600
     entry_point: str = "xrd"
     extra_configuration: dict = field(default_factory=dict)
@@ -77,6 +82,9 @@ def _configuration(config: XRDConfig) -> dict:
         "instrument_mode": config.instrument_mode,
         "instrument_fwhm_deg": config.instrument_fwhm_deg,
         "instrument_file": str(config.instrument_file) if config.instrument_file else None,
+        "auto_phase_match": config.auto_phase_match,
+        "phase_library_path": str(config.phase_library_path) if config.phase_library_path else None,
+        "phase_match_tolerance_deg": config.phase_match_tolerance_deg,
         "reference_path": str(config.reference_path) if config.reference_path else None,
         "match_tolerance_deg": config.match_tolerance_deg,
         "reference_min_relative": config.reference_min_relative,
@@ -119,6 +127,10 @@ def validate_configuration(config: XRDConfig) -> None:
     if config.instrument_mode == "csv":
         if config.instrument_file is None or not Path(config.instrument_file).is_file():
             raise FileNotFoundError(f"仪器展宽曲线文件不存在：{config.instrument_file}")
+    if not isinstance(config.auto_phase_match, bool):
+        raise ValueError("auto_phase_match 必须为布尔值。")
+    if not np.isfinite(config.phase_match_tolerance_deg) or config.phase_match_tolerance_deg <= 0:
+        raise ValueError("物相库匹配容差必须为正数。")
     if not 0 <= config.reference_min_relative <= 100:
         raise ValueError("参考峰最小相对强度必须在 0–100% 内。")
     if config.reference_path is not None and not Path(config.reference_path).is_file():
@@ -200,6 +212,7 @@ def _analysis_payload(analysis: dict) -> dict:
     return {"status": analysis["status"], "peaks": analysis["peaks"],
             "reference_matching": analysis["reference_matching"],
             "phase_combinations": analysis.get("phase_combinations", []),
+            "library_matches": analysis.get("library_matches", []),
             "background": analysis["background"], "quality": analysis["quality"],
             "warnings": analysis["warnings"], "note": analysis["note"]}
 
@@ -240,18 +253,38 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
             broadening = read_instrument_broadening(config.instrument_file, encoding=config.encoding)
         else:
             broadening = {"mode": "none"}
+        library = None
+        library_error = None
+        if config.auto_phase_match:
+            checkpoint(30, "准备 COD 物相库")
+            try:
+                path = config.phase_library_path or ensure_library()
+                if path is None:
+                    library_error = "未找到 COD 物相库；跳过自动物相匹配。"
+                else:
+                    library = PhaseLibrary(path)
+            except Exception as error:
+                library_error = f"COD 物相库不可用：{type(error).__name__}: {error}"
         checkpoint(35, "背景与峰检测")
-        analysis = analyze_xrd(data, wavelength_angstrom=float(wavelength),
-                               k_factor=config.k_factor, background_mode=config.background_mode,
-                               background_left=config.background_left,
-                               background_right=config.background_right,
-                               min_prominence_relative=config.min_prominence_relative,
-                               min_distance_deg=config.min_distance_deg,
-                               smoothing_points=config.smoothing_points,
-                               fit_peaks=config.fit_peaks,
-                               instrument_broadening=broadening, reference=reference,
-                               match_tolerance_deg=config.match_tolerance_deg,
-                               reference_min_relative=config.reference_min_relative)
+        try:
+            analysis = analyze_xrd(data, wavelength_angstrom=float(wavelength),
+                                   k_factor=config.k_factor, background_mode=config.background_mode,
+                                   background_left=config.background_left,
+                                   background_right=config.background_right,
+                                   min_prominence_relative=config.min_prominence_relative,
+                                   min_distance_deg=config.min_distance_deg,
+                                   smoothing_points=config.smoothing_points,
+                                   fit_peaks=config.fit_peaks,
+                                   instrument_broadening=broadening, reference=reference,
+                                   phase_library=library,
+                                   phase_match_tolerance_deg=config.phase_match_tolerance_deg,
+                                   match_tolerance_deg=config.match_tolerance_deg,
+                                   reference_min_relative=config.reference_min_relative)
+        finally:
+            if library is not None:
+                library.close()
+        if library_error:
+            analysis["warnings"].append(f"[KNOWN] {library_error}")
         table = _analysis_table(data, analysis)
         table.to_csv(directory / "parsed_data.csv", index=False)
         payload = _analysis_payload(analysis)
@@ -272,6 +305,14 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
                     "screening_only": True,
                 }), ensure_ascii=False, indent=2),
                 encoding="utf-8")
+        if analysis.get("library_matches"):
+            (directory / "phase_library_matching.json").write_text(
+                json.dumps(json_safe({
+                    "matches": analysis["library_matches"],
+                    "library": analysis["quality"].get("phase_library"),
+                    "screening_only": True,
+                }), ensure_ascii=False, indent=2),
+                encoding="utf-8")
         x = table["two_theta_deg"]
         record.update({
             "status": analysis["status"], "source": data.metadata,
@@ -281,6 +322,7 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
             "quality": analysis["quality"], "background": analysis["background"],
             "reference_matching": analysis["reference_matching"],
             "phase_combinations": analysis.get("phase_combinations", []),
+            "library_matches": analysis.get("library_matches", []),
             "warnings": analysis["warnings"],
             "artifacts_sha256": artifact_hashes(directory),
         })

@@ -1,5 +1,14 @@
 # 变更记录
 
+## v0.24.0 — COD 无机物相库自动匹配
+
+- 内置 COD 无机物相库（88,311 相，每相前 20 条衍射线），XRD 分析后默认自动 search-match，按参考覆盖/实测覆盖返回前 10 个候选。
+- 物相库为 CC-BY-4.0 开放数据，首次分析时解压到用户数据目录；不包含 ICDD PDF 商业卡片。
+- 新增 `phase_library_matching.json`，界面摘要与 DOCX/PDF 报告显示候选相、分数与覆盖率。
+- 页面可关闭自动匹配；CLI 新增 `--no-auto-phase`、`--phase-library`、`--phase-tolerance`。
+- 真实 A/B 数据验证：主相候选首位为 Fe，分数约 0.83；同构 bcc 相（Cr 等）可能并列，必须结合成分核对。
+- 437 项测试通过；新增 COD 库 search-match、容差与 service 集成测试。
+
 ## v0.23.3 — XRD 交互图谱纵向布局优化
 
 - 界面 XRD 图谱改用 compact 布局：去掉占用高度的图内标题、缩短峰标注为 2θ、固定边距，使曲线在较矮画布中占据更多高度。

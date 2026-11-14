@@ -1,0 +1,28 @@
+COD 无机物相库来源与许可
+==========================
+
+本程序内置的 `cod_inorg_compact.zip` 是从以下开放数据整理的精简库：
+
+- 数据来源：Crystallography Open Database (COD) 2026-07-02 快照的无机子集
+- 参考数据库：QualX reference databases from the COD (Zenodo 23297507)
+- 整理方式：每个 COD 条目保留按相对强度排序的前 20 条衍射线（d, I），
+  用于峰位 search-match；不包含 CIF 或完整结构。
+- 许可：Creative Commons Attribution 4.0 International (CC-BY-4.0)
+
+引用：
+
+- Gražulis, S. et al. (2009). Crystallography Open Database – an open-access
+  collection of crystal structures. J. Appl. Cryst. 42, 726–729.
+- Gražulis, S. et al. (2012). Crystallography Open Database (COD): an open-access
+  collection of crystal structures and platform for world-wide collaboration.
+  Nucleic Acids Research 40(D1), D420–D427.
+- Altomare, A. et al. (2015). QUALX2.0: a qualitative phase analysis software
+  using the freely available database POW_COD. J. Appl. Cryst. 48, 598–603.
+
+数据下载页：
+
+- https://zenodo.org/records/23297507 (QualX COD reference databases, CC-BY-4.0)
+
+重要边界：COD 是开放晶体结构数据库，不是 ICDD 的 PDF-2/PDF-4/PDF-5+ 商业卡片库。
+本程序不包含、也不分发 ICDD PDF 卡片。自动匹配只给出候选相，必须由用户结合
+成分、工艺、卡片/结构数据库和定量分析确认；不得把候选结果当作物相鉴定结论。

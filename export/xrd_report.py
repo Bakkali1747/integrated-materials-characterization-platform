@@ -59,6 +59,7 @@ def _report_data(directory):
     record, metrics = saved["record"], saved["metrics"]
     background = metrics.get("background") or {}
     configuration = record.get("configuration", {})
+    library_info = (metrics.get("quality") or {}).get("phase_library") or {}
     metadata = [
         ("样品", record.get("sample", "未记录")),
         ("运行状态", record.get("status", "unknown")),
@@ -77,6 +78,7 @@ def _report_data(directory):
         ("仪器 FWHM (°)", _value(configuration.get("instrument_fwhm_deg"))),
         ("仪器展宽文件", Path(configuration["instrument_file"]).name
          if configuration.get("instrument_file") else "未使用"),
+        ("物相库", library_info.get("source", "未使用")),
         ("背景", background.get("mode", "none")),
         ("检测峰数", len(metrics.get("peaks") or [])),
         ("图 DPI", configuration.get("figure_dpi", "未记录")),
@@ -101,6 +103,11 @@ def _report_data(directory):
         results.append((f"候选组合 {' + '.join(combo['phases'])}",
                         f"覆盖 {combo['matched_observed_count']}/{combo['observed_count']} 峰；"
                         f"权重 {combo['observed_coverage']:.1%}（仅筛查）"))
+    for match in (metrics.get("library_matches") or [])[:8]:
+        name = match.get("mineral") or match.get("formula") or f"COD {match['phase_id']}"
+        results.append((f"COD 候选 {name}",
+                        f"score={match['score']:.3f}；匹配 {match['matched_count']}/{match['reference_count']}；"
+                        f"实测覆盖 {match['observed_coverage']:.1%}（仅筛查）"))
     warnings = list(record.get("warnings") or [])
     artifacts = record.get("artifacts_sha256", {})
     provenance = [

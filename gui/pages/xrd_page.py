@@ -119,6 +119,8 @@ class XrdPage(TaskPage):
 
         self.fit_peaks = QCheckBox("Pseudo-Voigt 峰形拟合")
         self.fit_peaks.setChecked(True)
+        self.auto_phase_match = QCheckBox("自动匹配 COD 物相库")
+        self.auto_phase_match.setChecked(True)
         self.instrument_mode = QComboBox()
         self.instrument_mode.addItem("仪器展宽：不校正", "none")
         self.instrument_mode.addItem("常数 FWHM", "constant")
@@ -134,6 +136,7 @@ class XrdPage(TaskPage):
         self.instrument_mode.currentIndexChanged.connect(self._toggle_instrument)
         row = QHBoxLayout()
         row.addWidget(self.fit_peaks)
+        row.addWidget(self.auto_phase_match)
         row.addWidget(self.instrument_mode)
         row.addWidget(QLabel("常数"))
         row.addWidget(self.instrument_fwhm)
@@ -326,6 +329,7 @@ class XrdPage(TaskPage):
             min_distance_deg=float(self.min_distance.value()),
             smoothing_points=int(self.smoothing.currentData()),
             fit_peaks=self.fit_peaks.isChecked(),
+            auto_phase_match=self.auto_phase_match.isChecked(),
             instrument_mode=self.instrument_mode.currentData(),
             instrument_fwhm_deg=float(self.instrument_fwhm.value()),
             instrument_file=Path(self.instrument_file.text().strip()) if self.instrument_file.text().strip() else None,

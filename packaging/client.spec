@@ -8,6 +8,8 @@ datas = [(str(root / 'output/packaging/build_info.json'), '.'),
          (str(root / 'sample_data/synthetic_constant.csv'), 'sample_data'),
          (str(root / 'sample_data/synthetic_legacy.xls'), 'sample_data'),
          (str(root / 'assets/app.png'), 'assets'),
+         (str(root / 'assets/cod_inorg_compact.zip'), 'assets'),
+         (str(root / 'assets/COD_LICENSE.txt'), 'assets'),
          (str(root / 'docs/client_usage.md'), 'docs')]
 datas += [(str(root / 'docs/gui_phase2.md'), 'docs')]
 datas += [(str(root / 'docs/gui_phase3.md'), 'docs')]

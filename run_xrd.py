@@ -22,7 +22,8 @@ def analyze(path, *, output="output", name=None, two_theta_column=None, intensit
             background_mode="none", background_left=(10.0, 20.0), background_right=(70.0, 80.0),
             min_prominence_relative=0.05, min_distance_deg=0.1, smoothing_points=5,
             fit_peaks=True, instrument_mode="none", instrument_fwhm_deg=0.0,
-            instrument_file=None, reference_path=None,
+            instrument_file=None, reference_path=None, auto_phase_match=True,
+            phase_library_path=None, phase_match_tolerance_deg=0.2,
             match_tolerance_deg=0.2, style=None, report=False):
     """执行 XRD 分析并保存图组；返回结果目录。"""
     style = style or PlotStyle()
@@ -37,7 +38,9 @@ def analyze(path, *, output="output", name=None, two_theta_column=None, intensit
                        fit_peaks=fit_peaks, instrument_mode=instrument_mode,
                        instrument_fwhm_deg=instrument_fwhm_deg,
                        instrument_file=Path(instrument_file) if instrument_file else None,
-                       reference_path=reference_path,
+                       reference_path=reference_path, auto_phase_match=auto_phase_match,
+                       phase_library_path=Path(phase_library_path) if phase_library_path else None,
+                       phase_match_tolerance_deg=phase_match_tolerance_deg,
                        match_tolerance_deg=match_tolerance_deg, dpi=style.dpi, entry_point="cli_xrd",
                        extra_configuration={"plot_style": vars(style)})
     result = execute(config)
@@ -63,6 +66,10 @@ def analyze(path, *, output="output", name=None, two_theta_column=None, intensit
     for peak in payload["peaks"][:10]:
         print(f"  2theta={peak['two_theta_deg']:.4g} deg  I={peak['relative_intensity_pct']:.4g}%  "
               f"FWHM={peak['fwhm_deg']} deg  d={peak['d_angstrom']} A  D={peak['crystallite_size_nm']} nm")
+    for match in (payload.get("library_matches") or [])[:5]:
+        print(f"  COD候选 {match.get('formula')} score={match['score']:.3f} "
+              f"matched={match['matched_count']}/{match['reference_count']} "
+              f"observed={match['observed_coverage']:.1%}")
     return result.directory
 
 
@@ -94,6 +101,11 @@ def main():
                         help="常数仪器 FWHM（度）")
     parser.add_argument("--instrument-file", help="仪器展宽曲线 CSV（2θ,FWHM）")
     parser.add_argument("--reference")
+    parser.add_argument("--no-auto-phase", dest="auto_phase_match", action="store_false", default=True,
+                        help="关闭 COD 物相库自动匹配")
+    parser.add_argument("--phase-library", help="COD 物相库 SQLite 路径")
+    parser.add_argument("--phase-tolerance", type=float, default=0.2,
+                        help="COD 物相库 2θ 匹配容差（度）")
     parser.add_argument("--match-tolerance", type=float, default=0.2)
     parser.add_argument("--dpi", type=int, default=600)
     parser.add_argument("--report", action="store_true")
@@ -109,7 +121,10 @@ def main():
                 smoothing_points=args.smoothing, fit_peaks=args.fit_peaks,
                 instrument_mode=args.instrument, instrument_fwhm_deg=args.instrument_fwhm,
                 instrument_file=args.instrument_file,
-                reference_path=args.reference, match_tolerance_deg=args.match_tolerance,
+                reference_path=args.reference, auto_phase_match=args.auto_phase_match,
+                phase_library_path=args.phase_library,
+                phase_match_tolerance_deg=args.phase_tolerance,
+                match_tolerance_deg=args.match_tolerance,
                 style=PlotStyle(dpi=args.dpi), report=args.report)
         return 0
     except Exception as error:

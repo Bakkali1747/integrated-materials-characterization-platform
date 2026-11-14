@@ -1,10 +1,10 @@
 # Windows 独立客户端
 
-当前安装包为 v0.23.3，左侧按电磁/VSM/XRD/S 参数分组且默认折叠，每组含单样品、比较与批量；XRD 界面图谱使用紧凑布局，曲线更易读。默认“日常模式”；操作见 `type_workspaces.md`、`xrd.md`、`vsm.md`、`workspace.md`、`gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
+当前安装包为 v0.24.0，左侧按电磁/VSM/XRD/S 参数分组且默认折叠，每组含单样品、比较与批量；XRD 默认自动匹配内置 COD 无机物相库（88,311 相，CC-BY-4.0，不是 ICDD PDF 卡片）。默认“日常模式”；操作见 `phase_library.md`、`type_workspaces.md`、`xrd.md`、`vsm.md`、`workspace.md`、`gui_phase4.md`、`gui_phase3.md` 和 `gui_phase2.md`。
 
 ## 安装和启动
 
-双击 `MaterialsCharacterizationPlatform-Setup-0.23.3-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“综合材料表征分析平台”。
+双击 `MaterialsCharacterizationPlatform-Setup-0.24.0-win64.exe`，按安装向导完成安装。安装到当前用户目录，不需要 Python 或 Git，也不要求管理员权限。可创建桌面快捷方式；安装完成后从桌面或开始菜单打开“综合材料表征分析平台”。
 
 目标为 Windows 10（1809 或更高）/Windows 11 x64。界面为中文，安装向导按钮使用英文。客户端未做商业代码签名，Windows 可能显示“未知发布者”；请只使用随交付提供哈希的安装文件。
 
