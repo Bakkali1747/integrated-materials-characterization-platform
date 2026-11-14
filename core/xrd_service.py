@@ -284,7 +284,8 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
             if library is not None:
                 library.close()
         if library_error:
-            analysis["warnings"].append(f"[KNOWN] {library_error}")
+            analysis["quality"]["phase_library"] = {
+                "source": "unavailable", "phase_count": 0, "error": library_error}
         table = _analysis_table(data, analysis)
         table.to_csv(directory / "parsed_data.csv", index=False)
         payload = _analysis_payload(analysis)
