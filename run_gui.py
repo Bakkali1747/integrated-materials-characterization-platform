@@ -6,7 +6,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from application_paths import user_data_root
+from application_paths import resource_root, user_data_root
 
 ROOT = user_data_root()
 if getattr(sys, "frozen", False):
@@ -69,6 +69,10 @@ def main():
         return 1
     app = QApplication(sys.argv)
     app.setApplicationName("综合材料表征分析平台")
+    from PySide6.QtGui import QIcon
+    icon_path = resource_root() / "assets" / "app.png"
+    if icon_path.is_file():
+        app.setWindowIcon(QIcon(str(icon_path)))
     app.setStyle("Fusion")
     try:
         configure_logging()

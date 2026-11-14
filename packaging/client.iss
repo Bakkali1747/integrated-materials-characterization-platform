@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.23.1"
+  #define AppVersion "0.23.2"
 #endif
 
 [Setup]
@@ -18,6 +18,7 @@ OutputBaseFilename=MaterialsCharacterizationPlatform-Setup-{#AppVersion}-win64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\assets\app.ico
 UninstallDisplayIcon={app}\IntegratedMaterialsCharacterizationPlatform.exe
 DisableProgramGroupPage=yes
 CloseApplications=yes
@@ -33,8 +34,8 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; Flags: checkedonce
 Source: "..\output\dist\IntegratedMaterialsCharacterizationPlatform\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{userprograms}\综合材料表征分析平台"; Filename: "{app}\IntegratedMaterialsCharacterizationPlatform.exe"
-Name: "{userdesktop}\综合材料表征分析平台"; Filename: "{app}\IntegratedMaterialsCharacterizationPlatform.exe"; Tasks: desktopicon
+Name: "{userprograms}\综合材料表征分析平台"; Filename: "{app}\IntegratedMaterialsCharacterizationPlatform.exe"; IconFilename: "{app}\IntegratedMaterialsCharacterizationPlatform.exe"
+Name: "{userdesktop}\综合材料表征分析平台"; Filename: "{app}\IntegratedMaterialsCharacterizationPlatform.exe"; IconFilename: "{app}\IntegratedMaterialsCharacterizationPlatform.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\IntegratedMaterialsCharacterizationPlatform.exe"; Description: "启动综合材料表征分析平台"; Flags: nowait postinstall skipifsilent

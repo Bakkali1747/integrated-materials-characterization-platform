@@ -7,6 +7,7 @@ root = Path(SPECPATH).parent
 datas = [(str(root / 'output/packaging/build_info.json'), '.'),
          (str(root / 'sample_data/synthetic_constant.csv'), 'sample_data'),
          (str(root / 'sample_data/synthetic_legacy.xls'), 'sample_data'),
+         (str(root / 'assets/app.png'), 'assets'),
          (str(root / 'docs/client_usage.md'), 'docs')]
 datas += [(str(root / 'docs/gui_phase2.md'), 'docs')]
 datas += [(str(root / 'docs/gui_phase3.md'), 'docs')]
@@ -33,5 +34,6 @@ a = Analysis([str(root / 'run_gui.py')], pathex=[str(root)], binaries=[], datas=
 a.binaries = [entry for entry in a.binaries if Path(entry[0]).name.lower() not in ('icuuc.dll', 'icuin.dll') and not Path(entry[0]).name.lower().startswith('icudt')]
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='IntegratedMaterialsCharacterizationPlatform',
-          debug=False, strip=False, upx=False, console=bool(os.environ.get('CLIENT_DEBUG_CONSOLE')))
+          debug=False, strip=False, upx=False, console=bool(os.environ.get('CLIENT_DEBUG_CONSOLE')),
+          icon=str(root / 'assets/app.ico'))
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='IntegratedMaterialsCharacterizationPlatform')
