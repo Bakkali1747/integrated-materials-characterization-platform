@@ -1,6 +1,7 @@
 """左侧类型化导航树；比较/批量作为各数据类型的二级入口。"""
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
 
 
@@ -12,13 +13,14 @@ class NavigationTree(QTreeWidget):
         self.setObjectName("nav")
         self.setHeaderHidden(True)
         self.setIndentation(14)
-        self.setRootIsDecorated(True)
+        self.setRootIsDecorated(False)
         self.setExpandsOnDoubleClick(False)
-        self.setAnimated(False)
+        self.setAnimated(True)
         self.leaves = {}
         self.children = []
         self._build()
         self.currentItemChanged.connect(self._select)
+        self.itemPressed.connect(self._toggle_group)
 
     def _add(self, label, key=None, parent=None):
         item = QTreeWidgetItem(parent or self, [label])
@@ -26,7 +28,10 @@ class NavigationTree(QTreeWidget):
             item.setData(0, Qt.ItemDataRole.UserRole, key)
             self.leaves[key] = item
         else:
-            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            font = item.font(0)
+            font.setBold(True)
+            item.setFont(0, font)
+            item.setForeground(0, QBrush(QColor("#93C5FD")))
         return item
 
     def _build(self):
@@ -41,15 +46,25 @@ class NavigationTree(QTreeWidget):
         self.groups = {}
         for label, prefix, children in groups:
             parent = self._add(label)
+            parent.setData(0, Qt.ItemDataRole.UserRole + 1, label)
+            parent.setText(0, f"▸ {label}")
+            parent.setExpanded(False)
             self.groups[prefix] = parent
             for child_label, suffix in zip(children, ("single", "compare", "batch")):
                 child = self._add(child_label, f"{prefix}.{suffix}", parent)
                 if suffix != "single":
                     self.children.append(child)
-            parent.setExpanded(True)
+            parent.setExpanded(False)
         self._add("历史结果", "history")
         self._add("设置", "settings")
         self.setCurrentItem(self.leaves["home"])
+
+    def _toggle_group(self, item, column):
+        if item.childCount():
+            expanded = not item.isExpanded()
+            item.setExpanded(expanded)
+            label = item.data(0, Qt.ItemDataRole.UserRole + 1) or item.text(0).lstrip("▸▼ ")
+            item.setText(0, f"{'▼' if expanded else '▸'} {label}")
 
     def _select(self, current, previous):
         if current is not None:
@@ -60,6 +75,11 @@ class NavigationTree(QTreeWidget):
     def show_page(self, key):
         item = self.leaves.get(key)
         if item is not None:
+            parent = item.parent()
+            if parent is not None:
+                parent.setExpanded(True)
+                label = parent.data(0, Qt.ItemDataRole.UserRole + 1) or parent.text(0).lstrip("▸▼ ")
+                parent.setText(0, f"▼ {label}")
             self.setCurrentItem(item)
             self.scrollToItem(item)
 

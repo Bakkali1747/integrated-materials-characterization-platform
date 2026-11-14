@@ -14,8 +14,8 @@ def test_type_navigation_has_compare_and_batch_children(qtbot):
     for prefix in ("em", "vsm", "xrd", "sparameter"):
         for suffix in ("single", "compare", "batch"):
             assert f"{prefix}.{suffix}" in window.navigation.leaves
-    assert window.navigation.leaves["vsm.compare"].parent().text(0) == "VSM 分析"
-    assert window.navigation.leaves["xrd.batch"].parent().text(0) == "XRD 分析"
+    assert window.navigation.leaves["vsm.compare"].parent().text(0).lstrip("▸▼ ") == "VSM 分析"
+    assert window.navigation.leaves["xrd.batch"].parent().text(0).lstrip("▸▼ ") == "XRD 分析"
 
     window.show_page("xrd.compare")
     assert window.stack.currentWidget() is window.xrd_comparison
@@ -36,6 +36,20 @@ def test_daily_mode_hides_only_advanced_type_entries(qtbot):
     window.set_ui_mode("full")
     assert window.navigation.is_page_visible("sparameter.compare")
     assert window.navigation.is_page_visible("vsm.batch")
+
+
+def test_groups_collapsed_until_selected(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    assert not any(group.isExpanded() for group in window.navigation.groups.values())
+    window.show_page("xrd.compare")
+    assert window.navigation.groups["xrd"].isExpanded()
+    assert not window.navigation.groups["vsm"].isExpanded()
+    vsm = window.navigation.groups["vsm"]
+    window.navigation._toggle_group(vsm, 0)
+    assert vsm.isExpanded()
+    window.navigation._toggle_group(vsm, 0)
+    assert not vsm.isExpanded()
 
 
 def test_comparison_rows_for_each_type():
