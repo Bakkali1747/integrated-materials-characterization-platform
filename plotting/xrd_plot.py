@@ -1,5 +1,8 @@
 """XRD 图谱与参考相匹配图；只使用已保存表格与峰结果，不重新计算。"""
 
+import numpy as np
+from matplotlib.ticker import MaxNLocator
+
 from plotting.style import COLORBLIND, PlotStyle, new_axes
 
 
@@ -9,8 +12,8 @@ def _peak_label(peak, index):
     return f"{peak['two_theta_deg']:.2f}°"
 
 
-def plot_xrd_pattern(table, analysis, style=None):
-    """原始强度、背景与检测峰；峰标注 2θ 与 d 间距。"""
+def plot_xrd_pattern(table, analysis, style=None, *, compact=False):
+    """原始强度、背景与检测峰；compact 用于界面小画布，减少标注占用的高度。"""
     style = style or PlotStyle()
     figure, axes = new_axes(style)
     x = table["two_theta_deg"].to_numpy(dtype=float)
@@ -26,13 +29,21 @@ def plot_xrd_pattern(table, analysis, style=None):
                   [peak["intensity"] for peak in peaks], marker="v", ms=5, ls="none",
                   color=COLORBLIND[0], label="detected peaks")
         for index, peak in enumerate(peaks):
-            axes.annotate(_peak_label(peak, index), (peak["two_theta_deg"], peak["intensity"]),
-                          textcoords="offset points", xytext=(3, 8), fontsize=max(6, style.font_size - 4),
+            label = f"{peak['two_theta_deg']:.2f}°" if compact else _peak_label(peak, index)
+            axes.annotate(label, (peak["two_theta_deg"], peak["intensity"]),
+                          textcoords="offset points", xytext=(2, 4),
+                          fontsize=max(6, style.font_size - 4),
                           rotation=90, color=COLORBLIND[0])
     axes.set_xlabel("2θ (deg)")
     axes.set_ylabel("Intensity (counts)")
-    axes.set_title("XRD pattern with detected peaks")
+    axes.set_title("" if compact else "XRD pattern with detected peaks")
     axes.legend(loc="best", fontsize=max(7, style.font_size - 2), frameon=False)
+    if compact:
+        maximum = float(np.max(raw)) if len(raw) else 1.0
+        axes.set_ylim(0, maximum * 1.03 if maximum > 0 else 1.0)
+        axes.yaxis.set_major_locator(MaxNLocator(nbins=4))
+        figure.set_layout_engine(None)
+        figure.subplots_adjust(left=.11, right=.98, bottom=.21, top=.84)
     return figure
 
 
@@ -60,10 +71,10 @@ def plot_xrd_phase_matches(table, analysis, style=None):
     return figure
 
 
-def make_xrd_figure(table, analysis, key, dpi=600):
+def make_xrd_figure(table, analysis, key, dpi=600, *, compact=False):
     style = PlotStyle(dpi=dpi)
     if key == "xrd_pattern":
-        return plot_xrd_pattern(table, analysis, style)
+        return plot_xrd_pattern(table, analysis, style, compact=compact)
     if key == "xrd_phase_matches":
         if not analysis.get("reference_matching"):
             raise ValueError("本次运行没有参考相匹配结果。")

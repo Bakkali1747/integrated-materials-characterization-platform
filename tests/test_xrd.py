@@ -10,6 +10,8 @@ from core.xrd import analyze_xrd, inspect_xrd_table, read_instrument_broadening,
 from core.xrd_fit import fit_pseudo_voigt, pseudo_voigt
 from core.xrd_service import XRDConfig, execute, load_completed_xrd_run
 from export.xrd_report import export_xrd_report
+from plotting.style import plt
+from plotting.xrd_plot import make_xrd_figure
 
 
 def pattern_rows(*, peaks=((20.0, 500.0, .08), (30.0, 300.0, .10), (40.0, 200.0, .12)),
@@ -177,6 +179,22 @@ def test_execute_records_fit_and_instrument_fields(tmp_path):
         assert column in frame.columns
     assert result.record["quality"]["instrument_broadening"]["mode"] == "constant"
     assert result.record["configuration"]["fit_peaks"] is True
+
+
+def test_compact_pattern_fills_canvas_and_limits_ticks():
+    x = np.arange(10.0, 90.0, .02)
+    y = 10.0 + 170.0 * np.exp(-((x - 45.0) / .2) ** 2)
+    table = pd.DataFrame({"two_theta_deg": x, "intensity": y})
+    peaks = [{"two_theta_deg": 45.0, "intensity": 180.0, "d_angstrom": 2.0,
+              "relative_intensity_pct": 100.0}]
+    figure = make_xrd_figure(table, {"peaks": peaks, "background": {"mode": "none"}},
+                             "xrd_pattern", 100, compact=True)
+    axes = figure.axes[0]
+    assert axes.get_ylim()[0] == 0
+    assert len(axes.get_yticks()) <= 5
+    assert axes.get_title() == ""
+    assert axes.get_position().height > .55
+    plt.close(figure)
 
 
 def test_read_xrd_csv_and_headerless_xy(tmp_path):

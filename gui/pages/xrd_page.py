@@ -364,7 +364,10 @@ class XrdPage(TaskPage):
                 self.peaks.setItem(row_index, column_index, QTableWidgetItem(text))
             converged = peak.get("fit_converged")
             self.peaks.setItem(row_index, 8, QTableWidgetItem("是" if converged else "否（插值）"))
-        self.plot.set_figures(result["figures"])
+        figures = dict(result["figures"])
+        if figures.get("xrd_pattern") is not None:
+            figures["xrd_pattern"] = xrd_figure(result, "xrd_pattern", 100, compact=True)
+        self.plot.set_figures(figures)
         if record.get("status") == "not_computable":
             self.badge.set_status("NOT_COMPUTABLE", "未检测到满足阈值的峰；详见警告。")
         else:
@@ -376,7 +379,7 @@ class XrdPage(TaskPage):
             return
         result = self.completed
         def operation(progress, cancelled):
-            figure = xrd_figure(result, key, 100)
+            figure = xrd_figure(result, key, 100, compact=(key == "xrd_pattern"))
             plt.close(figure)
             return figure
         self.launch(operation, lambda figure: self.plot.install_preview(key, figure))

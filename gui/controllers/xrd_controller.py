@@ -13,8 +13,8 @@ class Cancelled(Exception):
     """协作式取消；只在阶段之间停止，不删除已保存数据。"""
 
 
-def xrd_figure(result, key, dpi=600):
-    return make_xrd_figure(result["table"], result["metrics"], key, dpi)
+def xrd_figure(result, key, dpi=600, *, compact=False):
+    return make_xrd_figure(result["table"], result["metrics"], key, dpi, compact=compact)
 
 
 def _figure_keys(analysis):
