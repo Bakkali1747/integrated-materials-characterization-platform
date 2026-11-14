@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QListWidget,
     QMainWindow,
     QStackedWidget,
     QVBoxLayout,
@@ -25,17 +24,20 @@ from gui.pages.results_page import ResultsPage
 from gui.pages.settings_page import SettingsPage
 from gui.pages.single_sample_page import SingleSamplePage
 from gui.pages.sparameter_page import SParameterPage
+from gui.pages.typed_batch_pages import SparamBatchPage, VsmBatchPage, XrdBatchPage
+from gui.pages.typed_comparison_pages import SparamComparisonPage, VsmComparisonPage, XrdComparisonPage
 from gui.pages.vsm_page import VsmPage
 from gui.pages.workspace_page import WorkspacePage
 from gui.pages.xrd_page import XrdPage
 from gui.theme import apply_theme
+from gui.widgets.nav_tree import NavigationTree
 
 
 class MainWindow(QMainWindow):
     def __init__(self, settings_store=None, workspace_repository=None):
         super().__init__()
         apply_theme(QApplication.instance())
-        self.setWindowTitle(f"综合材料表征分析平台 · v{__version__} · Phase B")
+        self.setWindowTitle(f"综合材料表征分析平台 · v{__version__} · Phase D")
         self.resize(1400, 900)
         self.setMinimumSize(1200, 750)
         self.setAcceptDrops(True)
@@ -72,10 +74,7 @@ class MainWindow(QMainWindow):
         work = QLabel("工作区")
         work.setObjectName("sideSection")
         side_layout.addWidget(work)
-        self.navigation = QListWidget()
-        self.navigation.setObjectName("nav")
-        self.navigation.setFrameShape(QFrame.Shape.NoFrame)
-        self.navigation.addItems(["首页", "工作区", "电磁性能", "VSM 分析", "XRD 分析", "S参数分析", "多样品比较", "批量分析", "历史结果", "设置"])
+        self.navigation = NavigationTree()
         side_layout.addWidget(self.navigation, 1)
         footer = QLabel("本地计算 · 数据不外传\n缺失数据插值 OFF")
         footer.setObjectName("sideFooter")
@@ -87,26 +86,38 @@ class MainWindow(QMainWindow):
         self.home = HomePage()
         self.workspace = WorkspacePage(workspace_repository)
         self.single = SingleSamplePage()
-        self.stack.addWidget(self.home)
-        self.stack.addWidget(self.workspace)
-        self.stack.addWidget(self.single)
         self.vsm = VsmPage()
-        self.stack.addWidget(self.vsm)
         self.xrd = XrdPage()
-        self.stack.addWidget(self.xrd)
         self.sparameters = SParameterPage()
         self.comparison = ComparisonPage()
-        self.stack.addWidget(self.sparameters)
-        self.stack.addWidget(self.comparison)
         self.batch = BatchPage()
+        self.vsm_comparison = VsmComparisonPage()
+        self.vsm_batch = VsmBatchPage()
+        self.xrd_comparison = XrdComparisonPage()
+        self.xrd_batch = XrdBatchPage()
+        self.sparameter_comparison = SparamComparisonPage()
+        self.sparameter_batch = SparamBatchPage()
         self.history = ResultsPage()
-        self.stack.addWidget(self.batch)
-        self.stack.addWidget(self.history)
-        self.task_pages = [self.single, self.vsm, self.xrd, self.sparameters, self.comparison, self.batch, self.history]
+        self.settings = SettingsPage()
+        self.pages = {
+            "home": self.home, "workspace": self.workspace,
+            "em.single": self.single, "em.compare": self.comparison, "em.batch": self.batch,
+            "vsm.single": self.vsm, "vsm.compare": self.vsm_comparison, "vsm.batch": self.vsm_batch,
+            "xrd.single": self.xrd, "xrd.compare": self.xrd_comparison, "xrd.batch": self.xrd_batch,
+            "sparameter.single": self.sparameters, "sparameter.compare": self.sparameter_comparison,
+            "sparameter.batch": self.sparameter_batch,
+            "history": self.history, "settings": self.settings,
+        }
+        for page in self.pages.values():
+            self.stack.addWidget(page)
+        self.task_pages = [self.single, self.vsm, self.xrd, self.sparameters, self.comparison,
+                           self.batch, self.vsm_comparison, self.vsm_batch, self.xrd_comparison,
+                           self.xrd_batch, self.sparameter_comparison, self.sparameter_batch,
+                           self.history]
         from gui.widgets.mapping_dialog import configure_mapping
-        for page in (self.single,self.comparison,self.batch):
-            page.parameters.mapping_button.clicked.connect(lambda checked=False,p=page:configure_mapping(p,p.parameters))
-        for page in (self.comparison,self.batch):
+        for page in (self.single, self.comparison, self.batch):
+            page.parameters.mapping_button.clicked.connect(lambda checked=False, p=page: configure_mapping(p, p.parameters))
+        for page in (self.comparison, self.batch):
             page.parameters.quick_preview.hide()
         for page in (self.comparison,):
             page.parameters.reuse.hide()
@@ -117,8 +128,6 @@ class MainWindow(QMainWindow):
             page.busy_changed.connect(self.update_task_lock)
             page.message.connect(self.statusBar().showMessage)
         self.settings_store = settings_store or SettingsStore()
-        self.settings = SettingsPage()
-        self.stack.addWidget(self.settings)
         self.settings.apply_requested.connect(self.save_settings)
         preferences, settings_warning = self.settings_store.load()
         self.apply_preferences(preferences)
@@ -130,8 +139,8 @@ class MainWindow(QMainWindow):
         content_layout.addWidget(self.stack)
         layout.addWidget(content, 1)
         self.setCentralWidget(body)
-        self.navigation.currentRowChanged.connect(self.stack.setCurrentIndex)
-        self.home.navigate.connect(self.navigation.setCurrentRow)
+        self.navigation.page_changed.connect(self.show_page)
+        self.home.navigate.connect(self.show_page)
         self.workspace.message.connect(self.statusBar().showMessage)
         self.single.message.connect(self.statusBar().showMessage)
         self.pending_workspace_analysis = None
@@ -148,18 +157,28 @@ class MainWindow(QMainWindow):
         self.vsm.exports_saved.connect(self.record_workspace_exports)
         self.xrd.analysis_completed.connect(self.record_workspace_xrd_run)
         self.xrd.exports_saved.connect(self.record_workspace_exports)
-        self.navigation.setCurrentRow(0)
+        self.show_page("home")
         self.statusBar().showMessage("就绪 · 缺失数据插值 OFF · 真实数据验证 PENDING")
         if settings_warning:
             self.statusBar().showMessage(settings_warning)
+
+    def show_page(self, key):
+        page = self.pages.get(key)
+        if page is None:
+            return
+        self.stack.setCurrentWidget(page)
+        if self.navigation.current_page() != key:
+            self.navigation.show_page(key)
 
     def apply_preferences(self, values):
         self.settings.populate(values)
         for page in (self.single, self.comparison, self.batch):
             page.parameters.apply_defaults(values)
-        self.sparameters.output.setText(values["output"])
-        self.vsm.output.setText(values["output"])
-        self.xrd.output.setText(values["output"])
+        for page in (self.sparameters, self.vsm, self.xrd, self.vsm_comparison, self.vsm_batch,
+                     self.xrd_comparison, self.xrd_batch, self.sparameter_comparison,
+                     self.sparameter_batch):
+            if hasattr(page, "output"):
+                page.output.setText(values["output"])
         for page in self.task_pages:
             # 交互分析按设置 DPI；手动导出至少 600 dpi，便于投稿和印刷。
             page.export_dpi = max(600, values["dpi"])
@@ -167,22 +186,23 @@ class MainWindow(QMainWindow):
         self.set_ui_mode(values.get("ui_mode", "simple"))
 
     def set_ui_mode(self, mode):
-        """日常模式隐藏 S 参数/比较/批量；VSM 与 XRD 作为主流程始终可用。"""
+        """日常模式只保留各类型单样品入口；完整模式显示比较/批量二级入口。"""
         simple = mode != "full"
         self.ui_mode = mode
         self.mode_hint.setText("DAILY WORKSPACE" if simple else "FULL WORKSPACE")
         self.side_footer.setText(
-            ("日常模式 · 工作区 / 电磁 / VSM / XRD / 历史" if simple else "完整功能 · 含 S 参数 / 比较 / 批量")
+            ("日常模式 · 工作区 / 电磁 / VSM / XRD / 历史" if simple else
+             "完整功能 · 各类型单样品 / 比较 / 批量")
             + "\n本地计算 · 数据不外传")
-        for row in (5, 6, 7):
-            self.navigation.setRowHidden(row, simple)
+        self.navigation.set_mode(not simple)
         self.home.set_simple(simple)
         for page in (self.single, self.comparison, self.batch):
             page.parameters.set_simple(simple)
         self.single.set_simple(simple)
         self.history.set_simple(simple)
-        if simple and self.navigation.currentRow() in (5, 6, 7):
-            self.navigation.setCurrentRow(0)
+        key = self.navigation.current_page()
+        if simple and key and (key.startswith("sparameter.") or key.endswith((".compare", ".batch"))):
+            self.show_page("home")
 
     def save_settings(self, values):
         if any(page.busy for page in self.task_pages):
@@ -203,7 +223,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("当前任务运行中，请完成或取消后再开始工作区分析。")
             return
         self.pending_workspace_analysis = dict(request)
-        self.navigation.setCurrentRow(2)
+        self.show_page("em.single")
         self.single.import_paths([request["path"]])
         self.statusBar().showMessage(
             f"已载入工作区测试文件：{Path(request['path']).name}；确认参数后点击“开始分析”，完成后自动登记运行。")
@@ -224,7 +244,7 @@ class MainWindow(QMainWindow):
         if self.ui_mode != "full":
             self.set_ui_mode("full")
         self.pending_workspace_analysis = dict(request)
-        self.navigation.setCurrentRow(5)
+        self.show_page("sparameter.single")
         self.sparameters.file.setText(request["path"])
         self.sparameters.name.setText(Path(request["path"]).stem)
         self.sparameters.error.clear()
@@ -245,7 +265,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("当前任务运行中，请完成或取消后再开始 VSM 分析。")
             return
         self.pending_workspace_analysis = dict(request)
-        self.navigation.setCurrentRow(3)
+        self.show_page("vsm.single")
         self.vsm.file.setText(request["path"])
         self.vsm.name.setText(Path(request["path"]).stem)
         self.vsm.error.clear()
@@ -267,7 +287,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("当前任务运行中，请完成或取消后再开始 XRD 分析。")
             return
         self.pending_workspace_analysis = dict(request)
-        self.navigation.setCurrentRow(4)
+        self.show_page("xrd.single")
         self.xrd.file.setText(request["path"])
         self.xrd.name.setText(Path(request["path"]).stem)
         self.xrd.error.clear()
@@ -322,16 +342,16 @@ class MainWindow(QMainWindow):
         if analysis_type == "s_parameters":
             if self.ui_mode != "full":
                 self.set_ui_mode("full")
-            self.navigation.setCurrentRow(5)
+            self.show_page("sparameter.single")
             self.sparameters.open_completed_run(directory)
         elif analysis_type == "vsm_hysteresis":
-            self.navigation.setCurrentRow(3)
+            self.show_page("vsm.single")
             self.vsm.open_completed_run(directory)
         elif analysis_type == "xrd_peaks":
-            self.navigation.setCurrentRow(4)
+            self.show_page("xrd.single")
             self.xrd.open_completed_run(directory)
         else:
-            self.navigation.setCurrentRow(2)
+            self.show_page("em.single")
             self.single.open_completed_run(directory)
 
     def record_workspace_exports(self, payload):
@@ -351,7 +371,7 @@ class MainWindow(QMainWindow):
         """拖拽复用与文件对话框相同的导入路径。"""
         paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
         if paths and not any(p.busy for p in self.task_pages):
-            self.navigation.setCurrentRow(2)
+            self.show_page("em.single")
             self.single.import_paths(paths)
             event.acceptProposedAction()
 

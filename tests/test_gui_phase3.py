@@ -1,4 +1,4 @@
-"""Phase 3 编排、取消、只读历史与 Qt 信号验收。"""
+﻿"""Phase 3 编排、取消、只读历史与 Qt 信号验收。"""
 import hashlib
 import json
 from dataclasses import replace
@@ -188,6 +188,6 @@ def test_history_bad_json(qtbot,tmp_path):
 def test_phase3_navigation(qtbot):
     from gui.main_window import MainWindow
     window=MainWindow(); qtbot.addWidget(window)
-    window.navigation.setCurrentRow(7); assert window.stack.currentWidget() is window.batch
-    window.navigation.setCurrentRow(8); assert window.stack.currentWidget() is window.history
-    assert len(window.task_pages)==7
+    window.show_page("em.batch"); assert window.stack.currentWidget() is window.batch
+    window.show_page("history"); assert window.stack.currentWidget() is window.history
+    assert len(window.task_pages)==13

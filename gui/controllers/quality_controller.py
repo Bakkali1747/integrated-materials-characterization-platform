@@ -2,6 +2,18 @@
 
 
 def quality_rows(record):
+    kind = record.get("analysis_kind")
+    if kind in {"vsm_hysteresis", "xrd_peaks", "s_parameters"}:
+        rows = [("Analysis kind", "PASS", str(kind)),
+                ("Run status", "PASS" if record.get("status") in {"success", "not_computable"} else "WARNING",
+                 str(record.get("status", "unknown"))),
+                ("Validation", "PENDING", str(record.get("validation_status", "pending")))]
+        if record.get("error"):
+            rows.append(("Analysis", "FAIL" if record.get("status") == "failed" else "WARNING",
+                         record["error"]))
+        for warning in record.get("warnings", []):
+            rows.append(("Data warning", "WARNING", str(warning)))
+        return rows
     parsed = bool(record.get("source", {}).get("parser")) and bool(record.get("frequency_points"))
     state = "PASS" if parsed else "PENDING"
     evidence = "正式严格 parser 已通过" if parsed else "未取得完整解析证据"

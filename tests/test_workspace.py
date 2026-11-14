@@ -1,4 +1,4 @@
-"""Phase A 项目、样品、测试和分析运行工作区，以及 Phase B 电磁分析接入。"""
+﻿"""Phase A 项目、样品、测试和分析运行工作区，以及 Phase B 电磁分析接入。"""
 
 import hashlib
 import json
@@ -401,7 +401,7 @@ def test_main_window_registers_completed_workspace_analysis(qtbot, tmp_path, fra
     measurement = window.workspace.add_measurement("electromagnetic", [source])
 
     window.workspace.start_measurement_analysis()
-    assert window.navigation.currentRow() == 2
+    assert window.navigation.current_page() == "em.single"
     assert window.pending_workspace_analysis["measurement_id"] == measurement.measurement_id
     qtbot.waitUntil(lambda: not window.single.busy, timeout=30000)
 
@@ -433,7 +433,7 @@ def test_main_window_registers_workspace_sparameter_run_and_exports(qtbot, tmp_p
     measurement = window.workspace.add_measurement("electromagnetic", [source])
 
     window.workspace.start_measurement_sparameter_analysis()
-    assert window.navigation.currentRow() == 5
+    assert window.navigation.current_page() == "sparameter.single"
     assert window.pending_workspace_analysis["kind"] == "s_parameters"
     assert window.pending_workspace_analysis["measurement_id"] == measurement.measurement_id
     assert window.sparameters.file.text() == str(source)

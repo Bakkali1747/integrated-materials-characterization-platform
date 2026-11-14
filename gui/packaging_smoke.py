@@ -1,4 +1,4 @@
-"""冻结版验收入口；走真实 Qt 导入/分析操作，不需要外部 Python。"""
+﻿"""冻结版验收入口；走真实 Qt 导入/分析操作，不需要外部 Python。"""
 
 import json
 import math
@@ -221,7 +221,7 @@ def run_smoke(app, output):
                 compare.parameters.output.setText(str(output))
                 compare.parameters.fields["thickness_max"].setValue(1.1)
                 compare.parameters.fields["thickness_step"].setValue(.1)
-                window.navigation.setCurrentRow(6)
+                window.show_page("em.compare")
                 compare.start_comparison()
                 phase = "comparison"
             elif phase == "comparison":
@@ -239,7 +239,7 @@ def run_smoke(app, output):
                 bpage.parameters.output.setText(str(output / "batch-output"))
                 bpage.parameters.fields["thickness_max"].setValue(1.1)
                 bpage.parameters.fields["thickness_step"].setValue(.1)
-                window.navigation.setCurrentRow(7)
+                window.show_page("em.batch")
                 bpage.scan(batch_source)
                 phase = "batch-scan"
             elif phase == "batch-scan":
@@ -253,7 +253,7 @@ def run_smoke(app, output):
                     raise RuntimeError(window.batch.error.text() or "批量失败隔离验收失败")
                 report["batch"] = {k:result["record"][k] for k in ("status", "success_count", "failed_count")}
                 window.grab().save(str(output / "client-batch.png"))
-                window.navigation.setCurrentRow(8)
+                window.show_page("history")
                 window.history.discovered([result["directory"] / "batch_record.json"])
                 window.history.load_selected()
                 phase = "history"
@@ -274,7 +274,7 @@ def run_smoke(app, output):
                 if report["quality_control"] != "PASS":
                     raise RuntimeError("Quality Control 未展示")
                 window.grab().save(str(output / "client-history.png"))
-                window.navigation.setCurrentRow(9)
+                window.show_page("settings")
                 analysis_dpi = page.completed["record"]["configuration"]["figure_dpi"]
                 window.settings.dpi.setValue(120)
                 window.settings.format.setCurrentText("svg")

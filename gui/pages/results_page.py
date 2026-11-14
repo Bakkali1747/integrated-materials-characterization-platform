@@ -153,7 +153,19 @@ class ResultsPage(TaskPage):
         from export.report import export_report
         directory = self.completed["directory"]
         base = Path(path)
-        self.launch(lambda p, c: export_report(directory, base, formats=("docx", "pdf")),
+        kind = self.completed["record"].get("analysis_kind")
+        if kind == "vsm_hysteresis":
+            from export.vsm_report import export_vsm_report
+            exporter = export_vsm_report
+        elif kind == "xrd_peaks":
+            from export.xrd_report import export_xrd_report
+            exporter = export_xrd_report
+        elif kind == "s_parameters":
+            self.show_error("S 参数专用报告尚未实现；请使用 S 参数页面的图片导出或可分享记录。")
+            return
+        else:
+            exporter = export_report
+        self.launch(lambda p, c: exporter(directory, base, formats=("docx", "pdf")),
                     lambda files: self.message.emit("报告已生成：" + "；".join(str(item) for item in files)))
 
     def export_share(self):

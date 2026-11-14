@@ -14,7 +14,7 @@ from gui.widgets.status_badge import StatusBadge
 
 
 class HomePage(QWidget):
-    navigate = Signal(int)
+    navigate = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -24,7 +24,7 @@ class HomePage(QWidget):
         title = QLabel("综合材料表征分析平台")
         title.setObjectName("heroTitle")
         layout.addWidget(title)
-        self.subtitle = QLabel("本地科研工作区 · 项目 / 样品 / 测试 / 分析运行 / 电磁 / VSM / XRD / 历史\n"
+        self.subtitle = QLabel("本地科研工作区 · 项目 / 样品 / 测试 / 分析运行 / 电磁 / VSM / XRD / S 参数\n"
                                "Phase D 已接入 XRD 峰分析；所有结果保持待验证状态")
         self.subtitle.setObjectName("heroSubtitle")
         self.subtitle.setWordWrap(True)
@@ -36,23 +36,21 @@ class HomePage(QWidget):
         self.actions_grid = QGridLayout()
         self.actions_grid.setSpacing(10)
         layout.addLayout(self.actions_grid)
-        for number, (text, detail, index) in enumerate([
-            ("项目与样品", "创建项目、样品并关联不同类型的测试", 1),
-            ("电磁性能", "ε/μ → RL 曲线、二维图、EAB 与科研图", 2),
-            ("VSM 分析", "磁滞回线、Hc / Mr / Ms 与背景扣除", 3),
-            ("XRD 分析", "峰检测、FWHM、Scherrer 尺寸与参考峰匹配", 4),
-            ("S 参数分析", "幅度 / dB / 相位 / RTA / SE / Smith", 5),
-            ("多样品比较", "十项指标与原始网格比较", 6),
-            ("批量分析", "同目录来源分组与失败隔离", 7),
-            ("打开历史结果", "只读摘要、QC、产物核验与报告", 8),
-            ("设置", "界面模式、默认厚度、DPI 与输出目录", 9),
+        for number, (text, detail, key) in enumerate([
+            ("项目与样品", "创建项目、样品并关联不同类型的测试", "workspace"),
+            ("电磁性能", "ε/μ → RL 曲线、二维图、EAB 与科研图", "em.single"),
+            ("VSM 分析", "磁滞回线、Hc / Mr / Ms 与背景扣除", "vsm.single"),
+            ("XRD 分析", "峰检测、Pseudo-Voigt 拟合、Scherrer 与参考相", "xrd.single"),
+            ("S 参数分析", "幅度 / dB / 相位 / RTA / SE / Smith", "sparameter.single"),
+            ("打开历史结果", "只读摘要、QC、产物核验与类型化报告", "history"),
+            ("设置", "界面模式、默认厚度、DPI 与输出目录", "settings"),
         ], 1):
             button = QPushButton(f"{number:02d}  {text}\n{detail}")
             button.setObjectName("quickAction")
             button.setMinimumHeight(62)
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            button.clicked.connect(lambda checked=False, i=index: self.navigate.emit(i))
-            self.actions.append((button, index, text, detail))
+            button.clicked.connect(lambda checked=False, k=key: self.navigate.emit(k))
+            self.actions.append((button, key, text, detail))
         self._relayout(False)
         section = QLabel("验证状态")
         section.setObjectName("sectionTitle")
@@ -84,22 +82,23 @@ class HomePage(QWidget):
         layout.addStretch()
 
     def set_simple(self, simple):
-        """日常模式隐藏 S 参数 / 比较 / 批量入口。"""
-        for button, index, _, _ in self.actions:
-            button.setVisible(not simple or index not in {5, 6, 7})
+        """日常模式隐藏 S 参数入口；比较/批量在完整模式下经类型菜单进入。"""
+        for button, key, _, _ in self.actions:
+            button.setVisible(not simple or key != "sparameter.single")
         self._relayout(simple)
         self.subtitle.setText(
-            "本地科研工作区 · 项目 / 样品 / 电磁 / VSM / XRD / 历史\nPhase D 已接入 XRD 峰分析；缺失数据插值固定 OFF"
+            "本地科研工作区 · 项目 / 样品 / 电磁 / VSM / XRD / 历史\n"
+            "Phase D 已接入 XRD 峰分析；缺失数据插值固定 OFF"
             if simple else
-            "本地科研工作区 · 项目 / 样品 / 测试 / 分析运行 / 电磁 / VSM / XRD / 历史\n"
-            "Phase D 已接入 XRD 峰分析；所有结果保持待验证状态")
+            "本地科研工作区 · 项目 / 样品 / 测试 / 分析运行 / 电磁 / VSM / XRD / S 参数\n"
+            "完整模式：每种数据类型的单样品、比较与批量入口在左侧二级菜单")
 
     def _relayout(self, simple):
         """只把当前可见入口排成两列；奇数个时最后一张横跨两列。"""
         for button, _, _, _ in self.actions:
             self.actions_grid.removeWidget(button)
-        visible = [(button, index, text, detail) for button, index, text, detail in self.actions
-                   if not simple or index not in {5, 6, 7}]
+        visible = [(button, key, text, detail) for button, key, text, detail in self.actions
+                   if not simple or key != "sparameter.single"]
         for position, (button, _, text, detail) in enumerate(visible):
             button.setText(f"{position + 1:02d}  {text}\n{detail}")
             if position == len(visible) - 1 and len(visible) % 2:

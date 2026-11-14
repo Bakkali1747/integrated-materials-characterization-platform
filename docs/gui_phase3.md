@@ -28,7 +28,7 @@
 
 ## 启动与阶段边界
 
-独立客户端：安装 `MaterialsCharacterizationPlatform-Setup-0.22.0-win64.exe` 后，从桌面快捷方式打开。
+独立客户端：安装 `MaterialsCharacterizationPlatform-Setup-0.23.0-win64.exe` 后，从桌面快捷方式打开。
 
 源码启动：`.\.venv\Scripts\python.exe run_gui.py`。CLI `run_batch.py` 继续可用。
 

@@ -29,9 +29,11 @@ def history_index(folder, progress, cancelled):
         if cancelled(): raise Cancelled("历史索引已取消")
         try:
             record=json.loads(path.read_text(encoding="utf-8"))
-            label=f"{record.get('sample','批量/比较/对照')} | {record.get('analysis_date','')} | {record.get('status','unknown')}"
+            kind=record.get("analysis_kind","electromagnetic_rl")
+            label=f"{record.get('sample','批量/比较/对照')} | {kind} | {record.get('analysis_date','')} | {record.get('status','unknown')}"
             search=label+" "+json.dumps(record.get("configuration",{}),ensure_ascii=False)+" "+str(path.parent)
-            entries.append(dict(path=path,label=label,search=search,status=record.get("status","unknown")))
+            entries.append(dict(path=path,label=label,search=search,status=record.get("status","unknown"),
+                                kind=kind))
         except (ValueError,OSError,AttributeError):
             entries.append(dict(path=path,label=f"记录读取失败 | {path.parent}",search=str(path),status="invalid"))
     return entries

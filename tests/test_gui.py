@@ -1,4 +1,4 @@
-"""GUI 流程/信号/科学 API 等价性测试；不比较像素。"""
+﻿"""GUI 流程/信号/科学 API 等价性测试；不比较像素。"""
 
 import hashlib
 import json
@@ -48,15 +48,15 @@ def test_main_window_start_and_navigation(window, qtbot):
     assert window.minimumWidth() == 1200
     assert window.minimumHeight() == 750
     assert "综合材料表征分析平台" in window.windowTitle()
-    window.navigation.setCurrentRow(1)
+    window.show_page("workspace")
     assert window.stack.currentWidget() is window.workspace
-    window.navigation.setCurrentRow(2)
+    window.show_page("em.single")
     assert window.stack.currentWidget() is window.single
-    window.navigation.setCurrentRow(3)
+    window.show_page("vsm.single")
     assert window.stack.currentWidget() is window.vsm
-    window.navigation.setCurrentRow(4)
+    window.show_page("xrd.single")
     assert window.stack.currentWidget() is window.xrd
-    window.navigation.setCurrentRow(5)
+    window.show_page("sparameter.single")
     assert "S 参数" in window.stack.currentWidget().text()
 
 

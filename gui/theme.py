@@ -38,6 +38,18 @@ QListWidget#nav::item {
 QListWidget#nav::item:hover { background: #1B2C48; color: #F8FAFC; }
 QListWidget#nav::item:selected { background: #1E40AF; color: #FFFFFF; }
 QListWidget#nav:focus { border: none; outline: none; }
+QTreeWidget#nav {
+    background: transparent; border: none; outline: 0;
+    color: #C7D2E3; font-size: 10pt;
+}
+QTreeWidget#nav::item {
+    height: 32px; padding-left: 6px; margin: 1px 8px;
+    border-radius: 7px; border: none;
+}
+QTreeWidget#nav::item:hover { background: #1B2C48; color: #F8FAFC; }
+QTreeWidget#nav::item:selected { background: #1E40AF; color: #FFFFFF; }
+QTreeWidget#nav::branch { background: transparent; }
+QTreeWidget#nav:focus { border: none; outline: none; }
 
 QPushButton {
     background: #FFFFFF; color: #1E293B;

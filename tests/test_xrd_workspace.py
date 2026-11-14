@@ -1,4 +1,4 @@
-"""XRD 与工作区、GUI 的闭环：自动登记、不可计算状态、载入分发。"""
+﻿"""XRD 与工作区、GUI 的闭环：自动登记、不可计算状态、载入分发。"""
 
 import numpy as np
 
@@ -80,7 +80,7 @@ def test_main_window_registers_xrd_run_and_dispatches_loading(qtbot, tmp_path, m
     measurement = window.workspace.add_measurement("xrd", [source])
 
     window.workspace.start_measurement_xrd_analysis()
-    assert window.navigation.currentRow() == 4
+    assert window.navigation.current_page() == "xrd.single"
     assert window.pending_workspace_analysis["kind"] == "xrd_peaks"
     assert window.xrd.file.text() == str(source)
     assert window.xrd.two_theta_column.currentText() == "two_theta_deg"
@@ -96,9 +96,9 @@ def test_main_window_registers_xrd_run_and_dispatches_loading(qtbot, tmp_path, m
     monkeypatch.setattr(window.xrd, "open_completed_run", lambda directory: calls.append(("xrd", directory)))
     monkeypatch.setattr(window.vsm, "open_completed_run", lambda directory: calls.append(("vsm", directory)))
     window.open_workspace_run({"directory": "x-dir", "analysis_type": "xrd_peaks"})
-    assert window.navigation.currentRow() == 4
+    assert window.navigation.current_page() == "xrd.single"
     window.open_workspace_run({"directory": "v-dir", "analysis_type": "vsm_hysteresis"})
-    assert window.navigation.currentRow() == 3
+    assert window.navigation.current_page() == "vsm.single"
     assert calls == [("xrd", "x-dir"), ("vsm", "v-dir")]
 
 
