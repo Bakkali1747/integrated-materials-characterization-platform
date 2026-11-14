@@ -1,5 +1,10 @@
 # 变更记录
 
+## v0.24.2 — XRD 摘要顶部显示 COD 候选
+
+- XRD 摘要新增“物相库”行，直接显示 COD 库相数、首位候选与分数；详细候选仍保留在下方与 `phase_library_matching.json`。
+- 437 项测试通过。
+
 ## v0.24.1 — 无 COD 库环境修正
 
 - 当 COD 物相库未安装或不可用时，不再把可选库缺失记为数据警告；XRD 结果保持 PENDING，并写 `quality.phase_library.source=unavailable`。

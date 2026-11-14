@@ -2,7 +2,7 @@
 
 开发者接手、架构、发布流程和后续路线见 [项目交接文档](docs/PROJECT_HANDOFF.md)。
 
-当前为 v0.24.1（Phase D 完成）。v0.13.0 建立了以样品为中心的本地工作区；v0.14.0 接入电磁分析；v0.15.0 增加 schema v1 与 S 参数运行；v0.16.0 新增 VSM；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 新增 XRD 峰分析；v0.19.0 支持真实 Bruker RAW4；v0.20.0 直接解析二进制 RAW4；v0.21.0 增加 Pseudo-Voigt 拟合与仪器展宽；v0.22.0 增加 d 间距参考卡片与多相筛查；v0.23.0 按数据类型重组导航；v0.23.1 类型菜单默认折叠；v0.23.2 更换应用图标；v0.23.3 优化 XRD 交互图谱；v0.24.0 内置 COD 无机物相库；v0.24.1 修复无库环境下的验证状态。原始文件不会被复制、移动或修改。使用说明见 [COD 自动物相匹配](docs/phase_library.md)、[类型工作区](docs/type_workspaces.md)、[XRD 峰分析](docs/xrd.md)、[VSM 磁滞回线](docs/vsm.md) 与 [项目与样品工作区](docs/workspace.md)。
+当前为 v0.24.2（Phase D 完成）。v0.13.0 建立了以样品为中心的本地工作区；v0.14.0 接入电磁分析；v0.15.0 增加 schema v1 与 S 参数运行；v0.16.0 新增 VSM；v0.17.0 支持 Lake Shore `.dat`；v0.18.0 新增 XRD 峰分析；v0.19.0 支持真实 Bruker RAW4；v0.20.0 直接解析二进制 RAW4；v0.21.0 增加 Pseudo-Voigt 拟合与仪器展宽；v0.22.0 增加 d 间距参考卡片与多相筛查；v0.23.0 按数据类型重组导航；v0.23.1 类型菜单默认折叠；v0.23.2 更换应用图标；v0.23.3 优化 XRD 交互图谱；v0.24.0 内置 COD 无机物相库；v0.24.1 修复无库环境状态；v0.24.2 在摘要顶部显示 COD 候选。原始文件不会被复制、移动或修改。使用说明见 [COD 自动物相匹配](docs/phase_library.md)、[类型工作区](docs/type_workspaces.md)、[XRD 峰分析](docs/xrd.md)、[VSM 磁滞回线](docs/vsm.md) 与 [项目与样品工作区](docs/workspace.md)。
 
 产品已覆盖 PRD 的电磁、VSM、XRD 三个表征阶段，并把 S 参数作为独立实测类型；Rietveld 精修、任意厂商专有二进制格式和外部物相数据库仍不在当前范围。
 
@@ -12,7 +12,7 @@
 
 现有电磁科学核心保持不变：分析缓存加入引擎版本，算法或解析语义升级后旧结果自动重算；Excel 列映射预览与正式解析使用相同工作表和表头行。默认“日常模式”，自动从同目录 S 参数夹具读取厚度 D；见 [界面主题](docs/ui_theme.md) 与 [日常流程](docs/daily_workflow.md)。CLI 与 GUI 共用分析服务，摘要、累计覆盖、验证状态和 `thickness_summary.csv` 由同一段代码生成；真实数据虚部定义与商业软件对照仍待外部验证。
 
-无需 Python 的客户端：`output/releases/MaterialsCharacterizationPlatform-Setup-0.24.1-win64.exe`，见 [客户端使用说明](docs/client_usage.md)。发布构建来自干净提交；具体提交见安装目录 `_internal/build_info.json`。
+无需 Python 的客户端：`output/releases/MaterialsCharacterizationPlatform-Setup-0.24.2-win64.exe`，见 [客户端使用说明](docs/client_usage.md)。发布构建来自干净提交；具体提交见安装目录 `_internal/build_info.json`。
 
 启动桌面界面：`.\.venv\Scripts\python.exe run_gui.py`。新环境安装 `requirements-gui.txt`。具体步骤和阶段边界见 [GUI 使用说明](docs/gui_usage.md)。
 

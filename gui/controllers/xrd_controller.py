@@ -64,6 +64,20 @@ def _fmt_fit(value):
     return "—" if value is None else f"{float(value):.6g}"
 
 
+def _library_summary(quality, matches):
+    info = quality.get("phase_library") or {}
+    if not info or info.get("source") == "unavailable":
+        return "未启用/不可用"
+    text = f"COD {info.get('phase_count', '?')} 相"
+    if matches:
+        top = matches[0]
+        name = top.get("mineral") or top.get("formula") or f"COD {top['phase_id']}"
+        text += f"；首位 {name}（score {top['score']:.3f}）"
+    else:
+        text += "；未检测到候选"
+    return text
+
+
 def xrd_summary_text(record, metrics):
     """生成界面摘要；缺失值明确写不可计算。"""
     background = metrics.get("background") or {}
@@ -82,6 +96,7 @@ def xrd_summary_text(record, metrics):
         f"仪器展宽：{instrument.get('mode', 'none')}"
         + (f"（常数 {instrument.get('fwhm_deg')}°）" if instrument.get("mode") == "constant" else ""),
         f"检测峰：{len(peaks)} 个",
+        f"物相库：{_library_summary(quality, metrics.get('library_matches') or [])}",
         f"状态：{record.get('status')}；验证：{record.get('validation_status')}",
     ]
     for peak in peaks[:20]:
