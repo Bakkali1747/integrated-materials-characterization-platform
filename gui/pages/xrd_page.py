@@ -3,7 +3,8 @@
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QTextBrowser,
 )
 
@@ -203,8 +205,23 @@ class XrdPage(TaskPage):
                                               "d (Å)", "Scherrer (nm)", "R²", "拟合"])
         self.peaks.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.peaks.horizontalHeader().setStretchLastSection(True)
-        self.peaks.setMaximumHeight(180)
-        self.layout.addWidget(self.peaks)
+        self.candidates = QTableWidget(0, 8)
+        self.candidates.setHorizontalHeaderLabels(["相/矿物", "化学式", "COD ID", "score", "参考覆盖",
+                                                   "实测覆盖", "匹配行", "空间群"])
+        self.candidates.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.candidates.horizontalHeader().setStretchLastSection(True)
+        self.candidates.setToolTip("双击候选行打开 COD 条目页面；结果仅为候选相筛查")
+        self.candidates.cellDoubleClicked.connect(self.open_cod_card)
+        self.combinations = QTableWidget(0, 6)
+        self.combinations.setHorizontalHeaderLabels(["组合", "覆盖峰", "覆盖率", "平均分数", "未覆盖峰", "相数"])
+        self.combinations.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.combinations.horizontalHeader().setStretchLastSection(True)
+        self.result_tabs = QTabWidget()
+        self.result_tabs.addTab(self.peaks, "峰表")
+        self.result_tabs.addTab(self.candidates, "COD 候选")
+        self.result_tabs.addTab(self.combinations, "多相组合")
+        self.result_tabs.setMaximumHeight(200)
+        self.layout.addWidget(self.result_tabs)
 
         row = QHBoxLayout()
         self.save_button = QPushButton("保存当前图")
@@ -368,6 +385,29 @@ class XrdPage(TaskPage):
                 self.peaks.setItem(row_index, column_index, QTableWidgetItem(text))
             converged = peak.get("fit_converged")
             self.peaks.setItem(row_index, 8, QTableWidgetItem("是" if converged else "否（插值）"))
+        matches = metrics.get("library_matches") or []
+        self.candidates.setRowCount(len(matches))
+        for row_index, match in enumerate(matches):
+            name = match.get("mineral") or match.get("formula") or f"COD {match['phase_id']}"
+            values = [name, match.get("formula") or "—", match.get("phase_id"),
+                      f"{match['score']:.3f}", f"{match['reference_coverage']:.1%}",
+                      f"{match['observed_coverage']:.1%}",
+                      f"{match['matched_count']}/{match['reference_count']}",
+                      match.get("spacegroup") or "—"]
+            for column_index, value in enumerate(values):
+                self.candidates.setItem(row_index, column_index, QTableWidgetItem(str(value)))
+        combinations = metrics.get("library_combinations") or []
+        self.combinations.setRowCount(len(combinations))
+        for row_index, combo in enumerate(combinations):
+            unmatched = ", ".join(f"{item['two_theta_deg']:.2f}°" for item in combo.get("unmatched_observed", []))
+            values = [" + ".join(combo["phases"]),
+                      f"{combo['matched_observed_count']}/{combo['observed_count']}",
+                      f"{combo['observed_coverage']:.1%}", f"{combo['mean_phase_score']:.3f}",
+                      unmatched or "—", combo["phase_count"]]
+            for column_index, value in enumerate(values):
+                self.combinations.setItem(row_index, column_index, QTableWidgetItem(str(value)))
+        self.result_tabs.setTabText(1, f"COD 候选 ({len(matches)})")
+        self.result_tabs.setTabText(2, f"多相组合 ({len(combinations)})")
         figures = dict(result["figures"])
         if figures.get("xrd_pattern") is not None:
             figures["xrd_pattern"] = xrd_figure(result, "xrd_pattern", 100, compact=True)
@@ -377,6 +417,14 @@ class XrdPage(TaskPage):
         else:
             self.badge.set_status("PENDING", "XRD 峰分析完成；外部参考核对仍待进行。")
         self.message.emit(f"XRD 分析完成：{result['directory']}")
+
+    def open_cod_card(self, row, column):
+        item = self.candidates.item(row, 2)
+        if item is None:
+            return
+        phase_id = item.text().strip()
+        if phase_id.isdigit():
+            QDesktopServices.openUrl(QUrl(f"https://www.crystallography.net/cod/{phase_id}.html"))
 
     def preview_figure(self, key):
         if not self.completed or self.busy:
