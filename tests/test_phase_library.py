@@ -4,8 +4,9 @@ import json
 import sqlite3
 
 import numpy as np
+import pytest
 
-from core.phase_library import PhaseLibrary
+from core.phase_library import PhaseLibrary, rank_combinations
 from core.xrd_service import XRDConfig, execute
 
 
@@ -51,6 +52,22 @@ def test_phase_library_respects_tolerance(tmp_path):
     library = PhaseLibrary(write_library(tmp_path / "library.sqlite"))
     peaks = [{"center_deg": 20.0, "relative_intensity_pct": 100.0, "d_angstrom": 4.4}]
     assert library.search(peaks, 1.5406, tolerance_deg=.1) == []
+
+
+def test_phase_library_ranks_multi_phase_combination(tmp_path):
+    library = PhaseLibrary(write_library(tmp_path / "library.sqlite"))
+    peaks = [
+        {"center_deg": 44.7, "relative_intensity_pct": 100.0, "d_angstrom": 2.026},
+        {"center_deg": 65.03, "relative_intensity_pct": 20.0, "d_angstrom": 1.433},
+        {"center_deg": 82.35, "relative_intensity_pct": 10.0, "d_angstrom": 1.170},
+        {"center_deg": 26.64, "relative_intensity_pct": 30.0, "d_angstrom": 3.343},
+        {"center_deg": 20.86, "relative_intensity_pct": 8.0, "d_angstrom": 4.257},
+    ]
+    matches = library.search(peaks, 1.5406, tolerance_deg=.1)
+    assert {match["formula"] for match in matches} >= {"Fe", "SiO2"}
+    combinations = rank_combinations(matches, peaks)
+    assert combinations[0]["phase_count"] == 2
+    assert combinations[0]["observed_coverage"] == pytest.approx(1.0)
 
 
 def test_xrd_service_records_phase_library_matches(tmp_path):

@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 from core.parser import decode_text
+from core.phase_library import rank_combinations as rank_library_combinations
 from core.xrd_fit import fit_pseudo_voigt
 
 SUPPORTED_SUFFIXES = {".csv", ".txt", ".xy", ".dat", ".raw"}
@@ -904,10 +905,12 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
                                 wavelength_angstrom) if reference else []
     combinations = _rank_phase_combinations(peaks, matching) if matching else []
     library_matches = []
+    library_combinations = []
     library_info = None
     if phase_library is not None and peaks:
         library_matches = phase_library.search(
             peaks, float(wavelength_angstrom), tolerance_deg=phase_match_tolerance_deg)
+        library_combinations = rank_library_combinations(library_matches, peaks)
         library_info = {"source": "COD", "license": "CC-BY-4.0",
                         "phase_count": phase_library.count()}
     status = "success" if peaks else "not_computable"
@@ -930,6 +933,7 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
         "phase_combination_count": len(combinations),
         "phase_library": library_info,
         "phase_library_match_count": len(library_matches),
+        "phase_library_combination_count": len(library_combinations),
         "wavelength_angstrom": float(wavelength_angstrom),
         "k_factor": float(k_factor), "status": status,
     }
@@ -939,6 +943,7 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
             "参考相匹配是筛查，不是物相鉴定。")
     return {"status": status, "peaks": peaks, "reference_matching": matching,
             "phase_combinations": combinations, "library_matches": library_matches,
+            "library_combinations": library_combinations,
             "background": background_info, "quality": quality, "warnings": warnings,
             "corrected_intensity": corrected, "background_intensity": background,
             "note": note}

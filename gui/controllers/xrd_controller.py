@@ -31,6 +31,7 @@ def analyze_xrd_request(config: XRDConfig, progress=lambda percent, text: None, 
                "reference_matching": result.analysis["reference_matching"],
                "phase_combinations": result.analysis.get("phase_combinations", []),
                "library_matches": result.analysis.get("library_matches", []),
+               "library_combinations": result.analysis.get("library_combinations", []),
                "background": result.analysis["background"], "quality": result.analysis["quality"],
                "warnings": result.analysis["warnings"], "note": result.analysis["note"]}
     figures = {}
@@ -130,6 +131,13 @@ def xrd_summary_text(record, metrics):
             lines.append(f"  {name}{formula}：score={match['score']:.3f}；"
                          f"匹配 {match['matched_count']}/{match['reference_count']} 行；"
                          f"实测覆盖 {match['observed_coverage']:.1%}")
+    library_combinations = metrics.get("library_combinations") or []
+    if library_combinations:
+        lines += ["", "COD 多相组合（覆盖度，仅筛查）："]
+        for combo in library_combinations:
+            lines.append(f"  {' + '.join(combo['phases'])}：覆盖 "
+                         f"{combo['matched_observed_count']}/{combo['observed_count']} 峰；"
+                         f"权重 {combo['observed_coverage']:.1%}")
     warnings = list(record.get("warnings") or [])
     if warnings:
         lines += ["", "警告：", *warnings]

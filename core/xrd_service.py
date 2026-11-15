@@ -213,6 +213,7 @@ def _analysis_payload(analysis: dict) -> dict:
             "reference_matching": analysis["reference_matching"],
             "phase_combinations": analysis.get("phase_combinations", []),
             "library_matches": analysis.get("library_matches", []),
+            "library_combinations": analysis.get("library_combinations", []),
             "background": analysis["background"], "quality": analysis["quality"],
             "warnings": analysis["warnings"], "note": analysis["note"]}
 
@@ -310,6 +311,7 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
             (directory / "phase_library_matching.json").write_text(
                 json.dumps(json_safe({
                     "matches": analysis["library_matches"],
+                    "combinations": analysis.get("library_combinations", []),
                     "library": analysis["quality"].get("phase_library"),
                     "screening_only": True,
                 }), ensure_ascii=False, indent=2),
@@ -324,6 +326,7 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
             "reference_matching": analysis["reference_matching"],
             "phase_combinations": analysis.get("phase_combinations", []),
             "library_matches": analysis.get("library_matches", []),
+            "library_combinations": analysis.get("library_combinations", []),
             "warnings": analysis["warnings"],
             "artifacts_sha256": artifact_hashes(directory),
         })

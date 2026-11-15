@@ -19,7 +19,8 @@ v0.24.0 起，XRD 页面默认启用 **COD 无机物相库** 自动 search-match
    - `observed_coverage`：实测峰强度加权覆盖率；
    - `score = 0.6 × reference_coverage + 0.4 × observed_coverage`。
 4. 按分数返回前 10 个候选，写入 `phase_library_matching.json`，并在界面摘要和报告中显示前 8 个。
-5. 页面可取消勾选“自动匹配 COD 物相库”关闭。
+5. 对前 10 个候选再做多相组合（最多 3 相），按实测峰覆盖度排序，输出前 3 个组合；同一实测峰不重复计数。
+6. 页面可取消勾选“自动匹配 COD 物相库”关闭。
 
 ## 输出
 
@@ -41,6 +42,9 @@ phase_library_matching.json
     }
   ],
   "library": {"source": "COD", "license": "CC-BY-4.0", "phase_count": 88311},
+  "combinations": [
+    {"phases": ["Fe", "Fe3O4"], "observed_coverage": 0.92, "matched_observed_count": 7}
+  ],
   "screening_only": true
 }
 ```

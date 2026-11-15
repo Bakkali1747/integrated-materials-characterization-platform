@@ -108,6 +108,10 @@ def _report_data(directory):
         results.append((f"COD 候选 {name}",
                         f"score={match['score']:.3f}；匹配 {match['matched_count']}/{match['reference_count']}；"
                         f"实测覆盖 {match['observed_coverage']:.1%}（仅筛查）"))
+    for combo in (metrics.get("library_combinations") or [])[:3]:
+        results.append((f"COD 组合 {' + '.join(combo['phases'])}",
+                        f"覆盖 {combo['matched_observed_count']}/{combo['observed_count']} 峰；"
+                        f"权重 {combo['observed_coverage']:.1%}（仅筛查）"))
     warnings = list(record.get("warnings") or [])
     artifacts = record.get("artifacts_sha256", {})
     provenance = [

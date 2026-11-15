@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 import sqlite3
 import zipfile
@@ -169,6 +170,7 @@ class PhaseLibrary:
                 matched_lines.append({
                     "reference_two_theta_deg": angle,
                     "reference_d_angstrom": d_value,
+                    "observed_index": index,
                     "observed_two_theta_deg": observed[index]["two_theta"],
                     "delta_deg": float(observed[index]["two_theta"] - angle),
                     "reference_relative_intensity": intensity,
@@ -193,3 +195,43 @@ class PhaseLibrary:
             })
         results.sort(key=lambda item: (item["score"], item["matched_observed_count"]), reverse=True)
         return results[:top_n]
+
+
+def rank_combinations(matches, peaks, *, max_phases=3, top_n=3):
+    """对 COD 候选做实测峰覆盖组合排序；同一实测峰不重复计数。"""
+    candidates = [match for match in matches if match.get("matched_lines")]
+    if not candidates:
+        return []
+    weights = [max(0.0, float(peak.get("relative_intensity_pct", 0.0))) for peak in peaks]
+    total = sum(weights) or 1.0
+    combinations = []
+    limit = min(max_phases, len(candidates))
+    for count in range(1, limit + 1):
+        for group in itertools.combinations(candidates, count):
+            covered = {}
+            for match in group:
+                for line in match["matched_lines"]:
+                    index = line.get("observed_index")
+                    if index is None:
+                        continue
+                    covered[index] = max(covered.get(index, 0.0), float(line["observed_relative_intensity"]))
+            coverage = sum(covered.values()) / total
+            combinations.append({
+                "phase_ids": [match["phase_id"] for match in group],
+                "phases": [match.get("mineral") or match.get("formula") or f"COD {match['phase_id']}"
+                           for match in group],
+                "phase_count": count,
+                "matched_observed_count": len(covered),
+                "observed_count": len(peaks),
+                "observed_coverage": float(coverage),
+                "mean_phase_score": float(sum(match["score"] for match in group) / count),
+                "unmatched_observed": [
+                    {"index": index, "two_theta_deg": peak.get("center_deg", peak.get("two_theta_deg")),
+                     "relative_intensity_pct": peak.get("relative_intensity_pct")}
+                    for index, peak in enumerate(peaks) if index not in covered
+                ],
+                "screening_only": True,
+            })
+    combinations.sort(key=lambda item: (item["observed_coverage"], -item["phase_count"],
+                                        item["mean_phase_score"]), reverse=True)
+    return combinations[:top_n]
