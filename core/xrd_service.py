@@ -49,6 +49,7 @@ class XRDConfig:
     auto_phase_match: bool = True
     phase_library_path: Path | None = None
     phase_match_tolerance_deg: float = 0.2
+    phase_elements: str = ""
     dpi: int = 600
     entry_point: str = "xrd"
     extra_configuration: dict = field(default_factory=dict)
@@ -85,6 +86,7 @@ def _configuration(config: XRDConfig) -> dict:
         "auto_phase_match": config.auto_phase_match,
         "phase_library_path": str(config.phase_library_path) if config.phase_library_path else None,
         "phase_match_tolerance_deg": config.phase_match_tolerance_deg,
+        "phase_elements": config.phase_elements,
         "reference_path": str(config.reference_path) if config.reference_path else None,
         "match_tolerance_deg": config.match_tolerance_deg,
         "reference_min_relative": config.reference_min_relative,
@@ -279,6 +281,7 @@ def execute(config: XRDConfig, *, progress=lambda percent, text: None,
                                    instrument_broadening=broadening, reference=reference,
                                    phase_library=library,
                                    phase_match_tolerance_deg=config.phase_match_tolerance_deg,
+                                   phase_elements=config.phase_elements,
                                    match_tolerance_deg=config.match_tolerance_deg,
                                    reference_min_relative=config.reference_min_relative)
         finally:

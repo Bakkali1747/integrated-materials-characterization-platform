@@ -23,7 +23,7 @@ def analyze(path, *, output="output", name=None, two_theta_column=None, intensit
             min_prominence_relative=0.05, min_distance_deg=0.1, smoothing_points=5,
             fit_peaks=True, instrument_mode="none", instrument_fwhm_deg=0.0,
             instrument_file=None, reference_path=None, auto_phase_match=True,
-            phase_library_path=None, phase_match_tolerance_deg=0.2,
+            phase_library_path=None, phase_match_tolerance_deg=0.2, phase_elements="",
             match_tolerance_deg=0.2, style=None, report=False):
     """执行 XRD 分析并保存图组；返回结果目录。"""
     style = style or PlotStyle()
@@ -41,6 +41,7 @@ def analyze(path, *, output="output", name=None, two_theta_column=None, intensit
                        reference_path=reference_path, auto_phase_match=auto_phase_match,
                        phase_library_path=Path(phase_library_path) if phase_library_path else None,
                        phase_match_tolerance_deg=phase_match_tolerance_deg,
+                       phase_elements=phase_elements,
                        match_tolerance_deg=match_tolerance_deg, dpi=style.dpi, entry_point="cli_xrd",
                        extra_configuration={"plot_style": vars(style)})
     result = execute(config)
@@ -106,6 +107,8 @@ def main():
     parser.add_argument("--phase-library", help="COD 物相库 SQLite 路径")
     parser.add_argument("--phase-tolerance", type=float, default=0.2,
                         help="COD 物相库 2θ 匹配容差（度）")
+    parser.add_argument("--phase-elements", default="",
+                        help="COD 元素过滤，如 'Fe O' 或 'Fe,O'")
     parser.add_argument("--match-tolerance", type=float, default=0.2)
     parser.add_argument("--dpi", type=int, default=600)
     parser.add_argument("--report", action="store_true")
@@ -124,6 +127,7 @@ def main():
                 reference_path=args.reference, auto_phase_match=args.auto_phase_match,
                 phase_library_path=args.phase_library,
                 phase_match_tolerance_deg=args.phase_tolerance,
+                phase_elements=args.phase_elements,
                 match_tolerance_deg=args.match_tolerance,
                 style=PlotStyle(dpi=args.dpi), report=args.report)
         return 0

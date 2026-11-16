@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import math
+import re
 import sqlite3
 import zipfile
 from pathlib import Path
@@ -62,6 +63,24 @@ def _d_to_two_theta(d_angstrom, wavelength_angstrom):
     return math.degrees(2.0 * math.asin(sine))
 
 
+def _formula_elements(formula):
+    return set(re.findall(r"[A-Z][a-z]?", formula or ""))
+
+
+def normalize_elements(values):
+    """把 "Fe, O" / "Fe O" 规范为元素符号集合；空值返回空集合。"""
+    if not values:
+        return set()
+    if isinstance(values, str):
+        values = re.split(r"[\s,;]+", values)
+    result = set()
+    for value in values:
+        symbol = str(value).strip()
+        if symbol and re.fullmatch(r"[A-Z][a-z]?", symbol):
+            result.add(symbol)
+    return result
+
+
 class PhaseLibrary:
     """只读物相库；对每次 XRD 分析返回按覆盖度排序的候选相。"""
 
@@ -92,7 +111,7 @@ class PhaseLibrary:
         return int(self.connection.execute("select count(*) from phases").fetchone()[0])
 
     def search(self, peaks, wavelength_angstrom, *, tolerance_deg=0.2, top_n=10,
-               max_candidates=3000, minimum_relative=5.0):
+               max_candidates=3000, minimum_relative=5.0, required_elements=None):
         """用 2θ 容差匹配 COD 的 d 列表；分数由参考覆盖与实测覆盖加权。"""
         observed = []
         for peak in peaks:
@@ -128,7 +147,6 @@ class PhaseLibrary:
         candidates = sorted(counts.items(), key=lambda item: (item[1], item[0]), reverse=True)[:max_candidates]
         phase_ids = [phase_id for phase_id, _ in candidates]
         phase_rows = {}
-        line_rows = {phase_id: [] for phase_id in phase_ids}
         for start in range(0, len(phase_ids), 500):
             chunk = phase_ids[start:start + 500]
             placeholders = ",".join("?" for _ in chunk)
@@ -136,6 +154,16 @@ class PhaseLibrary:
                     f"select id,formula,mineral,spacegroup,quality,rir from phases where id in ({placeholders})",
                     chunk):
                 phase_rows[row[0]] = row[1:]
+        elements = normalize_elements(required_elements)
+        if elements:
+            phase_ids = [phase_id for phase_id in phase_ids
+                         if elements.issubset(_formula_elements(phase_rows.get(phase_id, (None,))[0]))]
+            if not phase_ids:
+                return []
+        line_rows = {phase_id: [] for phase_id in phase_ids}
+        for start in range(0, len(phase_ids), 500):
+            chunk = phase_ids[start:start + 500]
+            placeholders = ",".join("?" for _ in chunk)
             for phase_id, d_value, intensity in self.connection.execute(
                     f"select phase_id,d,intensity from lines where phase_id in ({placeholders})", chunk):
                 line_rows[phase_id].append((float(d_value), float(intensity)))

@@ -776,7 +776,7 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
                 background_right=(70.0, 80.0), min_prominence_relative=0.05,
                 min_distance_deg=0.1, smoothing_points=5, fit_peaks=True,
                 instrument_broadening=None, reference=None,
-                phase_library=None, phase_match_tolerance_deg=0.2,
+                phase_library=None, phase_match_tolerance_deg=0.2, phase_elements="",
                 match_tolerance_deg=0.2, reference_min_relative=5.0) -> dict:
     """计算背景、峰位、Pseudo-Voigt 拟合、FWHM、d 间距、Scherrer 尺寸与参考匹配。
 
@@ -909,10 +909,12 @@ def analyze_xrd(data: XRDData, *, wavelength_angstrom=1.5406, k_factor=0.9,
     library_info = None
     if phase_library is not None and peaks:
         library_matches = phase_library.search(
-            peaks, float(wavelength_angstrom), tolerance_deg=phase_match_tolerance_deg)
+            peaks, float(wavelength_angstrom), tolerance_deg=phase_match_tolerance_deg,
+            required_elements=phase_elements)
         library_combinations = rank_library_combinations(library_matches, peaks)
         library_info = {"source": "COD", "license": "CC-BY-4.0",
-                        "phase_count": phase_library.count()}
+                        "phase_count": phase_library.count(),
+                        "element_filter": phase_elements or None}
     status = "success" if peaks else "not_computable"
     fit_converged_count = sum(1 for peak in peaks if peak.get("fit_converged"))
     instrument_info = {"mode": "none"}

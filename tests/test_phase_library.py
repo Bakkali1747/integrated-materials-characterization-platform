@@ -70,6 +70,20 @@ def test_phase_library_ranks_multi_phase_combination(tmp_path):
     assert combinations[0]["observed_coverage"] == pytest.approx(1.0)
 
 
+def test_phase_library_element_filter(tmp_path):
+    library = PhaseLibrary(write_library(tmp_path / "library.sqlite"))
+    peaks = [
+        {"center_deg": 44.7, "relative_intensity_pct": 100.0, "d_angstrom": 2.026},
+        {"center_deg": 26.64, "relative_intensity_pct": 30.0, "d_angstrom": 3.343},
+    ]
+    fe = library.search(peaks, 1.5406, tolerance_deg=.1, required_elements={"Fe"})
+    quartz = library.search(peaks, 1.5406, tolerance_deg=.1, required_elements={"Si", "O"})
+    none = library.search(peaks, 1.5406, tolerance_deg=.1, required_elements={"Fe", "O"})
+    assert [match["formula"] for match in fe] == ["Fe"]
+    assert [match["formula"] for match in quartz] == ["SiO2"]
+    assert none == []
+
+
 def test_xrd_service_records_phase_library_matches(tmp_path):
     library = write_library(tmp_path / "library.sqlite")
     path = tmp_path / "pattern.csv"

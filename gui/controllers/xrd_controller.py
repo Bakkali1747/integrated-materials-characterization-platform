@@ -70,6 +70,8 @@ def _library_summary(quality, matches):
     if not info or info.get("source") == "unavailable":
         return "未启用/不可用"
     text = f"COD {info.get('phase_count', '?')} 相"
+    if info.get("element_filter"):
+        text += f"；元素 {info['element_filter']}"
     if matches:
         top = matches[0]
         name = top.get("mineral") or top.get("formula") or f"COD {top['phase_id']}"
